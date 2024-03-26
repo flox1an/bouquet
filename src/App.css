@@ -1,0 +1,7 @@
+body h2 {
+  @apply text-2xl text-white py-4;
+}
+
+body h2 svg {
+  @apply w-8 inline align-text-bottom;
+}

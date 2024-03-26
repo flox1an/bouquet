@@ -1,0 +1,51 @@
+.server-list {
+  @apply flex flex-col gap-4;
+}
+
+.server {
+  @apply bg-neutral-800 text-neutral-300 rounded-lg p-4 gap-4 cursor-pointer hover:bg-neutral-700 flex flex-row items-center;
+}
+
+.server.selected {
+  @apply bg-pink-700 cursor-default;
+}
+
+.server-name {
+  @apply text-2xl mb-2 text-white;
+}
+
+.server-stats {
+  @apply flex flex-row gap-8;
+}
+
+.server-stat svg {
+  @apply w-5 inline align-text-bottom;
+}
+
+.server-icon {
+  @apply shrink-0;
+}
+
+.server-icon svg,
+.server-actions svg {
+  @apply w-10;
+}
+
+.server-actions a {
+  @apply cursor-pointer text-center flex flex-col items-center hover:text-white opacity-80 hover:opacity-100;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.loading {
+  @apply w-6 ml-2 inline align-text-bottom;
+  transform-origin: center;
+  animation: spin 3s linear infinite;
+}

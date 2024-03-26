@@ -1,0 +1,24 @@
+.blob-list svg {
+  @apply w-5 inline align-text-bottom mr-1;
+}
+
+.blob-list a {
+  @apply text-pink-500 hover:text-white;
+}
+
+.blob-list {
+  @apply bg-neutral-800 p-4 text-neutral-300 rounded-lg;
+}
+
+.blob-list .blob {
+  @apply p-1 hover:bg-neutral-700 rounded-md grid pr-4;
+  grid-template-columns: 2em auto 6em 10em 7em 1em;
+}
+
+.blob-list .blob span {
+  @apply overflow-ellipsis overflow-hidden text-nowrap;
+}
+
+.blob-list .blob a {
+  @apply cursor-pointer;
+}
