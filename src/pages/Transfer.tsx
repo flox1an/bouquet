@@ -28,7 +28,7 @@ type TransferStatus = {
 export const Transfer = () => {
   const { source: transferSource } = useParams();
   const navigate = useNavigate();
-  const serverInfo = useServerInfo();
+  const {serverInfo} = useServerInfo();
   const [transferTarget, setTransferTarget] = useState<string | undefined>();
   const { signEventTemplate } = useNDK();
   const queryClient = useQueryClient();

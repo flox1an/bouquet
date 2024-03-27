@@ -22,7 +22,7 @@ export const useServers = (): Server[] => {
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type
 
   const serverListEvent = useEvent({ kinds: [10063 as NDKKind], authors: [pubkey!] }, { disable: !pubkey });
-  console.log(serverListEvent);
+
   const servers = useMemo(() => {
     const serverUrls = uniqAndSort(
       [...(serverListEvent?.getMatchingTags('r').map(t => t[1]) || []), ...additionalServers].map(s =>

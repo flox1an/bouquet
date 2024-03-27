@@ -15,6 +15,10 @@ export type ServerInfo = {
   blobs?: BlobDescriptor[];
 };
 
+type BlobDictionary = {
+  [key: string]: { blob: BlobDescriptor; servers: string[] };
+};
+
 export const useServerInfo = () => {
   const servers = useServers();
   const { user, signEventTemplate } = useNDK();
@@ -58,5 +62,26 @@ export const useServerInfo = () => {
     return info;
   }, [servers, blobs]);
 
-  return serverInfo;
+  const distribution = useMemo(() => {
+    const dict: BlobDictionary = {};
+
+    servers.forEach(server => {
+      const si = serverInfo[server.name];
+
+      si.blobs &&
+        si.blobs.forEach((blob: BlobDescriptor) => {
+          if (dict[blob.sha256]) {
+            dict[blob.sha256].servers.push(server.name);
+          } else {
+            dict[blob.sha256] = {
+              blob,
+              servers: [server.name],
+            };
+          }
+        });
+    });
+    return dict;
+  }, [servers, serverInfo]);
+
+  return {serverInfo, distribution};
 };

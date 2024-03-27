@@ -3,7 +3,7 @@
 }
 
 .content {
-  @apply flex flex-col self-center sm:w-4/6 w-full;
+  @apply flex flex-col self-center sm:w-10/12 lg:w-4/6 w-full;
 }
 
 .title {

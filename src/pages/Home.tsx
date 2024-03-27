@@ -24,34 +24,12 @@ import { useNavigate } from 'react-router-dom';
 function Home() {
   const { loginWithExtension, signEventTemplate } = useNDK();
   const [selectedServer, setSelectedServer] = useState<string | undefined>();
-  const serverInfo = useServerInfo();
+  const { serverInfo } = useServerInfo();
   const navigate = useNavigate();
 
   useEffect(() => {
     loginWithExtension();
   }, []);
-
-  /*,
-    combine: (results) => {
-      const dict: BlobDictionary = {};
-
-      results.forEach((server) =>
-        server.data && server.data.forEach((blob: BlobDescriptor) => {
-          if (dict[blob.sha256]) {
-            dict[blob.sha256].urls.push(blob.url);
-          } else {
-            dict[blob.sha256] = {
-              ...blob,
-              urls: [blob.url],
-            };
-          }
-        })
-      );
-
-      return {
-        data: dict,
-      };
-    },*/
 
   const queryClient = useQueryClient();
 
@@ -64,7 +42,7 @@ function Home() {
       queryClient.setQueryData(['blobs', variables.serverName], (oldData: BlobDescriptor[]) =>
         oldData ? oldData.filter(b => b.sha256 !== variables.hash) : oldData
       );
-      console.log({ key: ['blobs', variables.serverName] });
+      // console.log({ key: ['blobs', variables.serverName] });
     },
   });
 

@@ -15,7 +15,8 @@
 }
 
 .server-stats {
-  @apply flex flex-row gap-8;
+  @apply grid grid-cols-4 gap-8;
+  grid-template-columns: 4em 6em 8em auto;
 }
 
 .server-stat svg {
