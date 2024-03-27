@@ -17,13 +17,13 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
 
   return (
     <>
-      <div className="blog-list-header">
+      <div className={`blog-list-header ${!title ? 'justify-end' : ''}`}>
         {title && <h2>{title}</h2>}
         <div className=" content-center">
-          <button onClick={() => setMode('list')} className={mode == 'list' ? 'selected': ''}>
+          <button onClick={() => setMode('list')} className={mode == 'list' ? 'selected' : ''}>
             <ListBulletIcon />
           </button>
-          <button onClick={() => setMode('gallery')} className={mode == 'gallery' ? 'selected': ''}>
+          <button onClick={() => setMode('gallery')} className={mode == 'gallery' ? 'selected' : ''}>
             <PhotoIcon />
           </button>
         </div>
@@ -33,6 +33,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
         <div className="blob-list flex flex-wrap justify-center">
           {blobs
             .filter(b => b.type?.startsWith('image/'))
+            .sort((a, b) => (a.created > b.created ? -1 : 1)) // descending
             .map(blob => (
               <div className="p-2 rounded-lg bg-neutral-900 m-2" style={{ display: 'inline-block' }}>
                 <a href={blob.url} target="_blank">

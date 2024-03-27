@@ -30,7 +30,9 @@ export const useServerInfo = () => {
       queryKey: ['blobs', server.name],
       queryFn: async () => {
         const listAuthEvent = await BlossomClient.getListAuth(signEventTemplate, 'List Blobs');
-        return await BlossomClient.listBlobs(server.url, pubkey!, undefined, listAuthEvent);
+        const blobs = await BlossomClient.listBlobs(server.url, pubkey!, undefined, listAuthEvent);
+        // fix for wrong timestamps on media-server.slidestr.net (remove)
+        return blobs.map(b => ({ ...b, created: b.created > 1711200000000 ? b.created / 1000 : b.created }));
       },
       enabled: !!pubkey && servers.length > 0,
       staleTime: 1000 * 60 * 5,
@@ -46,17 +48,7 @@ export const useServerInfo = () => {
         isLoading: blobs[sx].isLoading,
         count: blobs[sx].data?.length || 0,
         size: blobs[sx].data?.reduce((acc, blob) => acc + blob.size, 0) || 0,
-        lastChange:
-          blobs[sx].data?.reduce(
-            (acc, blob) =>
-              Math.max(
-                acc,
-                blob.created > 1711200000000 // fix for wrong timestamps on media-server.slidestr.net (remove)
-                  ? blob.created / 1000
-                  : blob.created
-              ),
-            0
-          ) || 0,
+        lastChange: blobs[sx].data?.reduce((acc, blob) => Math.max(acc, blob.created), 0) || 0,
       };
     });
     return info;
@@ -83,5 +75,5 @@ export const useServerInfo = () => {
     return dict;
   }, [servers, serverInfo]);
 
-  return {serverInfo, distribution};
+  return { serverInfo, distribution };
 };
