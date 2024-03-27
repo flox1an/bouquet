@@ -22,3 +22,23 @@
 .blob-list .blob a {
   @apply cursor-pointer;
 }
+
+.blog-list-header {
+  @apply flex flex-row mt-4;
+}
+
+.blog-list-header h2 {
+  @apply flex-grow;
+}
+
+.blog-list-header button {
+  @apply bg-neutral-800 hover:bg-neutral-700 p-2 ml-2 rounded-lg;
+}
+
+.blog-list-header button.selected {
+  @apply bg-pink-700 text-white;
+}
+
+.blog-list-header svg {
+  @apply w-6 text-white opacity-80 hover:opacity-100;
+}

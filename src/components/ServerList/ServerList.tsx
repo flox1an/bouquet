@@ -12,7 +12,7 @@ type ServerListProps = {
   onCheck?: (server: string) => void;
 };
 
-export const ServerList = ({ servers, selectedServer, setSelectedServer, onTransfer, onCancel, onCheck }: ServerListProps) => {
+export const ServerList = ({ servers, selectedServer, setSelectedServer, onTransfer, onCancel }: ServerListProps) => {
   const { serverInfo, distribution } = useServerInfo();
   const blobsWithOnlyOneOccurance = Object.values(distribution)
     .filter(d => d.servers.length == 1)

@@ -68,19 +68,17 @@ function Home() {
       ></ServerList>
 
       {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && (
-        <>
-          <h2>Your objects on {serverInfo[selectedServer].name}</h2>
-          <BlobList
-            blobs={selectedServerBlobs}
-            onDelete={blob =>
-              deleteBlob.mutate({
-                serverName: serverInfo[selectedServer].name,
-                serverUrl: serverInfo[selectedServer].url,
-                hash: blob.sha256,
-              })
-            }
-          ></BlobList>
-        </>
+        <BlobList
+          title={`Your objects on ${serverInfo[selectedServer].name}`}
+          blobs={selectedServerBlobs}
+          onDelete={blob =>
+            deleteBlob.mutate({
+              serverName: serverInfo[selectedServer].name,
+              serverUrl: serverInfo[selectedServer].url,
+              hash: blob.sha256,
+            })
+          }
+        ></BlobList>
       )}
     </>
   );
