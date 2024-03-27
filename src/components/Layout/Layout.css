@@ -7,7 +7,7 @@
 }
 
 .title {
-  @apply text-white text-4xl flex flex-row items-center gap-2 p-4 w-4/6 self-center;
+  @apply text-white text-4xl flex flex-row items-center gap-2 p-4 sm:w-10/12 lg:w-4/6 w-full self-center;
 }
 
 .title img {
