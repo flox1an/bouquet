@@ -27,7 +27,10 @@ export const ServerList = ({ servers, selectedServer, setSelectedServer, onTrans
     <div className="server-list">
       {servers.map((server, sx) => (
         <div
-          className={`server ${selectedServer == server.name ? 'selected' : ''}`}
+          className={
+            `server ${selectedServer == server.name ? 'selected' : ''} ` +
+            `${setSelectedServer ? ' hover:bg-neutral-700 cursor-pointer' : ''}  `
+          }
           key={sx}
           onClick={() => setSelectedServer && setSelectedServer(server.name)}
         >
