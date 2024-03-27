@@ -9,9 +9,10 @@ type ServerListProps = {
   setSelectedServer?: React.Dispatch<React.SetStateAction<string | undefined>>;
   onTransfer?: (server: string) => void;
   onCancel?: () => void;
+  onCheck?: (server: string) => void;
 };
 
-export const ServerList = ({ servers, selectedServer, setSelectedServer, onTransfer, onCancel }: ServerListProps) => {
+export const ServerList = ({ servers, selectedServer, setSelectedServer, onTransfer, onCancel, onCheck }: ServerListProps) => {
   const { serverInfo, distribution } = useServerInfo();
   const blobsWithOnlyOneOccurance = Object.values(distribution)
     .filter(d => d.servers.length == 1)
@@ -28,6 +29,7 @@ export const ServerList = ({ servers, selectedServer, setSelectedServer, onTrans
           setSelectedServer={setSelectedServer}
           onTransfer={onTransfer}
           onCancel={onCancel}
+          /* onCheck={onCheck} */
           blobsOnlyOnThisServer={blobsWithOnlyOneOccurance.filter(b => b.server == server.name).length}
         ></Server>
       ))}

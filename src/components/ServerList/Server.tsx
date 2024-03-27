@@ -5,22 +5,23 @@ import {
   ClockIcon,
   CubeIcon,
   DocumentDuplicateIcon,
-  ExclamationCircleIcon,
   ExclamationTriangleIcon,
   ServerIcon,
+  ShieldExclamationIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import { Server } from '../../utils/useServers';
+import { Server as ServerType } from '../../utils/useServers';
 import { ServerInfo } from '../../utils/useServerInfo';
 import { formatDate, formatFileSize } from '../../utils';
 
 type ServerProps = {
-  server: Server;
+  server: ServerType;
   serverInfo: ServerInfo;
   selectedServer?: string | undefined;
   setSelectedServer?: React.Dispatch<React.SetStateAction<string | undefined>>;
   onTransfer?: (server: string) => void;
   onCancel?: () => void;
+  onCheck?: (server: string) => void;
   blobsOnlyOnThisServer: number;
 };
 
@@ -31,6 +32,7 @@ const Server = ({
   serverInfo,
   onTransfer,
   onCancel,
+  onCheck,
   blobsOnlyOnThisServer,
 }: ServerProps) => {
   return (
@@ -75,10 +77,19 @@ const Server = ({
       </div>
       {((selectedServer == server.name && onTransfer) || onCancel) && (
         <div className="server-actions">
-          {selectedServer == server.name && onTransfer && (
-            <a onClick={() => onTransfer(server.name)}>
-              <ArrowUpOnSquareStackIcon /> Transfer
-            </a>
+          {selectedServer == server.name && (
+            <>
+              {onCheck && (
+                <a onClick={() => onCheck(server.name)}>
+                  <ShieldExclamationIcon /> Check
+                </a>
+              )}
+              {onTransfer && (
+                <a onClick={() => onTransfer(server.name)}>
+                  <ArrowUpOnSquareStackIcon /> Transfer
+                </a>
+              )}
+            </>
           )}
           {onCancel && (
             <a onClick={() => onCancel()}>

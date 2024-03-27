@@ -1,14 +1,23 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { useNDK } from '../../ndk';
 import './Layout.css';
+import { ArrowUpOnSquareIcon } from '@heroicons/react/24/outline';
 
 export const Layout = () => {
   const { user } = useNDK();
+  const navigate = useNavigate();
 
   return (
     <div className="main">
       <div className="title">
-        <img src="/bouquet.png" /> <span>bouquet</span>
+        <a className="logo" onClick={() => navigate('/')}>
+          <img src="/bouquet.png" /> <span>bouquet</span>
+        </a>
+        <div>
+          <a className='action' onClick={() => navigate('/upload')}>
+            <ArrowUpOnSquareIcon />
+          </a>
+        </div>
         <div className="avatar">
           <img src={user?.profile?.image} />
         </div>

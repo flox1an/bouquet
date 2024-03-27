@@ -3,7 +3,7 @@
 }
 
 .content {
-  @apply flex flex-col self-center sm:w-10/12 lg:w-4/6 w-full;
+  @apply flex flex-col self-center sm:w-10/12 lg:w-4/6 w-full min-h-[80vh]
 }
 
 .title {
@@ -14,8 +14,20 @@
   @apply w-10;
 }
 
+.title a.action {
+  @apply flex flex-col text-sm items-center opacity-50 hover:opacity-100 cursor-pointer px-2;
+}
+
+.title a.logo {
+  @apply flex flex-row flex-grow items-center gap-2 cursor-pointer;
+}
+
 .title span {
   @apply flex-grow;
+}
+
+.title svg {
+  @apply w-8;
 }
 
 .avatar {

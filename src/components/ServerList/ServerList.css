@@ -32,8 +32,12 @@
   @apply w-10;
 }
 
+.server-actions {
+  @apply flex flex-row gap-4;
+}
+
 .server-actions a {
-  @apply cursor-pointer text-center flex flex-col items-center hover:text-white opacity-80 hover:opacity-100;
+  @apply cursor-pointer text-center flex flex-col items-center hover:text-white opacity-80 hover:opacity-100 gap-1;
 }
 
 @keyframes spin {

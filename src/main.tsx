@@ -8,6 +8,8 @@ import { Route, RouterProvider, createBrowserRouter, createRoutesFromElements } 
 import { Layout } from './components/Layout/Layout.tsx';
 import Home from './pages/Home.tsx';
 import { Transfer } from './pages/Transfer.tsx';
+import Upload from './pages/Upload.tsx';
+import Check from './pages/Check.tsx';
 
 const queryClient = new QueryClient();
 
@@ -16,6 +18,8 @@ const router = createBrowserRouter(
     <Route element={<Layout />}>
       <Route path="/" element={<Home />} />
       <Route path="/transfer/:source" element={<Transfer />} />
+      <Route path="/upload" element={<Upload/>} />
+      <Route path="/check/:source" element={<Check/>} />
     </Route>
   )
 );

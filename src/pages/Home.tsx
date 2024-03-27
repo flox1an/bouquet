@@ -64,6 +64,7 @@ function Home() {
         selectedServer={selectedServer}
         setSelectedServer={setSelectedServer}
         onTransfer={() => navigate('/transfer/' + selectedServer)}
+        onCheck={() => navigate('/check/' + selectedServer)}
       ></ServerList>
 
       {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && (
