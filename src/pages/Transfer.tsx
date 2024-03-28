@@ -15,6 +15,7 @@ import { formatFileSize } from '../utils';
 import BlobList from '../components/BlobList/BlobList';
 import './Transfer.css';
 import { useNavigate, useParams } from 'react-router-dom';
+import ProgressBar from '../components/ProgressBar/ProgressBar';
 
 type TransferStatus = {
   [key: string]: {
@@ -134,14 +135,7 @@ export const Transfer = () => {
               )}
             </div>
             <div>
-              <div className="w-full bg-gray-200 rounded-lg dark:bg-neutral-800">
-                <div
-                  className="bg-pink-600 text-sm font-medium text-pink-100 text-center p-1 leading-none rounded-lg"
-                  style={{ width: `${Math.floor((transferStatus.size * 100) / transferStatus.fullSize)}%` }}
-                >
-                  {Math.floor((transferStatus.size * 100) / transferStatus.fullSize)}&nbsp;%
-                </div>
-              </div>
+              <ProgressBar value={transferStatus.size} max={transferStatus.fullSize} />
               {
                 <div className="message">
                   {formatFileSize(transferStatus.size)} / {formatFileSize(transferStatus.fullSize)} transferred
