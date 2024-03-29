@@ -15,21 +15,15 @@ import { useNavigate } from 'react-router-dom';
 - multi threaded sync
 - Add server and pulbish list event
 - upload to single/multi servers
-- upload exif data removal
 - upload image resize
 - upload & publish as file event to nostr
-- thumbnail gallery
 - check blobs (download & sha256 sum check), maybe limit max size
 */
 function Home() {
-  const { loginWithExtension, signEventTemplate } = useNDK();
   const [selectedServer, setSelectedServer] = useState<string | undefined>();
   const { serverInfo } = useServerInfo();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    loginWithExtension();
-  }, []);
+  const { signEventTemplate } = useNDK();
 
   const queryClient = useQueryClient();
 

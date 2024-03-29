@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArrowUpOnSquareIcon } from '@heroicons/react/24/outline';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { removeExifData } from '../exif';
+import CheckBox from '../components/CheckBox/CheckBox';
 
 type TransferStats = {
   enabled: boolean;
@@ -22,6 +23,8 @@ function Upload() {
   const [transfers, setTransfers] = useState<{ [key: string]: TransferStats }>({});
   const [files, setFiles] = useState<File[]>([]);
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
+  const [resizeImages, setResizeImages] = useState(false);
+  const [publishToNostr, setPublishToNostr] = useState(false);
 
   const upload = async () => {
     const filesToUpload: File[] = [];
@@ -32,6 +35,9 @@ function Upload() {
         filesToUpload.push(f);
       }
     }
+
+    // TODO use https://github.com/davejm/client-compress
+    // for image resizing
 
     if (filesToUpload && filesToUpload.length) {
       // sum files sizes
@@ -105,21 +111,16 @@ function Upload() {
           <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
         </label>
 
+        <h3 className="text-lg text-white">Servers</h3>
         <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
           {servers.map(s => (
             <>
-              <input
-                className="w-5 accent-pink-700 hover:accent-pink-600"
-                id={s.name}
-                type="checkbox"
+              <CheckBox
+                name={s.name}
                 checked={transfers[s.name]?.enabled || false}
-                onChange={e =>
-                  setTransfers(ut => ({ ...ut, [s.name]: { enabled: e.target.checked, transferred: 0, size: 0 } }))
-                }
-              />
-              <label htmlFor={s.name} className="cursor-pointer">
-                {s.name}
-              </label>
+                setChecked={c => setTransfers(ut => ({ ...ut, [s.name]: { enabled: c, transferred: 0, size: 0 } }))}
+                label={s.name}
+              ></CheckBox>
               {transfers[s.name]?.enabled ? (
                 <ProgressBar value={transfers[s.name].transferred} max={transfers[s.name].size} />
               ) : (
@@ -129,17 +130,26 @@ function Upload() {
           ))}
         </div>
 
-        <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em' }}>
-          <input
-            className="w-5 accent-pink-700 hover:accent-pink-600"
-            id="cleanData"
-            type="checkbox"
+        <h3 className="text-lg text-white">Options</h3>
+        <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em auto' }}>
+          <CheckBox
+            name="cleanData"
             checked={cleanPrivateData}
-            onChange={e => setCleanPrivateData(e.currentTarget.checked)}
-          />
-          <label htmlFor="cleanData" className="cursor-pointer">
-            Clean private data in images (EXIF)
-          </label>
+            setChecked={c => setCleanPrivateData(c)}
+            label="Clean private data in images (EXIF)"
+          ></CheckBox>
+          <CheckBox
+            name="resize"
+            checked={resizeImages}
+            setChecked={c => setResizeImages(c)}
+            label="Resize images to max. 2048 x 2048 (NOT IMPLEMENTED YET!)"
+          ></CheckBox>
+          <CheckBox
+            name="publish"
+            checked={publishToNostr}
+            setChecked={c => setPublishToNostr(c)}
+            label="Publish to NOSTR (as 1063 file metadata event) (NOT IMPLEMENTED YET!)"
+          ></CheckBox>
         </div>
         <button
           className="p-2 px-4  bg-neutral-600 hover:bg-pink-700 text-white rounded-lg w-2/6"

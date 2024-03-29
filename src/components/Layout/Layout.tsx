@@ -2,10 +2,15 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useNDK } from '../../ndk';
 import './Layout.css';
 import { ArrowUpOnSquareIcon } from '@heroicons/react/24/outline';
+import { useEffect } from 'react';
 
 export const Layout = () => {
-  const { user } = useNDK();
   const navigate = useNavigate();
+  const { loginWithExtension, user } = useNDK();
+
+  useEffect(() => {
+    if (!user) loginWithExtension();
+  }, []);
 
   return (
     <div className="main">
@@ -14,7 +19,7 @@ export const Layout = () => {
           <img src="/bouquet.png" /> <span>bouquet</span>
         </a>
         <div>
-          <a className='action' onClick={() => navigate('/upload')}>
+          <a className="action" onClick={() => navigate('/upload')}>
             <ArrowUpOnSquareIcon />
           </a>
         </div>
