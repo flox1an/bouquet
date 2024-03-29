@@ -12,7 +12,7 @@
 
 .blob-list .blob {
   @apply p-1 hover:bg-neutral-700 rounded-md grid pr-4;
-  grid-template-columns: 2em auto 6em 10em 7em 1em;
+  grid-template-columns: 2em auto 6em 10em 7em 3em;
 }
 
 .blob-list .blob span {

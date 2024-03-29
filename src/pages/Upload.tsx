@@ -6,6 +6,7 @@ import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowUpOnSquareIcon } from '@heroicons/react/24/outline';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
+import { removeExifData } from '../exif';
 
 type TransferStats = {
   enabled: boolean;
@@ -20,11 +21,21 @@ function Upload() {
   const queryClient = useQueryClient();
   const [transfers, setTransfers] = useState<{ [key: string]: TransferStats }>({});
   const [files, setFiles] = useState<File[]>([]);
+  const [cleanPrivateData, setCleanPrivateData] = useState(true);
 
   const upload = async () => {
-    if (files && files.length) {
+    const filesToUpload: File[] = [];
+    for (const f of files) {
+      if (cleanPrivateData) {
+        filesToUpload.push(await removeExifData(f));
+      } else {
+        filesToUpload.push(f);
+      }
+    }
+
+    if (filesToUpload && filesToUpload.length) {
       // sum files sizes
-      const totalSize = files.reduce((acc, f) => acc + f.size, 0);
+      const totalSize = filesToUpload.reduce((acc, f) => acc + f.size, 0);
 
       // set all entries size to totalSize
       setTransfers(ut => {
@@ -42,7 +53,7 @@ function Upload() {
           continue;
         }
         const serverUrl = serverInfo[server.name].url;
-        for (const file of files) {
+        for (const file of filesToUpload) {
           const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
           const newBlob = await BlossomClient.uploadBlob(serverUrl, file, uploadAuth);
 
@@ -94,7 +105,7 @@ function Upload() {
           <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
         </label>
 
-        <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1em 20em auto' }}>
+        <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
           {servers.map(s => (
             <>
               <input
@@ -118,6 +129,18 @@ function Upload() {
           ))}
         </div>
 
+        <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em' }}>
+          <input
+            className="w-5 accent-pink-700 hover:accent-pink-600"
+            id="cleanData"
+            type="checkbox"
+            checked={cleanPrivateData}
+            onChange={e => setCleanPrivateData(e.currentTarget.checked)}
+          />
+          <label htmlFor="cleanData" className="cursor-pointer">
+            Clean private data in images (EXIF)
+          </label>
+        </div>
         <button
           className="p-2 px-4  bg-neutral-600 hover:bg-pink-700 text-white rounded-lg w-2/6"
           onClick={() => upload()}
