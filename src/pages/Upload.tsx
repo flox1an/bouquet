@@ -1,6 +1,6 @@
 import { ChangeEvent, DragEvent, useEffect, useState } from 'react';
 import { useServers } from '../utils/useServers';
-import { BlossomClient } from 'blossom-client-sdk';
+import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../ndk';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { ArrowUpOnSquareIcon } from '@heroicons/react/24/outline';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { removeExifData } from '../exif';
 import CheckBox from '../components/CheckBox/CheckBox';
+import axios, { AxiosProgressEvent } from 'axios';
 
 type TransferStats = {
   enabled: boolean;
@@ -23,8 +24,27 @@ function Upload() {
   const [transfers, setTransfers] = useState<{ [key: string]: TransferStats }>({});
   const [files, setFiles] = useState<File[]>([]);
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
-  const [resizeImages, setResizeImages] = useState(false);
-  const [publishToNostr, setPublishToNostr] = useState(false);
+  // const [resizeImages, setResizeImages] = useState(false);
+  // const [publishToNostr, setPublishToNostr] = useState(false);
+
+  async function uploadBlob(
+    server: string,
+    file: File,
+    auth?: SignedEvent,
+    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+  ) {
+    const headers = {
+      Accept: 'application/json',
+      'Content-Type': file.type,
+    };
+
+    const res = await axios.put<BlobDescriptor>(`${server}/upload`, file, {
+      headers: auth ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(auth) } : headers,
+      onUploadProgress,
+    });
+
+    return res.data;
+  }
 
   const upload = async () => {
     const filesToUpload: File[] = [];
@@ -59,11 +79,23 @@ function Upload() {
           continue;
         }
         const serverUrl = serverInfo[server.name].url;
+        let serverTransferred = 0;
         for (const file of filesToUpload) {
           const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
-          const newBlob = await BlossomClient.uploadBlob(serverUrl, file, uploadAuth);
 
-          transfers[server.name].transferred += file.size;
+          const newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
+            setTransfers(ut => ({
+              ...ut,
+              [server.name]: { ...ut[server.name], transferred: serverTransferred + progressEvent.loaded },
+            }));
+          });
+
+          serverTransferred += file.size;
+          setTransfers(ut => ({
+            ...ut,
+            [server.name]: { ...ut[server.name], transferred: serverTransferred },
+          }));
+
           console.log(newBlob);
         }
         queryClient.invalidateQueries({ queryKey: ['blobs', server.name] });
@@ -138,6 +170,7 @@ function Upload() {
             setChecked={c => setCleanPrivateData(c)}
             label="Clean private data in images (EXIF)"
           ></CheckBox>
+          {/* 
           <CheckBox
             name="resize"
             checked={resizeImages}
@@ -150,10 +183,12 @@ function Upload() {
             setChecked={c => setPublishToNostr(c)}
             label="Publish to NOSTR (as 1063 file metadata event) (NOT IMPLEMENTED YET!)"
           ></CheckBox>
+          */}
         </div>
         <button
-          className="p-2 px-4  bg-neutral-600 hover:bg-pink-700 text-white rounded-lg w-2/6"
+          className="p-2 px-4  bg-neutral-600 hover:bg-pink-700 text-white rounded-lg w-2/6 disabled:text-neutral-800 disabled:bg-neutral-900 "
           onClick={() => upload()}
+          disabled={files.length == 0}
         >
           Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''}
         </button>

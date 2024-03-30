@@ -3,11 +3,11 @@
 }
 
 .content {
-  @apply flex flex-col self-center sm:w-10/12 lg:w-4/6 w-full min-h-[80vh]
+  @apply flex flex-col self-center sm:w-10/12 xl:w-4/6 w-full min-h-[80vh];
 }
 
 .title {
-  @apply text-white text-4xl flex flex-row items-center gap-2 p-4 sm:w-10/12 lg:w-4/6 w-full self-center;
+  @apply text-white text-4xl flex flex-row items-center gap-2 p-4 sm:w-10/12 xl:w-4/6 w-full self-center;
 }
 
 .title img {
