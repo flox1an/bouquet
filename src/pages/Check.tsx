@@ -16,7 +16,6 @@ function Check() {
         servers={Object.values(serverInfo).filter(s => s.name == source)}
         onCancel={() => navigate('/')}
       ></ServerList>
-      
     </>
   );
 }

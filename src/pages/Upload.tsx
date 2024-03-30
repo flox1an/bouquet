@@ -1,4 +1,4 @@
-import { ChangeEvent, DragEvent, useEffect, useState } from 'react';
+import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from 'react';
 import { useServers } from '../utils/useServers';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../ndk';
@@ -9,6 +9,7 @@ import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { removeExifData } from '../exif';
 import CheckBox from '../components/CheckBox/CheckBox';
 import axios, { AxiosProgressEvent } from 'axios';
+import { formatFileSize } from '../utils';
 
 type TransferStats = {
   enabled: boolean;
@@ -129,6 +130,8 @@ function Upload() {
     }
   };
 
+  const sizeOfFilesToUpload = useMemo(() => files.reduce((acc, file) => (acc += file.size), 0), [files]);
+
   return (
     <>
       <h2>Upload</h2>
@@ -190,7 +193,7 @@ function Upload() {
           onClick={() => upload()}
           disabled={files.length == 0}
         >
-          Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''}
+          Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files` ) : ''} / {formatFileSize(sizeOfFilesToUpload)}
         </button>
       </div>
     </>

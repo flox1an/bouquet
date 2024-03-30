@@ -32,7 +32,7 @@
 }
 
 .blog-list-header button {
-  @apply bg-neutral-800 hover:bg-neutral-700 p-2 ml-2 my-2 rounded-lg;
+  @apply bg-neutral-800 hover:bg-neutral-700 p-2 ml-2 my-2 text-white  rounded-lg  disabled:text-neutral-700 disabled:bg-neutral-900;
 }
 
 .blog-list-header button.selected {
@@ -40,5 +40,5 @@
 }
 
 .blog-list-header svg {
-  @apply w-6 text-white opacity-80 hover:opacity-100;
+  @apply w-6 opacity-80 hover:opacity-100;
 }

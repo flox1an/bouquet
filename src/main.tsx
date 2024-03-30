@@ -13,13 +13,20 @@ import Check from './pages/Check.tsx';
 
 const queryClient = new QueryClient();
 
+import { pdfjs } from 'react-pdf';
+
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.js',
+  import.meta.url,
+).toString();
+
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route element={<Layout />}>
       <Route path="/" element={<Home />} />
       <Route path="/transfer/:source" element={<Transfer />} />
-      <Route path="/upload" element={<Upload/>} />
-      <Route path="/check/:source" element={<Check/>} />
+      <Route path="/upload" element={<Upload />} />
+      <Route path="/check/:source" element={<Check />} />
     </Route>
   )
 );
