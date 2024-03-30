@@ -12,6 +12,8 @@ import { formatDate, formatFileSize } from '../../utils';
 import './BlobList.css';
 import { useEffect, useMemo, useState } from 'react';
 import { Document, Page } from 'react-pdf';
+import * as id3 from 'id3js';
+import { ID3Tag, ID3TagV2 } from 'id3js/lib/id3Tag';
 
 type ListMode = 'gallery' | 'list' | 'audio' | 'video' | 'docs';
 
@@ -21,8 +23,11 @@ type BlobListProps = {
   title?: string;
 };
 
+type AudioBlob = BlobDescriptor & { id3?: ID3Tag; imageData?: string };
+
 const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
   const [mode, setMode] = useState<ListMode>('list');
+  const [audioFiles, setAudioFiles] = useState<AudioBlob[]>([]);
 
   const images = useMemo(
     () => blobs.filter(b => b.type?.startsWith('image/')).sort((a, b) => (a.created > b.created ? -1 : 1)), // descending
@@ -34,10 +39,36 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
     [blobs]
   );
 
-  const audio = useMemo(
-    () => blobs.filter(b => b.type?.startsWith('audio/')).sort((a, b) => (a.created > b.created ? -1 : 1)), // descending
-    [blobs]
-  );
+  const fetchId3Tags = async (audioFiles: AudioBlob[]) => {
+    const id3Tags = await Promise.all(audioFiles.map(af => id3.fromUrl(af.url)));
+
+    const filesWithTags = audioFiles.map((af, i) => ({ ...af, id3: id3Tags[i] || undefined }));
+
+    for (const af of filesWithTags) {
+      if (af.id3 && af.id3.kind == 'v2') {
+        const id3v2 = af.id3 as ID3TagV2;
+        if (id3v2.images[0].data) {
+          const base64data = btoa(
+            new Uint8Array(id3v2.images[0].data).reduce(function (data, byte) {
+              return data + String.fromCharCode(byte);
+            }, '')
+          );
+          af.imageData = `data:${id3v2.images[0].type};base64,${base64data}`;
+        }
+      }
+    }
+
+    setAudioFiles(filesWithTags);
+    return;
+  };
+
+  useEffect(() => {
+    const audioFiles = blobs.filter(b => b.type?.startsWith('audio/')).sort((a, b) => (a.created > b.created ? -1 : 1));
+
+    setAudioFiles(audioFiles);
+
+    fetchId3Tags(audioFiles);
+  }, [blobs]);
 
   const docs = useMemo(
     () => blobs.filter(b => b.type?.startsWith('application/pdf')).sort((a, b) => (a.created > b.created ? -1 : 1)), // descending
@@ -50,7 +81,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
         if (videos.length == 0) setMode('list');
         break;
       case 'audio':
-        if (audio.length == 0) setMode('list');
+        if (audioFiles.length == 0) setMode('list');
         break;
       case 'gallery':
         if (images.length == 0) setMode('list');
@@ -59,7 +90,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
         if (docs.length == 0) setMode('list');
         break;
     }
-  }, [videos, images, audio, mode, docs]);
+  }, [videos, images, audioFiles, mode, docs]);
 
   const Actions = ({ blob, className }: { blob: BlobDescriptor; className?: string }) => (
     <div className={className}>
@@ -101,7 +132,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
           </button>
           <button
             onClick={() => setMode('audio')}
-            disabled={audio.length == 0}
+            disabled={audioFiles.length == 0}
             className={mode == 'audio' ? 'selected' : ''}
             title="Music"
           >
@@ -172,9 +203,27 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
 
       {mode == 'audio' && (
         <div className="blob-list flex flex-wrap justify-center">
-          {audio.map(blob => (
-            <div className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col" style={{ width: '22em' }}>
-              <audio src={blob.url} controls></audio>
+          {audioFiles.map(blob => (
+            <div className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col" style={{ width: '24em' }}>
+              {blob.id3 && (
+                <div className='flex flex-row gap-4 pb-4'>
+                  {blob.imageData && (
+                      <img width="120" src={blob.imageData} />
+                  )}
+
+                  <div className="flex flex-col pb-4 flex-grow">
+                    {blob.id3.title && <span className=" font-bold">{blob.id3.title}</span>}
+                    {blob.id3.artist && <span>{blob.id3.artist}</span>}
+                    {blob.id3.album && (
+                      <span>
+                        {blob.id3.album} {blob.id3.year ? `(${blob.id3.year})` : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              <audio className='w-full' src={blob.url} controls></audio>
+
               <div className="flex flex-grow flex-row text-xs pt-12 items-end">
                 <span>{formatFileSize(blob.size)}</span>
                 <span className=" flex-grow text-right">{formatDate(blob.created)}</span>

@@ -6,7 +6,7 @@ import { NDKKind } from '@nostr-dev-kit/ndk';
 import useEvent from '../useEvent';
 
 const additionalServers = [
-  'https://media-server.slidestr.net',
+  //'https://media-server.slidestr.net',
   //'https://cdn.hzrd149.com',
   'https://cdn.satellite.earth',
 ];

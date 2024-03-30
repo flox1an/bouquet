@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { NDKContextProvider } from './ndk.tsx';
 import { Route, RouterProvider, createBrowserRouter, createRoutesFromElements } from 'react-router-dom';
 import { Layout } from './components/Layout/Layout.tsx';
@@ -37,7 +36,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <NDKContextProvider>
         <RouterProvider router={router} />
       </NDKContextProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
+     {/*  <ReactQueryDevtools initialIsOpen={false} />*/}
     </QueryClientProvider>
   </React.StrictMode>
 );
