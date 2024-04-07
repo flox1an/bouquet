@@ -12,6 +12,8 @@ import { useNavigate } from 'react-router-dom';
 
 // TODOs
 /*
+- display flle progress for transfer
+- stop/pause transfer
 - multi threaded sync
 - Add server and pulbish list event
 - upload to single/multi servers

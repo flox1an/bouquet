@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Document, Page } from 'react-pdf';
 import * as id3 from 'id3js';
 import { ID3Tag, ID3TagV2 } from 'id3js/lib/id3Tag';
+import { useQueries } from '@tanstack/react-query';
 
 type ListMode = 'gallery' | 'list' | 'audio' | 'video' | 'docs';
 
@@ -27,7 +28,6 @@ type AudioBlob = BlobDescriptor & { id3?: ID3Tag; imageData?: string };
 
 const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
   const [mode, setMode] = useState<ListMode>('list');
-  const [audioFiles, setAudioFiles] = useState<AudioBlob[]>([]);
 
   const images = useMemo(
     () => blobs.filter(b => b.type?.startsWith('image/')).sort((a, b) => (a.created > b.created ? -1 : 1)), // descending
@@ -39,36 +39,40 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
     [blobs]
   );
 
-  const fetchId3Tags = async (audioFiles: AudioBlob[]) => {
-    const id3Tags = await Promise.all(audioFiles.map(af => id3.fromUrl(af.url)));
+  const fetchId3Tag = async (blob: BlobDescriptor) => {
+    const id3Tag = await id3.fromUrl(blob.url).catch(e => console.warn(e));
 
-    const filesWithTags = audioFiles.map((af, i) => ({ ...af, id3: id3Tags[i] || undefined }));
-
-    for (const af of filesWithTags) {
-      if (af.id3 && af.id3.kind == 'v2') {
-        const id3v2 = af.id3 as ID3TagV2;
-        if (id3v2.images[0].data) {
-          const base64data = btoa(
-            new Uint8Array(id3v2.images[0].data).reduce(function (data, byte) {
-              return data + String.fromCharCode(byte);
-            }, '')
-          );
-          af.imageData = `data:${id3v2.images[0].type};base64,${base64data}`;
-        }
+    if (id3Tag && id3Tag.kind == 'v2') {
+      const id3v2 = id3Tag as ID3TagV2;
+      if (id3v2.images[0].data) {
+        const base64data = btoa(
+          new Uint8Array(id3v2.images[0].data).reduce(function (data, byte) {
+            return data + String.fromCharCode(byte);
+          }, '')
+        );
+        const imageData = `data:${id3v2.images[0].type};base64,${base64data}`;
+        return { ...blob, id3: id3Tag, imageData } as AudioBlob;
       }
     }
-
-    setAudioFiles(filesWithTags);
-    return;
+    return { ...blob, id3: id3Tag } as AudioBlob;
   };
 
-  useEffect(() => {
-    const audioFiles = blobs.filter(b => b.type?.startsWith('audio/')).sort((a, b) => (a.created > b.created ? -1 : 1));
+  const audioFiles = useMemo(
+    () => blobs.filter(b => b.type?.startsWith('audio/')).sort((a, b) => (a.created > b.created ? -1 : 1)),
+    [blobs]
+  );
 
-    setAudioFiles(audioFiles);
-
-    fetchId3Tags(audioFiles);
-  }, [blobs]);
+  const audioFilesWithId3 = useQueries({
+    queries: audioFiles.map(af => ({
+      queryKey: ['id3', af.sha256],
+      queryFn: async () => {
+        return await fetchId3Tag(af);
+      },
+      enabled: mode == 'audio' && !!audioFiles && audioFiles.length > 0,
+      staleTime: 1000 * 60 * 5,
+      cacheTime: 1000 * 60 * 5,
+    })),
+  });
 
   const docs = useMemo(
     () => blobs.filter(b => b.type?.startsWith('application/pdf')).sort((a, b) => (a.created > b.created ? -1 : 1)), // descending
@@ -160,7 +164,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
       {mode == 'gallery' && (
         <div className="blob-list flex flex-wrap justify-center flex-grow">
           {images.map(blob => (
-            <div className="p-2 rounded-lg bg-neutral-900 m-2 relative inline-block text-center">
+            <div key={blob.sha256} className="p-2 rounded-lg bg-neutral-900 m-2 relative inline-block text-center">
               <a href={blob.url} target="_blank">
                 <div
                   className=""
@@ -189,7 +193,11 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
       {mode == 'video' && (
         <div className="blob-list flex flex-wrap justify-center">
           {videos.map(blob => (
-            <div className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col" style={{ width: '340px' }}>
+            <div
+              key={blob.sha256}
+              className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col"
+              style={{ width: '340px' }}
+            >
               <video src={blob.url} preload="metadata" width={320} controls playsInline></video>
               <div className="flex flex-grow flex-row text-xs pt-12 items-end">
                 <span>{formatFileSize(blob.size)}</span>
@@ -202,42 +210,52 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
       )}
 
       {mode == 'audio' && (
-        <div className="blob-list flex flex-wrap justify-center">
-          {audioFiles.map(blob => (
-            <div className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col" style={{ width: '24em' }}>
-              {blob.id3 && (
-                <div className='flex flex-row gap-4 pb-4'>
-                  {blob.imageData && (
-                      <img width="120" src={blob.imageData} />
+        <div className="blob-li st flex flex-wrap justify-center">
+          {audioFilesWithId3.map(
+            blob =>
+              blob.isSuccess && (
+                <div
+                  key={blob.data.sha256}
+                  className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col"
+                  style={{ width: '24em' }}
+                >
+                  {blob.data.id3 && (
+                    <div className="flex flex-row gap-4 pb-4">
+                      {blob.data.imageData && <img width="120" src={blob.data.imageData} />}
+
+                      <div className="flex flex-col pb-4 flex-grow">
+                        {blob.data.id3.title && <span className=" font-bold">{blob.data.id3.title}</span>}
+                        {blob.data.id3.artist && <span>{blob.data.id3.artist}</span>}
+                        {blob.data.id3.album && (
+                          <span>
+                            {blob.data.id3.album} {blob.data.id3.year ? `(${blob.data.id3.year})` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   )}
 
-                  <div className="flex flex-col pb-4 flex-grow">
-                    {blob.id3.title && <span className=" font-bold">{blob.id3.title}</span>}
-                    {blob.id3.artist && <span>{blob.id3.artist}</span>}
-                    {blob.id3.album && (
-                      <span>
-                        {blob.id3.album} {blob.id3.year ? `(${blob.id3.year})` : ''}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-              <audio className='w-full' src={blob.url} controls></audio>
+                  <audio className="w-full" src={blob.data.url} controls preload="metadata"></audio>
 
-              <div className="flex flex-grow flex-row text-xs pt-12 items-end">
-                <span>{formatFileSize(blob.size)}</span>
-                <span className=" flex-grow text-right">{formatDate(blob.created)}</span>
-              </div>
-              <Actions blob={blob} className="actions absolute bottom-10 right-2 " />
-            </div>
-          ))}
+                  <div className="flex flex-grow flex-row text-xs pt-12 items-end">
+                    <span>{formatFileSize(blob.data.size)}</span>
+                    <span className=" flex-grow text-right">{formatDate(blob.data.created)}</span>
+                  </div>
+                  <Actions blob={blob.data} className="actions absolute bottom-10 right-2 " />
+                </div>
+              )
+          )}
         </div>
       )}
 
       {mode == 'docs' && (
         <div className="blob-list flex flex-wrap justify-center">
           {docs.map(blob => (
-            <div className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col" style={{ width: '22em' }}>
+            <div
+              key={blob.sha256}
+              className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col"
+              style={{ width: '22em' }}
+            >
               <a href={blob.url} target="_blank" className="block overflow-clip text-ellipsis py-2">
                 <Document file={blob.url}>
                   <Page
