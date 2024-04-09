@@ -4,7 +4,7 @@ import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../ndk';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpOnSquareIcon } from '@heroicons/react/24/outline';
+import { ArrowUpOnSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { removeExifData } from '../exif';
 import CheckBox from '../components/CheckBox/CheckBox';
@@ -25,8 +25,29 @@ function Upload() {
   const [transfers, setTransfers] = useState<{ [key: string]: TransferStats }>({});
   const [files, setFiles] = useState<File[]>([]);
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
+  const [transferSpeed, setTransferSpeed] = useState<number | undefined>();
+
   // const [resizeImages, setResizeImages] = useState(false);
   // const [publishToNostr, setPublishToNostr] = useState(false);
+
+  type ImageSize = {
+    width: number;
+    height: number;
+  };
+
+  const getImageSize = async (imageFile: File): Promise<ImageSize> => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(imageFile);
+    const promise = new Promise<ImageSize>((resolve, reject) => {
+      img.onload = () => {
+        resolve({ width: img.width, height: img.height });
+        URL.revokeObjectURL(objectUrl);
+      };
+      img.onerror = () => reject();
+    });
+    img.src = objectUrl;
+    return promise;
+  };
 
   async function uploadBlob(
     server: string,
@@ -59,6 +80,12 @@ function Upload() {
 
     // TODO use https://github.com/davejm/client-compress
     // for image resizing
+    for (const file of filesToUpload) {
+      if (file.type.startsWith('image/')) {
+        const dimensions = await getImageSize(file);
+        console.log(dimensions);
+      }
+    }
 
     if (filesToUpload && filesToUpload.length) {
       // sum files sizes
@@ -85,6 +112,7 @@ function Upload() {
           const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
 
           const newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
+            setTransferSpeed(progressEvent.rate);
             setTransfers(ut => ({
               ...ut,
               [server.name]: { ...ut[server.name], transferred: serverTransferred + progressEvent.loaded },
@@ -101,6 +129,7 @@ function Upload() {
         }
         queryClient.invalidateQueries({ queryKey: ['blobs', server.name] });
         setFiles([]);
+        // TODO reset input control value??
       }
     }
   };
@@ -118,6 +147,7 @@ function Upload() {
     if (selectedFiles && selectedFiles.length > 0) {
       const newFiles = Array.from(selectedFiles);
       setFiles(prevFiles => [...prevFiles, ...newFiles]);
+      clearTransfers();
     }
   };
 
@@ -127,6 +157,7 @@ function Upload() {
     if (droppedFiles && droppedFiles.length > 0) {
       const newFiles = Array.from(droppedFiles);
       setFiles(prevFiles => [...prevFiles, ...newFiles]);
+      clearTransfers();
     }
   };
 
@@ -145,7 +176,6 @@ function Upload() {
         >
           <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
         </label>
-
         <h3 className="text-lg text-white">Servers</h3>
         <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
           {servers.map(s => (
@@ -157,14 +187,17 @@ function Upload() {
                 label={s.name}
               ></CheckBox>
               {transfers[s.name]?.enabled ? (
-                <ProgressBar value={transfers[s.name].transferred} max={transfers[s.name].size} />
+                <ProgressBar
+                  value={transfers[s.name].transferred}
+                  max={transfers[s.name].size}
+                  description={transferSpeed ? '' + formatFileSize(transferSpeed) + '/s' : ''}
+                />
               ) : (
                 <div></div>
               )}
             </>
           ))}
         </div>
-
         <h3 className="text-lg text-white">Options</h3>
         <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em auto' }}>
           <CheckBox
@@ -188,13 +221,25 @@ function Upload() {
           ></CheckBox>
           */}
         </div>
-        <button
-          className="p-2 px-4  bg-zinc-600 hover:bg-pink-700 text-white rounded-lg w-2/6 disabled:text-zinc-800 disabled:bg-zinc-900 "
-          onClick={() => upload()}
-          disabled={files.length == 0}
-        >
-          Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files` ) : ''} / {formatFileSize(sizeOfFilesToUpload)}
-        </button>
+        <div className="flex flex-row gap-2">
+          <button
+            className="p-2 px-4  bg-zinc-600 hover:bg-pink-700 text-white rounded-lg w-3/12 disabled:text-zinc-800 disabled:bg-zinc-900 "
+            onClick={() => upload()}
+            disabled={files.length == 0}
+          >
+            Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
+            {formatFileSize(sizeOfFilesToUpload)}
+          </button>
+          <button
+            className="p-2 px-4 bg-zinc-600 hover:bg-pink-700 text-white rounded-lg  "
+            onClick={() => {
+              clearTransfers();
+              setFiles([]);
+            }}
+          >
+            <TrashIcon className="w-6" />
+          </button>
+        </div>
       </div>
     </>
   );

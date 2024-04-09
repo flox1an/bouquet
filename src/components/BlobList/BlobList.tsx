@@ -1,6 +1,7 @@
 import {
   ClipboardDocumentIcon,
   DocumentIcon,
+  ExclamationTriangleIcon,
   FilmIcon,
   ListBulletIcon,
   MusicalNoteIcon,
@@ -15,6 +16,7 @@ import { Document, Page } from 'react-pdf';
 import * as id3 from 'id3js';
 import { ID3Tag, ID3TagV2 } from 'id3js/lib/id3Tag';
 import { useQueries } from '@tanstack/react-query';
+import { useServerInfo } from '../../utils/useServerInfo';
 
 type ListMode = 'gallery' | 'list' | 'audio' | 'video' | 'docs';
 
@@ -28,6 +30,7 @@ type AudioBlob = BlobDescriptor & { id3?: ID3Tag; imageData?: string };
 
 const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
   const [mode, setMode] = useState<ListMode>('list');
+  const { distribution } = useServerInfo();
 
   const images = useMemo(
     () => blobs.filter(b => b.type?.startsWith('image/')).sort((a, b) => (a.created > b.created ? -1 : 1)), // descending
@@ -100,18 +103,18 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
     <div className={className}>
       <span>
         <a
-          className=" cursor-pointer"
+          className="cursor-pointer"
           onClick={() => {
             navigator.clipboard.writeText(blob.url);
           }}
         >
-          <ClipboardDocumentIcon />
+          <ClipboardDocumentIcon title="Copy link to clipboard" />
         </a>
       </span>
       {onDelete && (
         <span>
-          <a onClick={() => onDelete(blob)} className=" cursor-pointer">
-            <TrashIcon />
+          <a onClick={() => onDelete(blob)} className="cursor-pointer">
+            <TrashIcon title="Delete this blob" />
           </a>
         </span>
       )}
@@ -288,6 +291,18 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
                 <a href={blob.url} target="_blank">
                   {blob.sha256}
                 </a>
+              </span>
+              {/*
+              <span>
+                <a className="pill">🌸 drive</a> <a className="pill">📝 post</a>
+              </span>
+               */}
+              <span>
+                {distribution[blob.sha256].servers.length == 1 ? (
+                  <ExclamationTriangleIcon title="Not distributed to any other server" />
+                ) : (
+                  ''
+                )}
               </span>
               <span>{formatFileSize(blob.size)}</span>
               <span>{blob.type && `${blob.type}`}</span>

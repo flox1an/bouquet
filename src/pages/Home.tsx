@@ -54,13 +54,13 @@ function Home() {
 
   return (
     <>
-      <h2>Servers</h2>
       <ServerList
         servers={Object.values(serverInfo).sort()}
         selectedServer={selectedServer}
         setSelectedServer={setSelectedServer}
         onTransfer={() => navigate('/transfer/' + selectedServer)}
         onCheck={() => navigate('/check/' + selectedServer)}
+        title={<>Servers</>}
       ></ServerList>
 
       {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && (
