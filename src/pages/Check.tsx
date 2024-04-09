@@ -9,7 +9,7 @@ function Check() {
   return (
     <>
       <h2>Check integrity</h2>
-      <p className="py-4 text-neutral-400">
+      <p className="py-4 text-zinc-400">
         Downloads all objects from the server and checks the integrity of the content.
       </p>
       <ServerList

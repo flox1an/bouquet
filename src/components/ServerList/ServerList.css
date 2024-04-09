@@ -3,7 +3,7 @@
 }
 
 .server {
-  @apply bg-neutral-800 text-neutral-300 rounded-lg p-4 gap-4 flex flex-row items-center;
+  @apply bg-zinc-800 text-zinc-300 rounded-lg p-4 gap-4 flex flex-row items-center;
 }
 
 .server.selected {

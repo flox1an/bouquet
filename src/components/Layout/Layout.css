@@ -39,5 +39,5 @@
 }
 
 .footer {
-  @apply self-center text-neutral-600 pt-12 pb-6;
+  @apply self-center text-zinc-600 pt-12 pb-6;
 }

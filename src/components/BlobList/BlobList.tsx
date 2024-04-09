@@ -164,7 +164,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
       {mode == 'gallery' && (
         <div className="blob-list flex flex-wrap justify-center flex-grow">
           {images.map(blob => (
-            <div key={blob.sha256} className="p-2 rounded-lg bg-neutral-900 m-2 relative inline-block text-center">
+            <div key={blob.sha256} className="p-2 rounded-lg bg-zinc-900 m-2 relative inline-block text-center">
               <a href={blob.url} target="_blank">
                 <div
                   className=""
@@ -195,7 +195,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
           {videos.map(blob => (
             <div
               key={blob.sha256}
-              className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col"
+              className="p-4 rounded-lg bg-zinc-900 m-2 relative flex flex-col"
               style={{ width: '340px' }}
             >
               <video src={blob.url} preload="metadata" width={320} controls playsInline></video>
@@ -216,7 +216,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
               blob.isSuccess && (
                 <div
                   key={blob.data.sha256}
-                  className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col"
+                  className="p-4 rounded-lg bg-zinc-900 m-2 relative flex flex-col"
                   style={{ width: '24em' }}
                 >
                   {blob.data.id3 && (
@@ -253,7 +253,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
           {docs.map(blob => (
             <div
               key={blob.sha256}
-              className="p-4 rounded-lg bg-neutral-900 m-2 relative flex flex-col"
+              className="p-4 rounded-lg bg-zinc-900 m-2 relative flex flex-col"
               style={{ width: '22em' }}
             >
               <a href={blob.url} target="_blank" className="block overflow-clip text-ellipsis py-2">

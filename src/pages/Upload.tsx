@@ -135,11 +135,11 @@ function Upload() {
   return (
     <>
       <h2>Upload</h2>
-      <div className=" bg-neutral-800 rounded-xl p-4 text-neutral-400 gap-4 flex flex-col">
+      <div className=" bg-zinc-800 rounded-xl p-4 text-zinc-400 gap-4 flex flex-col">
         <input id="browse" type="file" hidden multiple onChange={handleFileChange} />
         <label
           htmlFor="browse"
-          className="p-8 bg-neutral-700 rounded-lg hover:text-white text-neutral-400 border-dashed  border-neutral-500 border-2 block cursor-pointer text-center"
+          className="p-8 bg-zinc-700 rounded-lg hover:text-white text-zinc-400 border-dashed  border-zinc-500 border-2 block cursor-pointer text-center"
           onDrop={handleDrop}
           onDragOver={event => event.preventDefault()}
         >
@@ -189,7 +189,7 @@ function Upload() {
           */}
         </div>
         <button
-          className="p-2 px-4  bg-neutral-600 hover:bg-pink-700 text-white rounded-lg w-2/6 disabled:text-neutral-800 disabled:bg-neutral-900 "
+          className="p-2 px-4  bg-zinc-600 hover:bg-pink-700 text-white rounded-lg w-2/6 disabled:text-zinc-800 disabled:bg-zinc-900 "
           onClick={() => upload()}
           disabled={files.length == 0}
         >

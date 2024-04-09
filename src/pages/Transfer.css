@@ -15,7 +15,7 @@
 }
 
 .error-log {
-  @apply bg-neutral-800 p-4 text-neutral-300 rounded-lg;
+  @apply bg-zinc-800 p-4 text-zinc-300 rounded-lg;
 }
 
 .error-log svg {
@@ -23,7 +23,7 @@
 }
 
 .error-log div {
-  @apply p-1 hover:bg-neutral-700 rounded-md grid pr-4;
+  @apply p-1 hover:bg-zinc-700 rounded-md grid pr-4;
   grid-template-columns: 2em auto 6em 2em 15em;
 }
 .error-log div span {
