@@ -2,16 +2,12 @@
   @apply w-5 inline align-text-bottom mr-1;
 }
 
-.blob-list a {
-  @apply text-pink-500 hover:text-white;
-}
-
 .blob-list {
-  @apply bg-zinc-800 p-4 text-zinc-300 rounded-lg;
+  @apply bg-base-200 p-4 text-neutral-content rounded-lg;
 }
 
 .blob-list .blob {
-  @apply p-1 hover:bg-zinc-700 rounded-md grid pr-4;
+  @apply p-1 hover:bg-base-200 rounded-md grid pr-4;
   grid-template-columns: 2em auto /*auto*/ 2em 6em 10em 7em 3em;
 }
 
@@ -19,12 +15,8 @@
   @apply overflow-ellipsis overflow-hidden text-nowrap;
 }
 
-.blob-list .blob a {
-  @apply cursor-pointer;
-}
-
 .blog-list-header {
-  @apply flex flex-row mt-4;
+  @apply flex flex-row py-2 items-center;
 }
 
 .blog-list-header h2 {
@@ -32,11 +24,11 @@
 }
 
 .blog-list-header button {
-  @apply bg-zinc-800 hover:bg-zinc-700 p-2 ml-2 my-2 text-white rounded-lg disabled:text-zinc-700 disabled:bg-zinc-900;
+  @apply btn p-2 ml-2 my-2 text-neutral-content rounded-lg;
 }
 
 .blog-list-header button.selected {
-  @apply bg-pink-700 text-white;
+  @apply btn-primary text-primary-content;
 }
 
 .blog-list-header svg {
@@ -44,5 +36,5 @@
 }
 
 .blob-list .blob span a.pill {
-  @apply bg-zinc-700 p-1 px-2 rounded-2xl text-white;
+  @apply bg-base-200 p-1 px-2 rounded-2xl text-white;
 }

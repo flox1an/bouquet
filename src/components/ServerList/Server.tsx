@@ -39,7 +39,7 @@ const Server = ({
     <div
       className={
         `server ${selectedServer == server.name ? 'selected' : ''} ` +
-        `${setSelectedServer ? ' hover:bg-zinc-700 cursor-pointer' : ''}  `
+        `${setSelectedServer ? ' hover:bg-base-200 cursor-pointer' : ''}  `
       }
       key={server.name}
       onClick={() => setSelectedServer && setSelectedServer(server.name)}

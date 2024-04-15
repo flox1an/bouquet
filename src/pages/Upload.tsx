@@ -4,18 +4,34 @@ import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../ndk';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpOnSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
-import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { removeExifData } from '../exif';
-import CheckBox from '../components/CheckBox/CheckBox';
 import axios, { AxiosProgressEvent } from 'axios';
+import { ArrowUpOnSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
+import CheckBox from '../components/CheckBox/CheckBox';
+import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { formatFileSize } from '../utils';
+import FileEventEditor, { FileEventData } from '../components/FileEventEditor/FileEventEditor';
 
 type TransferStats = {
   enabled: boolean;
   size: number;
   transferred: number;
 };
+
+/*
+TODO
+steps
+- select files
+- (preview/reisze/exif removal)
+  - images: size, blurimage, dimensions
+  - audio: id3 tag
+  - video: dimensions, bitrate
+- upload
+  - server slection, progress bars, upload speed
+- 
+
+
+*/
 
 function Upload() {
   const servers = useServers();
@@ -26,6 +42,8 @@ function Upload() {
   const [files, setFiles] = useState<File[]>([]);
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
   const [transferSpeed, setTransferSpeed] = useState<number | undefined>();
+
+  const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
 
   // const [resizeImages, setResizeImages] = useState(false);
   // const [publishToNostr, setPublishToNostr] = useState(false);
@@ -80,10 +98,11 @@ function Upload() {
 
     // TODO use https://github.com/davejm/client-compress
     // for image resizing
+    const fileDimensions: { [key: string]: ImageSize } = {};
     for (const file of filesToUpload) {
       if (file.type.startsWith('image/')) {
         const dimensions = await getImageSize(file);
-        console.log(dimensions);
+        fileDimensions[file.name] = dimensions;
       }
     }
 
@@ -126,6 +145,22 @@ function Upload() {
           }));
 
           console.log(newBlob);
+
+          const dim = fileDimensions[file.name];
+
+          const fed: FileEventData = {
+            content: file.name,
+            x: newBlob.sha256,
+            url: newBlob.url,
+            size: `${newBlob.size}`,
+          };
+          if (newBlob.type) {
+            fed.m = newBlob.type;
+          }
+          if (dim) {
+            fed.dim = `${dim.width}x${dim.height}`;
+          }
+          setFileEventsToPublish(fetp => [...fetp, fed]);
         }
         queryClient.invalidateQueries({ queryKey: ['blobs', server.name] });
         setFiles([]);
@@ -136,6 +171,7 @@ function Upload() {
 
   const clearTransfers = () => {
     setTransfers(servers.reduce((acc, s) => ({ ...acc, [s.name]: { enabled: true, size: 0, transferred: 0 } }), {}));
+    setFileEventsToPublish([]);
   };
 
   useEffect(() => {
@@ -165,18 +201,18 @@ function Upload() {
 
   return (
     <>
-      <h2>Upload</h2>
-      <div className=" bg-zinc-800 rounded-xl p-4 text-zinc-400 gap-4 flex flex-col">
+      <h2 className=" py-4">Upload</h2>
+      <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
         <input id="browse" type="file" hidden multiple onChange={handleFileChange} />
         <label
           htmlFor="browse"
-          className="p-8 bg-zinc-700 rounded-lg hover:text-white text-zinc-400 border-dashed  border-zinc-500 border-2 block cursor-pointer text-center"
+          className="p-8 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
           onDrop={handleDrop}
           onDragOver={event => event.preventDefault()}
         >
           <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
         </label>
-        <h3 className="text-lg text-white">Servers</h3>
+        <h3 className="text-lg">Servers</h3>
         <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
           {servers.map(s => (
             <>
@@ -198,7 +234,7 @@ function Upload() {
             </>
           ))}
         </div>
-        <h3 className="text-lg text-white">Options</h3>
+        <h3 className="text-lg text-neutral-content">Options</h3>
         <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em auto' }}>
           <CheckBox
             name="cleanData"
@@ -222,16 +258,13 @@ function Upload() {
           */}
         </div>
         <div className="flex flex-row gap-2">
-          <button
-            className="p-2 px-4  bg-zinc-600 hover:bg-pink-700 text-white rounded-lg w-3/12 disabled:text-zinc-800 disabled:bg-zinc-900 "
-            onClick={() => upload()}
-            disabled={files.length == 0}
-          >
+          <button className="btn btn-primary" onClick={() => upload()} disabled={files.length == 0}>
             Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
             {formatFileSize(sizeOfFilesToUpload)}
           </button>
           <button
-            className="p-2 px-4 bg-zinc-600 hover:bg-pink-700 text-white rounded-lg  "
+            className="btn  btn-secondary  "
+            disabled={files.length == 0}
             onClick={() => {
               clearTransfers();
               setFiles([]);
@@ -241,6 +274,14 @@ function Upload() {
           </button>
         </div>
       </div>
+      {fileEventsToPublish.length > 0 && (
+        <>
+          <h2>Publish events</h2>
+          {fileEventsToPublish.map(fe => (
+            <FileEventEditor data={fe} />
+          ))}
+        </>
+      )}
     </>
   );
 }

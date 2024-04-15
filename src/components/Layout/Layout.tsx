@@ -3,6 +3,7 @@ import { useNDK } from '../../ndk';
 import './Layout.css';
 import { ArrowUpOnSquareIcon } from '@heroicons/react/24/outline';
 import { useEffect } from 'react';
+import ThemeSwitcher from '../ThemeSwitcher';
 
 export const Layout = () => {
   const navigate = useNavigate();
@@ -19,9 +20,12 @@ export const Layout = () => {
           <img src="/bouquet.png" /> <span>bouquet</span>
         </a>
         <div>
-          <a className="action" onClick={() => navigate('/upload')}>
-            <ArrowUpOnSquareIcon />
-          </a>
+          <ThemeSwitcher />
+          <div className="tooltip tooltip-bottom" data-tip="Upload">
+            <button className=" btn btn-square btn-ghost" onClick={() => navigate('/upload')}>
+              <ArrowUpOnSquareIcon />
+            </button>
+          </div>
         </div>
         <div className="avatar">
           <img src={user?.profile?.image} />

@@ -3,15 +3,19 @@
 }
 
 .server {
-  @apply bg-zinc-800 text-zinc-300 rounded-lg p-4 gap-4 flex flex-row items-center;
-}
-
-.server.selected {
-  @apply bg-pink-700 cursor-default;
+  @apply bg-base-200 text-neutral-content rounded-lg p-4 gap-4 flex flex-row items-center;
 }
 
 .server-name {
-  @apply text-2xl mb-2 text-white;
+  @apply text-2xl mb-2 text-neutral-content;
+}
+
+.server.selected {
+  @apply bg-primary text-primary-content cursor-default;
+}
+
+.server.selected .server-name {
+  @apply text-white;
 }
 
 .server-stats {
@@ -55,9 +59,8 @@
   animation: spin 3s linear infinite;
 }
 
-
 .server-list-header {
-  @apply flex flex-row mt-4;
+  @apply flex flex-row py-4;
 }
 
 .server-list-header h2 {

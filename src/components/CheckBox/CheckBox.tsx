@@ -11,7 +11,7 @@ const CheckBox = ({
 }) => (
   <>
     <input
-      className="w-5 accent-pink-700 hover:accent-pink-600"
+      className="checkbox checkbox-primary"
       id={name}
       type="checkbox"
       checked={checked}

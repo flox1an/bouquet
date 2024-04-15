@@ -103,7 +103,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
     <div className={className}>
       <span>
         <a
-          className="cursor-pointer"
+          className="link link-primary"
           onClick={() => {
             navigator.clipboard.writeText(blob.url);
           }}
@@ -113,7 +113,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
       </span>
       {onDelete && (
         <span>
-          <a onClick={() => onDelete(blob)} className="cursor-pointer">
+          <a onClick={() => onDelete(blob)} className="link link-primary">
             <TrashIcon title="Delete this blob" />
           </a>
         </span>
@@ -125,49 +125,60 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
     <>
       <div className={`blog-list-header ${!title ? 'justify-end' : ''}`}>
         {title && <h2>{title}</h2>}
-        <div className=" content-center">
-          <button onClick={() => setMode('list')} className={mode == 'list' ? 'selected' : ''} title="All content">
-            <ListBulletIcon />
-          </button>
-          <button
-            onClick={() => setMode('gallery')}
-            disabled={images.length == 0}
-            className={mode == 'gallery' ? 'selected' : ''}
-            title="Images"
-          >
-            <PhotoIcon />
-          </button>
-          <button
-            onClick={() => setMode('audio')}
-            disabled={audioFiles.length == 0}
-            className={mode == 'audio' ? 'selected' : ''}
-            title="Music"
-          >
-            <MusicalNoteIcon />
-          </button>
-          <button
-            onClick={() => setMode('video')}
-            disabled={videos.length == 0}
-            className={mode == 'video' ? 'selected' : ''}
-            title="Video"
-          >
-            <FilmIcon />
-          </button>
-          <button
-            onClick={() => setMode('docs')}
-            disabled={videos.length == 0}
-            className={mode == 'docs' ? 'selected' : ''}
-            title="PDF Documents"
-          >
-            <DocumentIcon />
-          </button>
-        </div>
+        <ul className="menu menu-horizontal  menu-active bg-base-200 rounded-box">
+          <li>
+            <a
+              className={' tooltip ' + (mode == 'list' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}
+              data-tip="All content"
+              onClick={() => setMode('list')}
+            >
+              <ListBulletIcon />
+            </a>
+          </li>
+          <li className={images.length == 0 ? 'disabled' : ''}>
+            <a
+              className={' tooltip ' + (mode == 'gallery' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}
+              onClick={() => setMode('gallery')}
+              data-tip="Images"
+            >
+              <PhotoIcon />
+            </a>
+          </li>
+
+          <li className={audioFiles.length == 0 ? 'disabled' : ''}>
+            <a
+              className={' tooltip  ' + (mode == 'audio' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}
+              onClick={() => setMode('audio')}
+              data-tip="Music"
+            >
+              <MusicalNoteIcon />
+            </a>
+          </li>
+          <li className={videos.length == 0 ? 'disabled' : ''}>
+            <a
+              className={' tooltip ' + (mode == 'video' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}
+              onClick={() => setMode('video')}
+              data-tip="Video"
+            >
+              <FilmIcon />
+            </a>
+          </li>
+          <li className={docs.length == 0 ? 'disabled' : ''}>
+            <a
+              className={' tooltip ' + (mode == 'docs' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}
+              onClick={() => setMode('docs')}
+              data-tip="PDF documents"
+            >
+              <DocumentIcon />
+            </a>
+          </li>
+        </ul>
       </div>
 
       {mode == 'gallery' && (
         <div className="blob-list flex flex-wrap justify-center flex-grow">
           {images.map(blob => (
-            <div key={blob.sha256} className="p-2 rounded-lg bg-zinc-900 m-2 relative inline-block text-center">
+            <div key={blob.sha256} className="p-2 rounded-lg bg-base-300 m-2 relative inline-block text-center">
               <a href={blob.url} target="_blank">
                 <div
                   className=""
@@ -198,7 +209,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
           {videos.map(blob => (
             <div
               key={blob.sha256}
-              className="p-4 rounded-lg bg-zinc-900 m-2 relative flex flex-col"
+              className="p-4 rounded-lg bg-base-300 m-2 relative flex flex-col"
               style={{ width: '340px' }}
             >
               <video src={blob.url} preload="metadata" width={320} controls playsInline></video>
@@ -219,7 +230,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
               blob.isSuccess && (
                 <div
                   key={blob.data.sha256}
-                  className="p-4 rounded-lg bg-zinc-900 m-2 relative flex flex-col"
+                  className="p-4 rounded-lg bg-base-300 m-2 relative flex flex-col"
                   style={{ width: '24em' }}
                 >
                   {blob.data.id3 && (
@@ -256,7 +267,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
           {docs.map(blob => (
             <div
               key={blob.sha256}
-              className="p-4 rounded-lg bg-zinc-900 m-2 relative flex flex-col"
+              className="p-4 rounded-lg bg-base-300 m-2 relative flex flex-col"
               style={{ width: '22em' }}
             >
               <a href={blob.url} target="_blank" className="block overflow-clip text-ellipsis py-2">
@@ -288,7 +299,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
                 <DocumentIcon />
               </span>
               <span>
-                <a href={blob.url} target="_blank">
+                <a className="link link-primary" href={blob.url} target="_blank">
                   {blob.sha256}
                 </a>
               </span>
@@ -299,11 +310,11 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
                */}
               <span>
                 {distribution[blob.sha256].servers.length == 1 ? (
-                  <ExclamationTriangleIcon title="Not distributed to any other server" />
+                  <ExclamationTriangleIcon  title="Not distributed to any other server" />
                 ) : (
                   ''
                 )}
-              </span>
+              </span> 
               <span>{formatFileSize(blob.size)}</span>
               <span>{blob.type && `${blob.type}`}</span>
               <span>{formatDate(blob.created)}</span>
