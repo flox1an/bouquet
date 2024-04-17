@@ -25,16 +25,12 @@ console.log(allXTags);
   }, [fileMetaSub.events]);
 */
 
-
-  const fileMetaEventsByHash = useMemo(
-    () => {
-        const allXTags = fileMetaSub.events.flatMap(ev => ev.tags.filter(t => t[0]=='x').flatMap(t => ({x:t[1], ev})));
-        const groupedByX= groupBy(allXTags, item => item.x);
-        return mapValues(groupedByX, v => v.map(e => e.ev));
-    }, 
-    [fileMetaSub]
-  );
-  console.log(fileMetaEventsByHash)
+  const fileMetaEventsByHash = useMemo(() => {
+    const allXTags = fileMetaSub.events.flatMap(ev => ev.tags.filter(t => t[0] == 'x').flatMap(t => ({ x: t[1], ev })));
+    const groupedByX = groupBy(allXTags, item => item.x);
+    return mapValues(groupedByX, v => v.map(e => e.ev));
+  }, [fileMetaSub]);
+  console.log(fileMetaEventsByHash);
 
   return fileMetaEventsByHash;
 };

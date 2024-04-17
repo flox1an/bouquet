@@ -55,7 +55,7 @@ const Server = ({
         </div>
         {serverInfo.isError ? (
           <div className="badge badge-error">
-            <ExclamationTriangleIcon className='w-4 mr-2'/> Error connecting to server
+            <ExclamationTriangleIcon className="w-4 mr-2" /> Error connecting to server
           </div>
         ) : (
           <div className="server-stats">

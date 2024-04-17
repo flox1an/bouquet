@@ -106,7 +106,11 @@ export const Transfer = () => {
         <ServerList
           servers={Object.values(serverInfo).filter(s => s.name == transferSource)}
           onCancel={() => closeTransferMode()}
-          title={<><ArrowUpOnSquareIcon /> Transfer Source</>}
+          title={
+            <>
+              <ArrowUpOnSquareIcon /> Transfer Source
+            </>
+          }
         ></ServerList>
         <ServerList
           servers={Object.values(serverInfo)
@@ -114,7 +118,11 @@ export const Transfer = () => {
             .sort()}
           selectedServer={transferTarget}
           setSelectedServer={setTransferTarget}
-          title={<><ArrowDownOnSquareIcon /> Transfer Target</>}
+          title={
+            <>
+              <ArrowDownOnSquareIcon /> Transfer Target
+            </>
+          }
         ></ServerList>
         {transferTarget && transferJobs && transferJobs.length > 0 ? (
           <>

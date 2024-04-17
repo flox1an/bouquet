@@ -1,4 +1,3 @@
-
 function Check() {
   /*
   const { serverInfo } = useServerInfo();
@@ -17,7 +16,7 @@ function Check() {
         onCancel={() => navigate('/')}
       ></ServerList>
   */}
-    <button className="btn">dfgfdgdfg</button>
+      <button className="btn">dfgfdgdfg</button>
     </>
   );
 }

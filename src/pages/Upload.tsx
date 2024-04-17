@@ -136,7 +136,9 @@ function Upload() {
         fileDimensions[file.name] = {
           ...fileDimensions[file.name],
           x: newBlob.sha256,
-          url: primary ? [newBlob.url, ...fileDimensions[file.name].url] : [...fileDimensions[file.name].url, newBlob.url],
+          url: primary
+            ? [newBlob.url, ...fileDimensions[file.name].url]
+            : [...fileDimensions[file.name].url, newBlob.url],
           size: newBlob.size,
           m: newBlob.type,
         };

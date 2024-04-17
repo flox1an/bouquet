@@ -29,4 +29,3 @@
 .error-log div span {
   @apply overflow-ellipsis overflow-hidden text-nowrap;
 }
-

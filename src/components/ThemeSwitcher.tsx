@@ -11,12 +11,12 @@ const ThemeSwitcher = () => {
     document.querySelector('html')?.setAttribute('data-theme', theme);
   }, [theme]);
   return (
-    <div className='tooltip tooltip-bottom' data-tip="Switch theme">
-    <label className="swap swap-rotate">
-      <input onClick={toggleTheme} type="checkbox" />
-      <MoonIcon className="tooltip swap-on" />
-      <SunIcon className="tooltip swap-off" />
-    </label>
+    <div className="tooltip tooltip-bottom" data-tip="Switch theme">
+      <label className="swap swap-rotate">
+        <input onClick={toggleTheme} type="checkbox" />
+        <MoonIcon className="tooltip swap-on" />
+        <SunIcon className="tooltip swap-off" />
+      </label>
     </div>
   );
 };

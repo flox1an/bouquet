@@ -22,7 +22,7 @@ export const ServerList = ({
   onTransfer,
   onCancel,
   title,
-  showAddButton = false
+  showAddButton = false,
 }: ServerListProps) => {
   const { serverInfo, distribution } = useServerInfo();
   const blobsWithOnlyOneOccurance = Object.values(distribution)
@@ -33,11 +33,14 @@ export const ServerList = ({
     <>
       <div className={`server-list-header ${!title ? 'justify-end' : ''}`}>
         {title && <h2>{title}</h2>}
-        {showAddButton && <div className="content-center">
-          <button onClick={() => {}} className='flex flex-row gap-2' title="Add server">
-            <PlusIcon/><ServerIcon />
-          </button>
-        </div>}
+        {showAddButton && (
+          <div className="content-center">
+            <button onClick={() => {}} className="flex flex-row gap-2" title="Add server">
+              <PlusIcon />
+              <ServerIcon />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="server-list">

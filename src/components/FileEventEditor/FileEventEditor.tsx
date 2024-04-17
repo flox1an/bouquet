@@ -82,10 +82,7 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
           placeholder="Caption"
         ></textarea>
         <span className="font-bold">URL</span>
-        <textarea
-          value={fileEventData.url.join('\n')}
-          className="textarea"
-          placeholder="URL"/>
+        <textarea value={fileEventData.url.join('\n')} className="textarea" placeholder="URL" />
         <button className="btn btn-primary" onClick={() => publishFileEvent(fileEventData)}>
           Publish
         </button>
