@@ -35,14 +35,15 @@ const Server = ({
   onCheck,
   blobsOnlyOnThisServer,
 }: ServerProps) => {
+  const readyToUse = !serverInfo.isLoading && !serverInfo.isError;
   return (
     <div
       className={
         `server ${selectedServer == server.name ? 'selected' : ''} ` +
-        `${setSelectedServer ? ' hover:bg-base-200 cursor-pointer' : ''}  `
+        `${readyToUse && setSelectedServer ? ' hover:bg-base-200 cursor-pointer' : ''}  `
       }
       key={server.name}
-      onClick={() => setSelectedServer && setSelectedServer(server.name)}
+      onClick={() => readyToUse && setSelectedServer && setSelectedServer(server.name)}
     >
       <div className="server-icon">
         <ServerIcon />
@@ -52,28 +53,36 @@ const Server = ({
           {server.name}
           {serverInfo.isLoading && <ArrowPathIcon className="loading" />}
         </div>
-        <div className="server-stats">
-          <div className="server-stat">
-            <DocumentDuplicateIcon /> {serverInfo.count}
+        {serverInfo.isError ? (
+          <div className="badge badge-error">
+            <ExclamationTriangleIcon className='w-4 mr-2'/> Error connecting to server
           </div>
-          <div className="server-stat">
-            <CubeIcon /> {formatFileSize(serverInfo.size)}
-          </div>
-          <div className="server-stat">
-            <ClockIcon /> {formatDate(serverInfo.lastChange)}
-          </div>
-          <div className="server-stat">
-            {blobsOnlyOnThisServer > 0 ? (
-              <div>
-                <ExclamationTriangleIcon /> {blobsOnlyOnThisServer} objects only available here
-              </div>
-            ) : (
-              <div>
-                <CheckBadgeIcon /> all objects distributed.
+        ) : (
+          <div className="server-stats">
+            <div className="server-stat tooltip" data-tip="Number of blobs">
+              <DocumentDuplicateIcon /> {serverInfo.count}
+            </div>
+            <div className="server-stat tooltip" data-tip="Total size of blobs">
+              <CubeIcon /> {formatFileSize(serverInfo.size)}
+            </div>
+            <div className="server-stat tooltip" data-tip="Date of last change">
+              <ClockIcon /> {formatDate(serverInfo.lastChange)}
+            </div>
+            {serverInfo.count > 0 && (
+              <div className="server-stat">
+                {blobsOnlyOnThisServer > 0 ? (
+                  <div>
+                    <ExclamationTriangleIcon /> {blobsOnlyOnThisServer} objects only available here
+                  </div>
+                ) : (
+                  <div>
+                    <CheckBadgeIcon /> all objects distributed.
+                  </div>
+                )}
               </div>
             )}
           </div>
-        </div>
+        )}
       </div>
       {((selectedServer == server.name && onTransfer) || onCancel) && (
         <div className="server-actions">

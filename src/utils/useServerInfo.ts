@@ -10,6 +10,7 @@ export type ServerInfo = {
   size: number;
   lastChange: number;
   isLoading: boolean;
+  isError: boolean;
   name: string;
   url: string;
   blobs?: BlobDescriptor[];
@@ -46,6 +47,7 @@ export const useServerInfo = () => {
         ...server,
         blobs: blobs[sx].data,
         isLoading: blobs[sx].isLoading,
+        isError: blobs[sx].isError,
         count: blobs[sx].data?.length || 0,
         size: blobs[sx].data?.reduce((acc, blob) => acc + blob.size, 0) || 0,
         lastChange: blobs[sx].data?.reduce((acc, blob) => Math.max(acc, blob.created), 0) || 0,

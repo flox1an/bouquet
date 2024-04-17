@@ -108,24 +108,24 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
     <div className={className}>
       <span>
         <a
-          className="link link-primary"
+          className="link link-primary tooltip"
+          data-tip="Copy link to clipboard"
           onClick={() => {
             navigator.clipboard.writeText(blob.url);
           }}
         >
-          <ClipboardDocumentIcon title="Copy link to clipboard" />
+          <ClipboardDocumentIcon />
         </a>
       </span>
       {onDelete && (
         <span>
-          <a onClick={() => onDelete(blob)} className="link link-primary">
-            <TrashIcon title="Delete this blob" />
+          <a onClick={() => onDelete(blob)} className="link link-primary tooltip" data-tip="Delete this blob">
+            <TrashIcon />
           </a>
         </span>
       )}
     </div>
   );
-
 
   const Badge = ({ ev }: { ev: NDKEvent }) => {
     if (ev.kind == KIND_FILE_META) {
@@ -157,13 +157,13 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
     }
 
     return <></>;
-  }
+  };
 
   const Badges = ({ blob }: { blob: BlobDescriptor }) => {
     const events = fileMetaEventsByHash[blob.sha256];
     if (!events) return;
 
-    return events.map(ev => <Badge ev={ev}></Badge>)
+    return events.map(ev => <Badge ev={ev}></Badge>);
   };
 
   return (
@@ -352,7 +352,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
             <tbody>
               {blobs.map((blob: BlobDescriptor) => (
                 <tr className="hover" key={blob.sha256}>
-                  <td className=" whitespace-nowrap">
+                  <td className="whitespace-nowrap">
                     <DocumentIcon />
                     <a className="link link-primary" href={blob.url} target="_blank">
                       {blob.sha256.slice(0, 15)}
@@ -367,7 +367,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
                   <td>{formatFileSize(blob.size)}</td>
                   <td>{blob.type && `${blob.type}`}</td>
                   <td>{formatDate(blob.created)}</td>
-                  <td className=" whitespace-nowrap">
+                  <td className="whitespace-nowrap">
                     <Actions blob={blob}></Actions>
                   </td>
                 </tr>

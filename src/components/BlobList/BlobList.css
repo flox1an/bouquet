@@ -1,9 +1,9 @@
-.blob-list svg {
-  @apply w-5 inline align-text-bottom mr-1;
+.blob-list .table :where(th, td) {
+  padding: 0.25em;
 }
 
-.blob-list {
-  @apply p-4 text-neutral-content rounded-lg;
+.blob-list svg {
+  @apply w-5 inline align-text-bottom mr-1;
 }
 
 .blog-list-header {
@@ -16,8 +16,4 @@
 
 .blog-list-header svg {
   @apply w-6 opacity-80 hover:opacity-100;
-}
-
-.blob-list .table :where(th, td)  {
-  padding: .25em;
 }
