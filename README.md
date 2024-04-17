@@ -1,30 +1,48 @@
-# React + TypeScript + Vite
+# Bouquet
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A tool to manage your content on blossom severs (Upload, Distribution, Posting)
 
-Currently, two official plugins are available:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## Expanding the ESLint configuration
+## TODO / Ideas
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+Add Blurhash
+https://github.com/verbiricha/filestr/blob/master/src/blur.tsx
 
-- Configure the top-level `parserOptions` property like this:
+Upload
 
-```js
-export default {
-  // other rules...
-  parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-  },
-}
-```
+  Audio
+   Audio Event 31337, maybe Podcast 31338
+   Album Event 30029
+   Read ID3 INfo
+   Display in Metadata Editor 
+   Post Audio Events
+   Option to select "Full Album" and POst Album (Playlist) Event
+   Upload of Album Art from Disc
+   Usage of Album Art from ID3
+   --> Album art as new blob
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+
+  Video
+    FileMeta Data Event 1063
+    Video Preview
+
+  PDF
+    FileMeta Data Event 1063
+
+  Images
+    FileMeta Data Event 1063
+    dimensions
+    blurhash
+
+Nav
+  Add AUdio Player like Soundcloud
+
+Blob List
+  - Selection -> Delete Selected
+
+Audio List
+  Audio List, mit Mini Thumnnail (Artitst / Title )
+  Join von Album/year aus Album (Playlist) Event ????
+  Display blob as "published" when in Audio Event, else as "unlisted"
+

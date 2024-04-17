@@ -1,5 +1,5 @@
 import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from 'react';
-import { useServers } from '../utils/useServers';
+import { Server, useServers } from '../utils/useServers';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../ndk';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -11,11 +11,13 @@ import CheckBox from '../components/CheckBox/CheckBox';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { formatFileSize } from '../utils';
 import FileEventEditor, { FileEventData } from '../components/FileEventEditor/FileEventEditor';
+import pLimit from 'p-limit';
 
 type TransferStats = {
   enabled: boolean;
   size: number;
   transferred: number;
+  rate: number;
 };
 
 /*
@@ -41,7 +43,7 @@ function Upload() {
   const [transfers, setTransfers] = useState<{ [key: string]: TransferStats }>({});
   const [files, setFiles] = useState<File[]>([]);
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
-  const [transferSpeed, setTransferSpeed] = useState<number | undefined>();
+  const limit = pLimit(3);
 
   const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
 
@@ -98,13 +100,49 @@ function Upload() {
 
     // TODO use https://github.com/davejm/client-compress
     // for image resizing
-    const fileDimensions: { [key: string]: ImageSize } = {};
+    const fileDimensions: { [key: string]: FileEventData } = {};
     for (const file of filesToUpload) {
+      let data = { content: file.name, url: [] as string[] } as FileEventData;
       if (file.type.startsWith('image/')) {
         const dimensions = await getImageSize(file);
-        fileDimensions[file.name] = dimensions;
+        data = { ...data, dim: `${dimensions.width}x${dimensions.height}` };
       }
+      fileDimensions[file.name] = data;
     }
+
+    const startTransfer = async (server: Server, primary: boolean) => {
+      const serverUrl = serverInfo[server.name].url;
+      let serverTransferred = 0;
+      for (const file of filesToUpload) {
+        const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
+
+        const newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
+          setTransfers(ut => ({
+            ...ut,
+            [server.name]: {
+              ...ut[server.name],
+              transferred: serverTransferred + progressEvent.loaded,
+              rate: progressEvent.rate || 0,
+            },
+          }));
+        });
+
+        serverTransferred += file.size;
+        setTransfers(ut => ({
+          ...ut,
+          [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
+        }));
+
+        fileDimensions[file.name] = {
+          ...fileDimensions[file.name],
+          x: newBlob.sha256,
+          url: primary ? [newBlob.url, ...fileDimensions[file.name].url] : [...fileDimensions[file.name].url, newBlob.url],
+          size: newBlob.size,
+          m: newBlob.type,
+        };
+      }
+      queryClient.invalidateQueries({ queryKey: ['blobs', server.name] });
+    };
 
     if (filesToUpload && filesToUpload.length) {
       // sum files sizes
@@ -121,51 +159,14 @@ function Upload() {
         return newTransfers;
       });
 
-      for (const server of servers) {
-        if (!transfers[server.name]?.enabled) {
-          continue;
-        }
-        const serverUrl = serverInfo[server.name].url;
-        let serverTransferred = 0;
-        for (const file of filesToUpload) {
-          const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
+      const enabledServers = servers.filter(s => transfers[s.name]?.enabled);
+      const primaryServerName = servers[0].name;
 
-          const newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
-            setTransferSpeed(progressEvent.rate);
-            setTransfers(ut => ({
-              ...ut,
-              [server.name]: { ...ut[server.name], transferred: serverTransferred + progressEvent.loaded },
-            }));
-          });
+      await Promise.all(enabledServers.map(s => limit(() => startTransfer(s, s.name == primaryServerName))));
 
-          serverTransferred += file.size;
-          setTransfers(ut => ({
-            ...ut,
-            [server.name]: { ...ut[server.name], transferred: serverTransferred },
-          }));
-
-          console.log(newBlob);
-
-          const dim = fileDimensions[file.name];
-
-          const fed: FileEventData = {
-            content: file.name,
-            x: newBlob.sha256,
-            url: newBlob.url,
-            size: `${newBlob.size}`,
-          };
-          if (newBlob.type) {
-            fed.m = newBlob.type;
-          }
-          if (dim) {
-            fed.dim = `${dim.width}x${dim.height}`;
-          }
-          setFileEventsToPublish(fetp => [...fetp, fed]);
-        }
-        queryClient.invalidateQueries({ queryKey: ['blobs', server.name] });
-        setFiles([]);
-        // TODO reset input control value??
-      }
+      setFiles([]);
+      // TODO reset input control value??
+      setFileEventsToPublish(Object.values(fileDimensions));
     }
   };
 
@@ -176,6 +177,23 @@ function Upload() {
 
   useEffect(() => {
     clearTransfers();
+    /*
+    setFileEventsToPublish([
+      {
+        content: '_DSF3852.jpg',
+        dim: '1365x2048',
+        m: 'image/jpeg',
+        size: 599988,
+        url: [
+          'https://test-store.slidestr.net/d32b7eff53919bc38b59e05b2fe4bda3067c46589eeee743a46649ae71f4b659',
+
+          'https://media-server.slidestr.net/d32b7eff53919bc38b59e05b2fe4bda3067c46589eeee743a46649ae71f4b659',
+
+          'https://cdn.satellite.earth/d32b7eff53919bc38b59e05b2fe4bda3067c46589eeee743a46649ae71f4b659.jpg',
+        ],
+        x: 'd32b7eff53919bc38b59e05b2fe4bda3067c46589eeee743a46649ae71f4b659',
+      },
+    ]);*/
   }, [servers]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -198,7 +216,6 @@ function Upload() {
   };
 
   const sizeOfFilesToUpload = useMemo(() => files.reduce((acc, file) => (acc += file.size), 0), [files]);
-
   return (
     <>
       <h2 className=" py-4">Upload</h2>
@@ -219,14 +236,16 @@ function Upload() {
               <CheckBox
                 name={s.name}
                 checked={transfers[s.name]?.enabled || false}
-                setChecked={c => setTransfers(ut => ({ ...ut, [s.name]: { enabled: c, transferred: 0, size: 0 } }))}
+                setChecked={c =>
+                  setTransfers(ut => ({ ...ut, [s.name]: { enabled: c, transferred: 0, size: 0, rate: 0 } }))
+                }
                 label={s.name}
               ></CheckBox>
               {transfers[s.name]?.enabled ? (
                 <ProgressBar
                   value={transfers[s.name].transferred}
                   max={transfers[s.name].size}
-                  description={transferSpeed ? '' + formatFileSize(transferSpeed) + '/s' : ''}
+                  description={transfers[s.name].rate > 0 ? '' + formatFileSize(transfers[s.name].rate) + '/s' : ''}
                 />
               ) : (
                 <div></div>
@@ -276,7 +295,7 @@ function Upload() {
       </div>
       {fileEventsToPublish.length > 0 && (
         <>
-          <h2>Publish events</h2>
+          <h2 className="py-4">Publish events</h2>
           {fileEventsToPublish.map(fe => (
             <FileEventEditor data={fe} />
           ))}

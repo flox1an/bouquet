@@ -17,6 +17,10 @@ import * as id3 from 'id3js';
 import { ID3Tag, ID3TagV2 } from 'id3js/lib/id3Tag';
 import { useQueries } from '@tanstack/react-query';
 import { useServerInfo } from '../../utils/useServerInfo';
+import useFileMetaEventsByHash, { KIND_BLOSSOM_DRIVE, KIND_FILE_META } from '../../utils/useFileMetaEvents';
+import { nip19 } from 'nostr-tools';
+import { AddressPointer, EventPointer } from 'nostr-tools/nip19';
+import { NDKEvent } from '@nostr-dev-kit/ndk';
 
 type ListMode = 'gallery' | 'list' | 'audio' | 'video' | 'docs';
 
@@ -31,6 +35,7 @@ type AudioBlob = BlobDescriptor & { id3?: ID3Tag; imageData?: string };
 const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
   const [mode, setMode] = useState<ListMode>('list');
   const { distribution } = useServerInfo();
+  const fileMetaEventsByHash = useFileMetaEventsByHash();
 
   const images = useMemo(
     () => blobs.filter(b => b.type?.startsWith('image/')).sort((a, b) => (a.created > b.created ? -1 : 1)), // descending
@@ -120,6 +125,46 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
       )}
     </div>
   );
+
+
+  const Badge = ({ ev }: { ev: NDKEvent }) => {
+    if (ev.kind == KIND_FILE_META) {
+      const nevent = nip19.neventEncode({
+        kind: ev.kind,
+        id: ev.id,
+        author: ev.author.pubkey,
+        relays: ev.onRelays.map(r => r.url),
+      } as EventPointer);
+      return (
+        <a target="_blank" href={`https://filestr.vercel.app/e/${nevent}`}>
+          <div className="badge badge-primary mr-2">published</div>
+        </a>
+      );
+    }
+
+    if (ev.kind == KIND_BLOSSOM_DRIVE) {
+      const naddr = nip19.naddrEncode({
+        kind: ev.kind,
+        identifier: ev.tagValue('d'),
+        pubkey: ev.author.pubkey,
+        relays: ev.onRelays.map(r => r.url),
+      } as AddressPointer);
+      return (
+        <a target="_blank" className="badge badge-primary mr-2" href={`https://blossom.hzrd149.com/#/drive/${naddr}`}>
+          🌸 drive
+        </a>
+      );
+    }
+
+    return <></>;
+  }
+
+  const Badges = ({ blob }: { blob: BlobDescriptor }) => {
+    const events = fileMetaEventsByHash[blob.sha256];
+    if (!events) return;
+
+    return events.map(ev => <Badge ev={ev}></Badge>)
+  };
 
   return (
     <>
@@ -293,34 +338,42 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
 
       {mode == 'list' && (
         <div className="blob-list">
-          {blobs.map((blob: BlobDescriptor) => (
-            <div className="blob" key={blob.sha256}>
-              <span>
-                <DocumentIcon />
-              </span>
-              <span>
-                <a className="link link-primary" href={blob.url} target="_blank">
-                  {blob.sha256}
-                </a>
-              </span>
-              {/*
-              <span>
-                <a className="pill">🌸 drive</a> <a className="pill">📝 post</a>
-              </span>
-               */}
-              <span>
-                {distribution[blob.sha256].servers.length == 1 ? (
-                  <ExclamationTriangleIcon  title="Not distributed to any other server" />
-                ) : (
-                  ''
-                )}
-              </span> 
-              <span>{formatFileSize(blob.size)}</span>
-              <span>{blob.type && `${blob.type}`}</span>
-              <span>{formatDate(blob.created)}</span>
-              <Actions blob={blob}></Actions>
-            </div>
-          ))}
+          <table className="table hover">
+            <thead>
+              <tr>
+                <th>Hash</th>
+                <th>Uses</th>
+                <th>Size</th>
+                <th>Type</th>
+                <th>Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {blobs.map((blob: BlobDescriptor) => (
+                <tr className="hover" key={blob.sha256}>
+                  <td className=" whitespace-nowrap">
+                    <DocumentIcon />
+                    <a className="link link-primary" href={blob.url} target="_blank">
+                      {blob.sha256.slice(0, 15)}
+                    </a>
+                  </td>
+                  <td>
+                    <Badges blob={blob} />
+                    <span className="text-warning tooltip" data-tip="Not distributed to any other server">
+                      {distribution[blob.sha256].servers.length == 1 && <ExclamationTriangleIcon />}
+                    </span>
+                  </td>
+                  <td>{formatFileSize(blob.size)}</td>
+                  <td>{blob.type && `${blob.type}`}</td>
+                  <td>{formatDate(blob.created)}</td>
+                  <td className=" whitespace-nowrap">
+                    <Actions blob={blob}></Actions>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </>
