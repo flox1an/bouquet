@@ -1,6 +1,6 @@
 import { PlusIcon, ServerIcon } from '@heroicons/react/24/outline';
 import { useServerInfo } from '../../utils/useServerInfo';
-import { Server as ServerType } from '../../utils/useServers';
+import { Server as ServerType } from '../../utils/useUserServers';
 import Server from './Server';
 import './ServerList.css';
 

@@ -1,5 +1,4 @@
-import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from 'react';
-import { Server, useServers } from '../utils/useServers';
+import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../ndk';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -12,6 +11,8 @@ import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { formatFileSize } from '../utils';
 import FileEventEditor, { FileEventData } from '../components/FileEventEditor/FileEventEditor';
 import pLimit from 'p-limit';
+import { Server, useUserServers } from '../utils/useUserServers';
+import useBlossomServerEvents from '../utils/useBlossomServerEvents';
 
 type TransferStats = {
   enabled: boolean;
@@ -31,12 +32,10 @@ steps
 - upload
   - server slection, progress bars, upload speed
 - 
-
-
 */
 
 function Upload() {
-  const servers = useServers();
+  const servers = useUserServers();
   const { signEventTemplate } = useNDK();
   const { serverInfo } = useServerInfo();
   const queryClient = useQueryClient();
@@ -44,9 +43,10 @@ function Upload() {
   const [files, setFiles] = useState<File[]>([]);
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
   const limit = pLimit(3);
-
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const bs = useBlossomServerEvents();
   const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
-
+console.log(bs);
   // const [resizeImages, setResizeImages] = useState(false);
   // const [publishToNostr, setPublishToNostr] = useState(false);
 
@@ -173,7 +173,19 @@ function Upload() {
   };
 
   const clearTransfers = () => {
-    setTransfers(servers.reduce((acc, s) => ({ ...acc, [s.name]: { enabled: true, size: 0, transferred: 0 } }), {}));
+    setTransfers(tfs =>
+      servers.reduce(
+        (acc, s) => ({
+          ...acc,
+          [s.name]: {
+            enabled: !serverInfo[s.name].isError && (tfs[s.name] !== undefined ? tfs[s.name].enabled : true),
+            size: 0,
+            transferred: 0,
+          },
+        }),
+        {}
+      )
+    );
     setFileEventsToPublish([]);
   };
 
@@ -222,7 +234,7 @@ function Upload() {
     <>
       <h2 className=" py-4">Upload</h2>
       <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
-        <input id="browse" type="file" hidden multiple onChange={handleFileChange} />
+        <input id="browse" type="file" ref={fileInputRef} hidden multiple onChange={handleFileChange} />
         <label
           htmlFor="browse"
           className="p-8 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
@@ -289,6 +301,9 @@ function Upload() {
             onClick={() => {
               clearTransfers();
               setFiles([]);
+              if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+              }
             }}
           >
             <TrashIcon className="w-6" />

@@ -1,5 +1,4 @@
 import {
-  ArrowPathIcon,
   ArrowUpOnSquareStackIcon,
   CheckBadgeIcon,
   ClockIcon,
@@ -10,7 +9,7 @@ import {
   ShieldExclamationIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import { Server as ServerType } from '../../utils/useServers';
+import { Server as ServerType } from '../../utils/useUserServers';
 import { ServerInfo } from '../../utils/useServerInfo';
 import { formatDate, formatFileSize } from '../../utils';
 
@@ -51,7 +50,7 @@ const Server = ({
       <div className="flex flex-col grow">
         <div className="server-name">
           {server.name}
-          {serverInfo.isLoading && <ArrowPathIcon className="loading" />}
+          {serverInfo.isLoading && <span className="ml-2 loading loading-spinner loading-sm"></span>}
         </div>
         {serverInfo.isError ? (
           <div className="badge badge-error">

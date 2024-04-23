@@ -16,7 +16,7 @@ export type Server = {
   url: string;
 };
 
-export const useServers = (): Server[] => {
+export const useUserServers = (): Server[] => {
   const { user } = useNDK();
 
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type

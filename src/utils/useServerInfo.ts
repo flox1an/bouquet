@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { useServers } from './useServers';
 import { useQueries } from '@tanstack/react-query';
 import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
 import { useNDK } from '../ndk';
 import { nip19 } from 'nostr-tools';
+import { useUserServers } from './useUserServers';
 
 export type ServerInfo = {
   count: number;
@@ -21,7 +21,7 @@ type BlobDictionary = {
 };
 
 export const useServerInfo = () => {
-  const servers = useServers();
+  const servers = useUserServers();
   const { user, signEventTemplate } = useNDK();
 
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type
@@ -37,6 +37,7 @@ export const useServerInfo = () => {
       },
       enabled: !!pubkey && servers.length > 0,
       staleTime: 1000 * 60 * 5,
+      retryOnMount: false,
     })),
   });
 

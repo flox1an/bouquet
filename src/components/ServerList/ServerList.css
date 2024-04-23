@@ -44,21 +44,6 @@
   @apply cursor-pointer text-center flex flex-col items-center hover:text-white opacity-80 hover:opacity-100 gap-1;
 }
 
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.loading {
-  @apply w-6 ml-2 inline align-text-bottom;
-  transform-origin: center;
-  animation: spin 3s linear infinite;
-}
-
 .server-list-header {
   @apply flex flex-row py-4;
 }
