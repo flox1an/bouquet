@@ -65,6 +65,7 @@ function Home() {
 
       {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && (
         <BlobList
+          className="mt-4"
           title={`Your objects on ${serverInfo[selectedServer].name}`}
           blobs={selectedServerBlobs}
           onDelete={blob =>

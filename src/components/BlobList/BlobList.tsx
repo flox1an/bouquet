@@ -28,11 +28,12 @@ type BlobListProps = {
   blobs: BlobDescriptor[];
   onDelete?: (blob: BlobDescriptor) => void;
   title?: string;
+  className?: string;
 };
 
 type AudioBlob = BlobDescriptor & { id3?: ID3Tag; imageData?: string };
 
-const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
+const BlobList = ({ blobs, onDelete, title, className ='' }: BlobListProps) => {
   const [mode, setMode] = useState<ListMode>('list');
   const { distribution } = useServerInfo();
   const fileMetaEventsByHash = useFileMetaEventsByHash();
@@ -168,7 +169,7 @@ const BlobList = ({ blobs, onDelete, title }: BlobListProps) => {
 
   return (
     <>
-      <div className={`blog-list-header ${!title ? 'justify-end' : ''}`}>
+      <div className={`blog-list-header ${className}  ${!title ? 'justify-end' : ''}`}>
         {title && <h2>{title}</h2>}
         <ul className="menu menu-horizontal  menu-active bg-base-200 rounded-box">
           <li>

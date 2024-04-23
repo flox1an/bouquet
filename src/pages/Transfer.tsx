@@ -126,39 +126,46 @@ export const Transfer = () => {
         ></ServerList>
         {transferTarget && transferJobs && transferJobs.length > 0 ? (
           <>
-            <div className="message">
-              {transferJobs.length} object{transferJobs.length > 1 ? 's' : ''} to transfer{' '}
-              {!started && (
-                <button
-                  className="action-button"
-                  onClick={() => performTransfer(transferSource, transferTarget, transferJobs)}
-                >
-                  <ArrowUpOnSquareIcon />
-                  Start
-                </button>
-              )}
-            </div>
-            <div>
-              <ProgressBar value={transferStatus.size} max={transferStatus.fullSize} />
-              {
-                <div className="message">
-                  {formatFileSize(transferStatus.size)} / {formatFileSize(transferStatus.fullSize)} transferred
+            <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col my-4">
+              <div className="message">
+                {transferJobs.length} object{transferJobs.length > 1 ? 's' : ''} to transfer{' '}
+                {!started && (
+                  <button
+                    className="action-button"
+                    onClick={() => performTransfer(transferSource, transferTarget, transferJobs)}
+                  >
+                    <ArrowUpOnSquareIcon />
+                    Start
+                  </button>
+                )}
+              </div>
+              <div className="w-5/6">
+                <ProgressBar
+                  value={transferStatus.size}
+                  max={transferStatus.fullSize}
+                  description={
+                    formatFileSize(transferStatus.size) +
+                    ' / ' +
+                    formatFileSize(transferStatus.fullSize) +
+                    ' transferred'
+                  }
+                />
+                {<div className="message"></div>}
+                <div className="error-log">
+                  {Object.values(transferLog)
+                    .filter(b => b.status == 'error')
+                    .map(t => (
+                      <div>
+                        <span>
+                          <DocumentIcon />
+                        </span>
+                        <span>{t.sha256}</span>
+                        <span>{formatFileSize(t.size)}</span>
+                        <span>{t.status && (t.status == 'error' ? <ExclamationTriangleIcon /> : '')}</span>
+                        <span>{t.message}</span>
+                      </div>
+                    ))}
                 </div>
-              }
-              <div className="error-log">
-                {Object.values(transferLog)
-                  .filter(b => b.status == 'error')
-                  .map(t => (
-                    <div>
-                      <span>
-                        <DocumentIcon />
-                      </span>
-                      <span>{t.sha256}</span>
-                      <span>{formatFileSize(t.size)}</span>
-                      <span>{t.status && (t.status == 'error' ? <ExclamationTriangleIcon /> : '')}</span>
-                      <span>{t.message}</span>
-                    </div>
-                  ))}
               </div>
             </div>
             {!started && <BlobList blobs={transferJobs}></BlobList>}

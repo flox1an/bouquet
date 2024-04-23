@@ -46,7 +46,8 @@ function Upload() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bs = useBlossomServerEvents();
   const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
-console.log(bs);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  console.log(bs);
   // const [resizeImages, setResizeImages] = useState(false);
   // const [publishToNostr, setPublishToNostr] = useState(false);
 
@@ -89,6 +90,8 @@ console.log(bs);
   }
 
   const upload = async () => {
+    setUploadBusy(true);
+
     const filesToUpload: File[] = [];
     for (const f of files) {
       if (cleanPrivateData) {
@@ -170,6 +173,8 @@ console.log(bs);
       // TODO reset input control value??
       setFileEventsToPublish(Object.values(fileDimensions));
     }
+
+    setUploadBusy(false);
   };
 
   const clearTransfers = () => {
@@ -211,6 +216,8 @@ console.log(bs);
   }, [servers]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (uploadBusy) return;
+
     const selectedFiles = event.target.files;
     if (selectedFiles && selectedFiles.length > 0) {
       const newFiles = Array.from(selectedFiles);
@@ -220,7 +227,9 @@ console.log(bs);
   };
 
   const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
+    if (uploadBusy) return;
     event.preventDefault();
+
     const droppedFiles = event.dataTransfer?.files;
     if (droppedFiles && droppedFiles.length > 0) {
       const newFiles = Array.from(droppedFiles);
@@ -234,7 +243,15 @@ console.log(bs);
     <>
       <h2 className=" py-4">Upload</h2>
       <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
-        <input id="browse" type="file" ref={fileInputRef} hidden multiple onChange={handleFileChange} />
+        <input
+          id="browse"
+          type="file"
+          ref={fileInputRef}
+          disabled={uploadBusy}
+          hidden
+          multiple
+          onChange={handleFileChange}
+        />
         <label
           htmlFor="browse"
           className="p-8 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
@@ -249,6 +266,7 @@ console.log(bs);
             <>
               <CheckBox
                 name={s.name}
+                disabled={uploadBusy}
                 checked={transfers[s.name]?.enabled || false}
                 setChecked={c =>
                   setTransfers(ut => ({ ...ut, [s.name]: { enabled: c, transferred: 0, size: 0, rate: 0 } }))
@@ -271,6 +289,7 @@ console.log(bs);
         <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em auto' }}>
           <CheckBox
             name="cleanData"
+            disabled={uploadBusy}
             checked={cleanPrivateData}
             setChecked={c => setCleanPrivateData(c)}
             label="Clean private data in images (EXIF)"
@@ -291,13 +310,13 @@ console.log(bs);
           */}
         </div>
         <div className="flex flex-row gap-2">
-          <button className="btn btn-primary" onClick={() => upload()} disabled={files.length == 0}>
+          <button className="btn btn-primary" onClick={() => upload()} disabled={uploadBusy || files.length == 0}>
             Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
             {formatFileSize(sizeOfFilesToUpload)}
           </button>
           <button
             className="btn  btn-secondary  "
-            disabled={files.length == 0}
+            disabled={uploadBusy || files.length == 0}
             onClick={() => {
               clearTransfers();
               setFiles([]);

@@ -1,5 +1,5 @@
 .message {
-  @apply text-3xl text-center text-white p-12;
+  @apply text-2xl text-center text-white p-4;
 }
 
 .message svg {
@@ -7,7 +7,7 @@
 }
 
 .action-button {
-  @apply bg-white text-lg text-black hover:bg-pink-600 hover:text-white inline-block rounded-lg p-2 pr-4 pl-3;
+  @apply bg-white text-lg text-black hover:bg-primary hover:text-white inline-block rounded-lg p-2 pr-4 pl-3;
 }
 
 .action-button svg {
@@ -15,7 +15,7 @@
 }
 
 .error-log {
-  @apply bg-zinc-800 p-4 text-zinc-300 rounded-lg;
+  @apply p-2 rounded-lg;
 }
 
 .error-log svg {
