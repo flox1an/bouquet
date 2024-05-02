@@ -9,7 +9,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { formatDate, formatFileSize } from '../../utils';
+import { formatDate, formatFileSize } from '../../utils/utils';
 import './BlobList.css';
 import { useEffect, useMemo, useState } from 'react';
 import { Document, Page } from 'react-pdf';
@@ -138,7 +138,7 @@ const BlobList = ({ blobs, onDelete, title, className ='' }: BlobListProps) => {
       } as EventPointer);
       return (
         <a target="_blank" href={`https://filestr.vercel.app/e/${nevent}`}>
-          <div className="badge badge-primary mr-2">published</div>
+          <div className="badge badge-primary mr-2">filemeta</div>
         </a>
       );
     }

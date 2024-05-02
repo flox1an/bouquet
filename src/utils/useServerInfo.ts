@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
-import { useNDK } from '../ndk';
+import { useNDK } from '../utils/ndk';
 import { nip19 } from 'nostr-tools';
 import { useUserServers } from './useUserServers';
 

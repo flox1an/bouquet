@@ -1,15 +1,11 @@
 import { useMemo } from 'react';
-import { uniqAndSort } from '../utils';
-import { useNDK } from '../ndk';
+import { uniqAndSort } from '../utils/utils';
+import { useNDK } from '../utils/ndk';
 import { nip19 } from 'nostr-tools';
 import { NDKKind } from '@nostr-dev-kit/ndk';
-import useEvent from '../useEvent';
+import useEvent from '../utils/useEvent';
 
-const additionalServers = [
-  //'https://media-server.slidestr.net',
-  //'https://cdn.hzrd149.com',
-  'https://cdn.satellite.earth',
-];
+const additionalServers = ['https://cdn.satellite.earth'];
 
 export type Server = {
   name: string;
@@ -25,9 +21,11 @@ export const useUserServers = (): Server[] => {
 
   const servers = useMemo(() => {
     const serverUrls = uniqAndSort(
-      [...(serverListEvent?.getMatchingTags('r').map(t => t[1]) || []), ...additionalServers].map(s =>
-        s.toLocaleLowerCase().replace(/\/$/, '')
-      )
+      [
+        ...(serverListEvent?.getMatchingTags('r').map(t => t[1]) || []),  // TODO 'r' is deprecated
+        ...(serverListEvent?.getMatchingTags('server').map(t => t[1]) || []),
+        ...additionalServers,
+      ].map(s => s.toLocaleLowerCase().replace(/\/$/, ''))
     );
     return serverUrls.map(s => ({
       name: s.replace(/https?:\/\//, ''),

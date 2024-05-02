@@ -1,9 +1,10 @@
-import { NDKEvent, NostrEvent } from '@nostr-dev-kit/ndk';
-import { useNDK } from '../../ndk';
+import { NDKEvent, NDKKind, NDKUser, NostrEvent } from '@nostr-dev-kit/ndk';
+import { useNDK } from '../../utils/ndk';
 import dayjs from 'dayjs';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import uniq from 'lodash/uniq';
-import { formatFileSize } from '../../utils';
+import { formatFileSize } from '../../utils/utils';
+import useEvents from '../../utils/useEvents';
 
 export type FileEventData = {
   content: string;
@@ -12,14 +13,57 @@ export type FileEventData = {
   x: string;
   m?: string;
   size: number;
+  thumbnails?: string[];
+  thumbnail?: string;
   //summary: string;
   //alt: string;
 };
 
+const ensureDecrypted = async (dvm: NDKUser, event: NDKEvent) => {
+  if (!event) return undefined;
+
+  const encrypted = event.tags.some(t => t[0] == 'encrypted');
+
+  if (encrypted) {
+    const decryptedContent = await event.ndk?.signer?.decrypt(dvm, event.content);
+
+    if (decryptedContent) {
+      return {
+        ...event,
+        tags: event.tags.filter(t => t[0] !== 'encrypted').concat(JSON.parse(decryptedContent)),
+      };
+    }
+  }
+  return event;
+};
+
 const FileEventEditor = ({ data }: { data: FileEventData }) => {
   const [fileEventData, setFileEventData] = useState(data);
-
+  const [thumbnailRequestEventId, setThumbnailRequestEventId] = useState<string | undefined>();
   const { ndk, user } = useNDK();
+  const dvm = ndk.getUser({ npub: 'npub1q8cv87l47fql2xer2uyw509y5n5s9f53h76hvf9377efdptmsvusxf3n8s' });
+
+  const thumbnailDvmFilter = useMemo(
+    () => ({ kinds: [6204 as NDKKind], '#e': [thumbnailRequestEventId || ''] }),
+    [thumbnailRequestEventId]
+  );
+  const thumbnailSubscription = useEvents(thumbnailDvmFilter, {
+    closeOnEose: false,
+    disable: thumbnailRequestEventId == undefined,
+  });
+
+  useEffect(() => {
+    const doASync = async () => {
+      const firstEvent = await ensureDecrypted(dvm, thumbnailSubscription.events[0]);
+      if (firstEvent) {
+        const urls = firstEvent.tags.filter(t => t[0] === 'thumb').map(t => t[1]);
+        const dim = firstEvent.tags.find(t => t[0] === 'dim')?.[1];
+        setFileEventData(ed => ({ ...ed, thumbnails: urls, dim, thumbnail: urls[0] }));
+      }
+    };
+    doASync();
+  }, [thumbnailSubscription.events]);
+
   const publishFileEvent = async (data: FileEventData) => {
     const e: NostrEvent = {
       created_at: dayjs().unix(),
@@ -43,6 +87,10 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
     if (data.m) {
       e.tags.push(['m', data.m]);
     }
+    if (data.thumbnail) {
+      e.tags.push(['thumb', data.thumbnail]);
+      e.tags.push(['image', data.thumbnail]);
+    }
 
     const ev = new NDKEvent(ndk, e);
     await ev.sign();
@@ -50,18 +98,88 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
     // await ev.publish();
   };
 
+  const getThumbnails = async (data: FileEventData) => {
+    if (!ndk.signer) return;
+
+    const e: NostrEvent = {
+      created_at: dayjs().unix(),
+      content: await ndk.signer?.encrypt(
+        dvm,
+        JSON.stringify([
+          ['i', data.url[0], 'url'],
+          ['output', 'image/jpeg'],
+          ['param', 'thumbnailCount', '3'],
+          ['param', 'imageFormat', 'jpg'],
+          ['relays', user?.relayUrls.join(',') || ndk.explicitRelayUrls?.join(',') || ''],
+        ])
+      ),
+      tags: [['p', dvm.pubkey], ['encrypted']],
+      /*tags: [
+        ['i', data.url[0], 'url'],
+        ['output', 'image/jpeg'],
+        ['param', 'thumbnailCount', '5'],
+        ['param', 'imageFormat', 'jpg'],
+        ['relays', user?.relayUrls.join(',') || ndk.explicitRelayUrls?.join(',') || ''],
+      ],*/
+      kind: 5204,
+      pubkey: user?.pubkey || '',
+    };
+    const ev = new NDKEvent(ndk, e);
+    await ev.sign();
+    console.log(ev.rawEvent());
+    setThumbnailRequestEventId(ev.id);
+    await ev.publish();
+  };
+
+  useEffect(() => {
+    if (fileEventData.m?.startsWith('video/') && fileEventData.thumbnails == undefined) {
+      // getThumbnails(fileEventData); skip for now, until the DVM is properly hosted
+    }
+  }, [fileEventData]);
+
   return (
     <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-row">
+      {fileEventData.m?.startsWith('video/') && (
+        <>
+          {thumbnailRequestEventId &&
+            (fileEventData.thumbnails && fileEventData.thumbnails.length > 0 ? (
+              <div className='w-2/6'>
+                <div className="carousel w-full">
+                  {fileEventData.thumbnails.map((t, i) => (
+                    <div id={`item${i + 1}`} key={`item${i + 1}`} className="carousel-item w-full">
+                      <img src={t} className="w-full" />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-center w-full py-2 gap-2">
+                  {fileEventData.thumbnails.map((t, i) => (
+                    <a
+                      key={`link${i + 1}`}
+                      href={`#item${i + 1}`}
+                      onClick={() => setFileEventData(ed => ({ ...ed, thumbnail: t }))}
+                      className={'btn btn-xs ' + (t==fileEventData.thumbnail ? 'btn-primary':'')}
+                    >{`${i + 1}`}</a>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div>
+                Creating previews <span className="loading loading-spinner loading-md"></span>
+              </div>
+            ))}
+        </>
+      )}
+
       {fileEventData.m?.startsWith('image/') && (
-        <div className="p-4 bg-base-300">
+        <div className="p-4 bg-base-300 w-2/6">
           <img
-            width={200}
-            height={200}
+            width={300}
+            height={300}
             src={`https://images.slidestr.net/insecure/f:webp/rs:fill:300/plain/${fileEventData.url[0]}`}
           ></img>
         </div>
       )}
-      <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 30em' }}>
+      <div className="grid gap-4 w-4/6" style={{ gridTemplateColumns: '1fr 30em' }}>
         <span className="font-bold">Type</span>
         <span>{fileEventData.m}</span>
 
@@ -82,7 +200,7 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
           placeholder="Caption"
         ></textarea>
         <span className="font-bold">URL</span>
-        <textarea value={fileEventData.url.join('\n')} className="textarea" placeholder="URL" />
+        <div className=''>{fileEventData.url.map((text,i) => <div key={i} className='break-words mb-2'>{text}</div>)}</div>
         <button className="btn btn-primary" onClick={() => publishFileEvent(fileEventData)}>
           Publish
         </button>

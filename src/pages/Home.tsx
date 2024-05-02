@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import './Home.css';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
-import { useNDK } from '../ndk';
+import { useNDK } from '../utils/ndk';
 import BlobList from '../components/BlobList/BlobList';
 import { useServerInfo } from '../utils/useServerInfo';
 import { ServerList } from '../components/ServerList/ServerList';

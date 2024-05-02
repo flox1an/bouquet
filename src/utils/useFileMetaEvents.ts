@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import useEvents from '../useEvents';
+import useEvents from '../utils/useEvents';
 import groupBy from 'lodash/groupBy';
 import { NDKFilter } from '@nostr-dev-kit/ndk';
-import { useNDK } from '../ndk';
+import { useNDK } from '../utils/ndk';
 import { mapValues } from 'lodash';
 
 export const KIND_FILE_META = 1063;

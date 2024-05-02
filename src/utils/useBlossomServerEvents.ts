@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import useEvents from '../useEvents';
+import useEvents from '../utils/useEvents';
 import { NDKKind } from '@nostr-dev-kit/ndk';
 import countBy from 'lodash/countBy';
 import sortBy from 'lodash/sortBy';
@@ -12,7 +12,7 @@ const useBlossomServerEvents = () => {
 
   const blossomServers = useMemo(() => {
     const allRTags = blossomServerEvents.events.flatMap(ev =>
-      ev.tags.filter(t => t[0] == 'r').flatMap(t => ({ name: t[1] }))
+      ev.tags.filter(t => t[0] == 'r' || t[0] == 'server').flatMap(t => ({ name: t[1] }))  // TODO 'r' is deprecated
     );
     const cnt = countBy(
       allRTags.filter(s => !s.name.match(/https?:\/\/localhost/)),

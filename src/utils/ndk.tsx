@@ -17,20 +17,21 @@ type NDKContextType = {
   publishSignedEvent: (signedEvent: SignedEvent) => Promise<void>;
 };
 
+const cacheAdapter = new NDKCacheAdapterDexie({ dbName: 'ndk-cache-2' });
+
+const ndk = new NDK({
+  explicitRelayUrls: ['wss://nostrue.com/', 'wss://relay.damus.io/', 'wss://nos.lol/'],
+  cacheAdapter,
+});
+
 export const NDKContext = createContext<NDKContextType>({
-  ndk: new NDK({ explicitRelayUrls: [] }),
+  ndk,
   logout: () => {},
   loginWithExtension: () => Promise.reject(),
   loginWithNostrAddress: () => Promise.reject(),
   loginWithPrivateKey: () => Promise.reject(),
   signEventTemplate: () => Promise.reject(),
   publishSignedEvent: () => Promise.reject(),
-});
-const cacheAdapter = new NDKCacheAdapterDexie({ dbName: 'ndk-cache' });
-
-const ndk = new NDK({
-  explicitRelayUrls: ['wss://nostrue.com/', 'wss://relay.damus.io/', 'wss://nos.lol/'],
-  cacheAdapter,
 });
 
 export const NDKContextProvider = ({ children }: { children: React.ReactElement }) => {

@@ -1,18 +1,17 @@
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
-import { useNDK } from '../ndk';
+import { useNDK } from '../utils/ndk';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
-import { removeExifData } from '../exif';
+import { removeExifData } from '../utils/exif';
 import axios, { AxiosProgressEvent } from 'axios';
 import { ArrowUpOnSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 import CheckBox from '../components/CheckBox/CheckBox';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
-import { formatFileSize } from '../utils';
+import { formatFileSize } from '../utils/utils';
 import FileEventEditor, { FileEventData } from '../components/FileEventEditor/FileEventEditor';
 import pLimit from 'p-limit';
 import { Server, useUserServers } from '../utils/useUserServers';
-import useBlossomServerEvents from '../utils/useBlossomServerEvents';
 
 type TransferStats = {
   enabled: boolean;
@@ -44,10 +43,11 @@ function Upload() {
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
   const limit = pLimit(3);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const bs = useBlossomServerEvents();
+  // const bs = useBlossomServerEvents();
+  // console.log(bs);
+
   const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
-  console.log(bs);
   // const [resizeImages, setResizeImages] = useState(false);
   // const [publishToNostr, setPublishToNostr] = useState(false);
 
@@ -105,7 +105,7 @@ function Upload() {
     // for image resizing
     const fileDimensions: { [key: string]: FileEventData } = {};
     for (const file of filesToUpload) {
-      let data = { content: file.name, url: [] as string[] } as FileEventData;
+      let data = { content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/,''), url: [] as string[] } as FileEventData;
       if (file.type.startsWith('image/')) {
         const dimensions = await getImageSize(file);
         data = { ...data, dim: `${dimensions.width}x${dimensions.height}` };

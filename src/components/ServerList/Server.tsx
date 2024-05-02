@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { Server as ServerType } from '../../utils/useUserServers';
 import { ServerInfo } from '../../utils/useServerInfo';
-import { formatDate, formatFileSize } from '../../utils';
+import { formatDate, formatFileSize } from '../../utils/utils';
 
 type ServerProps = {
   server: ServerType;

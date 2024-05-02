@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { NDKContextProvider } from './ndk.tsx';
+import { NDKContextProvider } from './utils/ndk.tsx';
 import { Route, RouterProvider, createBrowserRouter, createRoutesFromElements } from 'react-router-dom';
 import { Layout } from './components/Layout/Layout.tsx';
 import Home from './pages/Home.tsx';
