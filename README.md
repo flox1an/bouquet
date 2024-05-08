@@ -6,6 +6,8 @@ A tool to manage your content on blossom severs (Upload, Distribution, Posting)
 
 ## TODO / Ideas
 
+Add cancel button for upload stream
+
 Add Blurhash
 https://github.com/verbiricha/filestr/blob/master/src/blur.tsx
 

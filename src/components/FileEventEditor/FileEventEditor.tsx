@@ -98,8 +98,43 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
     // await ev.publish();
   };
 
+  /*
+  async function createDvmBlossemAuthToken() {
+    const pubkey = ndk.activeUser?.pubkey;
+    if (!ndk.signer || !pubkey) return;
+    const tenMinutes = () => dayjs().unix() + 10 * 60;
+    const authEvent = ({
+      pubkey,
+      created_at: dayjs().unix(),
+      kind: 24242,
+      content: 'Upload thumbail',
+      tags: [
+        ['t', 'upload'],
+        ['name', `thumb_${Math.random().toString(36).substring(2)}`], // make sure the auth events are unique
+        ['expiration', String(tenMinutes())],
+      ],
+    });
+    const ev = new NDKEvent(ndk, authEvent);
+    await ev.sign();
+    console.log(JSON.stringify(ev.rawEvent()));
+    return btoa(JSON.stringify(ev.rawEvent()));
+  }
+  */
+
   const getThumbnails = async (data: FileEventData) => {
     if (!ndk.signer) return;
+
+    const thumbCount = 3;
+
+    /*s
+    const authTokens = [];
+    for (let i = 0; i < thumbCount; i++) {
+      const uploadAuth = await createDvmBlossemAuthToken();
+      if (uploadAuth) {
+        authTokens.push(['param', 'authToken', uploadAuth]);
+      }
+    }
+    */
 
     const e: NostrEvent = {
       created_at: dayjs().unix(),
@@ -108,19 +143,15 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
         JSON.stringify([
           ['i', data.url[0], 'url'],
           ['output', 'image/jpeg'],
-          ['param', 'thumbnailCount', '3'],
-          ['param', 'imageFormat', 'jpg'],
+          ['param', 'thumbnailCount', `${thumbCount}`],
           ['relays', user?.relayUrls.join(',') || ndk.explicitRelayUrls?.join(',') || ''],
         ])
       ),
-      tags: [['p', dvm.pubkey], ['encrypted']],
-      /*tags: [
-        ['i', data.url[0], 'url'],
-        ['output', 'image/jpeg'],
-        ['param', 'thumbnailCount', '5'],
-        ['param', 'imageFormat', 'jpg'],
-        ['relays', user?.relayUrls.join(',') || ndk.explicitRelayUrls?.join(',') || ''],
-      ],*/
+      tags: [
+        ['p', dvm.pubkey],
+        ['encrypted'],
+        // TODO set expiration
+      ],
       kind: 5204,
       pubkey: user?.pubkey || '',
     };
@@ -133,7 +164,7 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
 
   useEffect(() => {
     if (fileEventData.m?.startsWith('video/') && fileEventData.thumbnails == undefined) {
-      // getThumbnails(fileEventData); skip for now, until the DVM is properly hosted
+      getThumbnails(fileEventData);
     }
   }, [fileEventData]);
 
@@ -143,7 +174,7 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
         <>
           {thumbnailRequestEventId &&
             (fileEventData.thumbnails && fileEventData.thumbnails.length > 0 ? (
-              <div className='w-2/6'>
+              <div className="w-2/6">
                 <div className="carousel w-full">
                   {fileEventData.thumbnails.map((t, i) => (
                     <div id={`item${i + 1}`} key={`item${i + 1}`} className="carousel-item w-full">
@@ -157,7 +188,7 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
                       key={`link${i + 1}`}
                       href={`#item${i + 1}`}
                       onClick={() => setFileEventData(ed => ({ ...ed, thumbnail: t }))}
-                      className={'btn btn-xs ' + (t==fileEventData.thumbnail ? 'btn-primary':'')}
+                      className={'btn btn-xs ' + (t == fileEventData.thumbnail ? 'btn-primary' : '')}
                     >{`${i + 1}`}</a>
                   ))}
                 </div>
@@ -200,7 +231,13 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
           placeholder="Caption"
         ></textarea>
         <span className="font-bold">URL</span>
-        <div className=''>{fileEventData.url.map((text,i) => <div key={i} className='break-words mb-2'>{text}</div>)}</div>
+        <div className="">
+          {fileEventData.url.map((text, i) => (
+            <div key={i} className="break-words mb-2">
+              {text}
+            </div>
+          ))}
+        </div>
         <button className="btn btn-primary" onClick={() => publishFileEvent(fileEventData)}>
           Publish
         </button>
