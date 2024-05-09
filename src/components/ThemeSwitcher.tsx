@@ -14,8 +14,8 @@ const ThemeSwitcher = () => {
     <div className="tooltip tooltip-bottom" data-tip="Switch theme">
       <label className="swap swap-rotate">
         <input onClick={toggleTheme} type="checkbox" />
-        <MoonIcon className="tooltip swap-on" />
-        <SunIcon className="tooltip swap-off" />
+        <MoonIcon className="w-8 tooltip swap-on" />
+        <SunIcon className="w-8 *:tooltip swap-off" />
       </label>
     </div>
   );

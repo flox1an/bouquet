@@ -37,11 +37,13 @@ const ensureDecrypted = async (dvm: NDKUser, event: NDKEvent) => {
   return event;
 };
 
+const NPUB_DVM_THUMBNAIL_CREATION = 'npub1q8cv87l47fql2xer2uyw509y5n5s9f53h76hvf9377efdptmsvusxf3n8s';
+
 const FileEventEditor = ({ data }: { data: FileEventData }) => {
   const [fileEventData, setFileEventData] = useState(data);
   const [thumbnailRequestEventId, setThumbnailRequestEventId] = useState<string | undefined>();
   const { ndk, user } = useNDK();
-  const dvm = ndk.getUser({ npub: 'npub1q8cv87l47fql2xer2uyw509y5n5s9f53h76hvf9377efdptmsvusxf3n8s' });
+  const dvm = ndk.getUser({ npub: NPUB_DVM_THUMBNAIL_CREATION });
 
   const thumbnailDvmFilter = useMemo(
     () => ({ kinds: [6204 as NDKKind], '#e': [thumbnailRequestEventId || ''] }),

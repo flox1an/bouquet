@@ -41,6 +41,7 @@ const router = createBrowserRouter(
     <Route element={<Layout />}>
       <Route path="/" element={<Home />} />
       <Route path="/transfer/:source" element={<Transfer />} />
+      <Route path="/transfer" element={<Transfer />} />
       <Route path="/upload" element={<Upload />} />
       <Route path="/check/:source" element={<Check />} />
     </Route>

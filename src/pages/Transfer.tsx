@@ -27,7 +27,8 @@ type TransferStatus = {
 };
 
 export const Transfer = () => {
-  const { source: transferSource } = useParams();
+  const { source } = useParams();
+  const [transferSource, setTransferSource] = useState(source);
   const navigate = useNavigate();
   const { serverInfo } = useServerInfo();
   const [transferTarget, setTransferTarget] = useState<string | undefined>();
@@ -100,88 +101,96 @@ export const Transfer = () => {
     return { ...stats, fullSize: transferJobs?.reduce((acc, b) => acc + b.size, 0) || 0 };
   }, [transferLog, transferJobs]);
 
-  return (
-    transferSource && (
-      <>
-        <ServerList
-          servers={Object.values(serverInfo).filter(s => s.name == transferSource)}
-          onCancel={() => closeTransferMode()}
-          title={
-            <>
-              <ArrowUpOnSquareIcon /> Transfer Source
-            </>
-          }
-        ></ServerList>
-        <ServerList
-          servers={Object.values(serverInfo)
-            .filter(s => s.name != transferSource)
-            .sort()}
-          selectedServer={transferTarget}
-          setSelectedServer={setTransferTarget}
-          title={
-            <>
-              <ArrowDownOnSquareIcon /> Transfer Target
-            </>
-          }
-        ></ServerList>
-        {transferTarget && transferJobs && transferJobs.length > 0 ? (
+  return transferSource ? (
+    <>
+      <ServerList
+        servers={Object.values(serverInfo).filter(s => s.name == transferSource)}
+        onCancel={() => closeTransferMode()}
+        title={
           <>
-            <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col my-4">
-              <div className="message">
-                {transferJobs.length} object{transferJobs.length > 1 ? 's' : ''} to transfer{' '}
-                {!started && (
-                  <button
-                    className="action-button"
-                    onClick={() => performTransfer(transferSource, transferTarget, transferJobs)}
-                  >
-                    <ArrowUpOnSquareIcon />
-                    Start
-                  </button>
-                )}
-              </div>
-              <div className="w-5/6">
-                <ProgressBar
-                  value={transferStatus.size}
-                  max={transferStatus.fullSize}
-                  description={
-                    formatFileSize(transferStatus.size) +
-                    ' / ' +
-                    formatFileSize(transferStatus.fullSize) +
-                    ' transferred'
-                  }
-                />
-                {<div className="message"></div>}
-                <div className="error-log">
-                  {Object.values(transferLog)
-                    .filter(b => b.status == 'error')
-                    .map(t => (
-                      <div>
-                        <span>
-                          <DocumentIcon />
-                        </span>
-                        <span>{t.sha256}</span>
-                        <span>{formatFileSize(t.size)}</span>
-                        <span>{t.status && (t.status == 'error' ? <ExclamationTriangleIcon /> : '')}</span>
-                        <span>{t.message}</span>
-                      </div>
-                    ))}
-                </div>
+            <ArrowUpOnSquareIcon /> Transfer Source
+          </>
+        }
+      ></ServerList>
+      <ServerList
+        servers={Object.values(serverInfo)
+          .filter(s => s.name != transferSource)
+          .sort()}
+        selectedServer={transferTarget}
+        setSelectedServer={setTransferTarget}
+        title={
+          <>
+            <ArrowDownOnSquareIcon /> Transfer Target
+          </>
+        }
+      ></ServerList>
+      {transferTarget && transferJobs && transferJobs.length > 0 ? (
+        <>
+          <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col my-4">
+            <div className="message">
+              {transferJobs.length} object{transferJobs.length > 1 ? 's' : ''} to transfer{' '}
+              {!started && (
+                <button
+                  className="action-button"
+                  onClick={() => performTransfer(transferSource, transferTarget, transferJobs)}
+                >
+                  <ArrowUpOnSquareIcon />
+                  Start
+                </button>
+              )}
+            </div>
+            <div className="w-5/6">
+              <ProgressBar
+                value={transferStatus.size}
+                max={transferStatus.fullSize}
+                description={
+                  formatFileSize(transferStatus.size) + ' / ' + formatFileSize(transferStatus.fullSize) + ' transferred'
+                }
+              />
+              {<div className="message"></div>}
+              <div className="error-log">
+                {Object.values(transferLog)
+                  .filter(b => b.status == 'error')
+                  .map(t => (
+                    <div>
+                      <span>
+                        <DocumentIcon />
+                      </span>
+                      <span>{t.sha256}</span>
+                      <span>{formatFileSize(t.size)}</span>
+                      <span>{t.status && (t.status == 'error' ? <ExclamationTriangleIcon /> : '')}</span>
+                      <span>{t.message}</span>
+                    </div>
+                  ))}
               </div>
             </div>
-            {!started && <BlobList blobs={transferJobs}></BlobList>}
-          </>
-        ) : (
-          <div className="message">
-            {transferTarget ? (
-              <>
-                <CheckBadgeIcon /> no missing objects to transfer
-              </>
-            ) : (
-              <>choose a transfer target above</>
-            )}
           </div>
-        )}
-      </>
-    )
+          {!started && <BlobList blobs={transferJobs}></BlobList>}
+        </>
+      ) : (
+        <div className="message">
+          {transferTarget ? (
+            <>
+              <CheckBadgeIcon /> no missing objects to transfer
+            </>
+          ) : (
+            <>choose a transfer target above</>
+          )}
+        </div>
+      )}
+    </>
+  ) : (
+    <>
+      <ServerList
+        title={
+          <>
+            <ArrowUpOnSquareIcon /> Transfer Source
+          </>
+        }
+        servers={Object.values(serverInfo).sort()}
+        selectedServer={transferSource}
+        setSelectedServer={s => setTransferSource(s)}
+      ></ServerList>
+    </>
   );
 };

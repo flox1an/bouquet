@@ -1,7 +1,7 @@
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useNDK } from '../../utils/ndk';
 import './Layout.css';
-import { ArrowUpOnSquareIcon } from '@heroicons/react/24/outline';
+import { ArrowUpOnSquareIcon, MagnifyingGlassIcon, ServerStackIcon } from '@heroicons/react/24/outline';
 import { useEffect } from 'react';
 import ThemeSwitcher from '../ThemeSwitcher';
 
@@ -15,22 +15,36 @@ export const Layout = () => {
 
   return (
     <div className="main">
-      <div className="title">
-        <a className="logo" onClick={() => navigate('/')}>
-          <img src="/bouquet.png" /> <span>bouquet</span>
-        </a>
-        <div>
+      <div className="navbar bg-base-300">
+        <div className="navbar-start">
+          <button className="btn btn-ghost text-xl">
+            <a className="logo" onClick={() => navigate('/')}>
+              <img className="w-8" src="/bouquet.png" />{' '}
+            </a>
+            <span>bouquet</span>
+          </button>
+        </div>
+        <div className="navbar-center">
+          <button className=" btn btn-ghost" onClick={() => navigate('/upload')}>
+            <ArrowUpOnSquareIcon /> Upload
+          </button>
+          <button className=" btn btn-ghost" onClick={() => navigate('/')}>
+            <MagnifyingGlassIcon /> Browse
+          </button>
+          <button className=" btn btn-ghost" onClick={() => navigate('/transfer')}>
+            <ServerStackIcon /> Sync
+          </button>
+        </div>
+        <div className="navbar-end">
           <ThemeSwitcher />
-          <div className="tooltip tooltip-bottom" data-tip="Upload">
-            <button className=" btn btn-square btn-ghost" onClick={() => navigate('/upload')}>
-              <ArrowUpOnSquareIcon />
-            </button>
+          <div className="avatar px-4">
+            <div className="w-12 rounded-full">
+              <img src={user?.profile?.image} />
+            </div>
           </div>
         </div>
-        <div className="avatar">
-          <img src={user?.profile?.image} />
-        </div>
       </div>
+
       <div className="content">{<Outlet />}</div>
       <div className="footer">
         made with 💜 by{' '}

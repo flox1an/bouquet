@@ -6,38 +6,11 @@
   @apply flex flex-col self-center md:w-10/12 w-full min-h-[80vh] px-4 md:px-0;
 }
 
-.title {
-  @apply text-neutral-content text-4xl flex flex-row items-center gap-2 p-4 md:w-10/12 w-full self-center;
-}
-
-.title img {
-  @apply w-10;
-}
-
-.title a.action {
-  @apply flex flex-col text-sm items-center opacity-50 hover:opacity-100 cursor-pointer px-2;
-}
-
-.title a.logo {
-  @apply flex flex-row flex-grow items-center gap-2 cursor-pointer;
-}
-
-.title span {
-  @apply flex-grow;
-}
-
-.title svg {
-  @apply w-7;
-}
-
-.avatar {
-  @apply flex-shrink;
-}
-
-.avatar img {
-  @apply w-10 h-10 rounded-full;
-}
 
 .footer {
   @apply justify-center gap-1 text-base-content pt-12 pb-6;
+}
+
+.btn svg {
+  @apply w-8;
 }
