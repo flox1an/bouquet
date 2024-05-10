@@ -58,13 +58,13 @@ const Server = ({
           </div>
         ) : (
           <div className="server-stats">
-            <div className="server-stat tooltip" data-tip="Number of blobs">
+            <div className="server-stat tooltip text-left" data-tip="Number of blobs">
               <DocumentDuplicateIcon /> {serverInfo.count}
             </div>
-            <div className="server-stat tooltip" data-tip="Total size of blobs">
+            <div className="server-stat tooltip text-left" data-tip="Total size of blobs">
               <CubeIcon /> {formatFileSize(serverInfo.size)}
             </div>
-            <div className="server-stat tooltip" data-tip="Date of last change">
+            <div className="server-stat tooltip text-left" data-tip="Date of last change">
               <ClockIcon /> {formatDate(serverInfo.lastChange)}
             </div>
             {serverInfo.count > 0 && (
@@ -84,7 +84,7 @@ const Server = ({
         )}
       </div>
       {((selectedServer == server.name && onTransfer) || onCancel) && (
-        <div className="server-actions">
+        <div className="server-actions ">
           {selectedServer == server.name && (
             <>
               {onCheck && (

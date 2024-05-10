@@ -33,7 +33,7 @@ type BlobListProps = {
 
 type AudioBlob = BlobDescriptor & { id3?: ID3Tag; imageData?: string };
 
-const BlobList = ({ blobs, onDelete, title, className ='' }: BlobListProps) => {
+const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => {
   const [mode, setMode] = useState<ListMode>('list');
   const { distribution } = useServerInfo();
   const fileMetaEventsByHash = useFileMetaEventsByHash();
@@ -227,15 +227,8 @@ const BlobList = ({ blobs, onDelete, title, className ='' }: BlobListProps) => {
             <div key={blob.sha256} className="p-2 rounded-lg bg-base-300 m-2 relative inline-block text-center">
               <a href={blob.url} target="_blank">
                 <div
-                  className=""
+                  className="bg-center bg-no-repeat bg-contain cursor-pointer inline-block w-[90vw] md:w-[200px] h-[200px]"
                   style={{
-                    width: 200,
-                    height: 200,
-                    cursor: 'pointer',
-                    display: 'inline-block',
-                    backgroundSize: 'contain',
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'center',
                     backgroundImage: `url(https://images.slidestr.net/insecure/f:webp/rs:fill:300/plain/${blob.url})`,
                   }}
                 ></div>

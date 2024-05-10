@@ -3,7 +3,7 @@
 }
 
 .server {
-  @apply bg-base-200 text-neutral-content rounded-lg p-4 gap-4 flex flex-row items-center;
+  @apply bg-base-200 text-neutral-content rounded-lg p-4 gap-4 w-full flex flex-row items-center;
 }
 
 .server-name {
@@ -19,8 +19,7 @@
 }
 
 .server-stats {
-  @apply grid grid-cols-4 gap-8;
-  grid-template-columns: 4em 6em 8em auto;
+  @apply grid gap-x-8 gap-y-4 grid-cols-2 md:grid-cols-[4em_6em_8em_auto];
 }
 
 .server-stat svg {
@@ -37,7 +36,7 @@
 }
 
 .server-actions {
-  @apply flex flex-row gap-4;
+  @apply flex flex-row gap-4 hidden md:flex;
 }
 
 .server-actions a {

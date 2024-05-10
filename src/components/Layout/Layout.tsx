@@ -13,10 +13,46 @@ export const Layout = () => {
     if (!user) loginWithExtension();
   }, []);
 
+  const navItems = (
+    <>
+      <button className="btn" onClick={() => navigate('/upload')}>
+        <ArrowUpOnSquareIcon /> Upload
+      </button>
+      <button className="btn" onClick={() => navigate('/')}>
+        <MagnifyingGlassIcon /> Browse
+      </button>
+      <button className="btn" onClick={() => navigate('/transfer')}>
+        <ServerStackIcon /> Sync
+      </button>
+    </>
+  );
+
   return (
     <div className="main">
       <div className="navbar bg-base-300">
         <div className="navbar-start">
+          <div className="flex-none md:hidden">
+            <div className="dropdown dropdown-bottom">
+              <button className="btn btn-square btn-ghost">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  className="inline-block w-5 h-5 stroke-current"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  ></path>
+                </svg>
+              </button>{' '}
+              <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-[11em]">
+                {navItems}
+              </ul>
+            </div>
+          </div>
           <button className="btn btn-ghost text-xl">
             <a className="logo" onClick={() => navigate('/')}>
               <img className="w-8" src="/bouquet.png" />{' '}
@@ -24,17 +60,7 @@ export const Layout = () => {
             <span>bouquet</span>
           </button>
         </div>
-        <div className="navbar-center">
-          <button className=" btn btn-ghost" onClick={() => navigate('/upload')}>
-            <ArrowUpOnSquareIcon /> Upload
-          </button>
-          <button className=" btn btn-ghost" onClick={() => navigate('/')}>
-            <MagnifyingGlassIcon /> Browse
-          </button>
-          <button className=" btn btn-ghost" onClick={() => navigate('/transfer')}>
-            <ServerStackIcon /> Sync
-          </button>
-        </div>
+        <div className="navbar-center hidden md:block">{navItems}</div>
         <div className="navbar-end">
           <ThemeSwitcher />
           <div className="avatar px-4">
@@ -47,8 +73,8 @@ export const Layout = () => {
 
       <div className="content">{<Outlet />}</div>
       <div className="footer">
-        made with 💜 by{' '}
-        <a href="https://njump.me/npub1klr0dy2ul2dx9llk58czvpx73rprcmrvd5dc7ck8esg8f8es06qs427gxc">florian</a>
+        <span className='whitespace-nowrap'>made with 💜 by{' '}
+        <a href="https://njump.me/npub1klr0dy2ul2dx9llk58czvpx73rprcmrvd5dc7ck8esg8f8es06qs427gxc">florian</a></span>
       </div>
     </div>
   );
