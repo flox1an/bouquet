@@ -17,3 +17,16 @@
 .blog-list-header svg {
   @apply w-6 opacity-80 hover:opacity-100;
 }
+
+.blob-list .cover-image {
+  @apply min-h-[96px] min-w-[96px];
+}
+
+.blob-list .cover-image:hover .play-icon {
+  @apply opacity-100;
+}
+
+.blob-list .cover-image .play-icon {
+  @apply opacity-0 absolute text-white top-8 left-8 w-16 h-16 rounded-full bg-[rgba(0,0,0,.4)] p-2 cursor-pointer;
+}
+

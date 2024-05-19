@@ -12,6 +12,7 @@ import Upload from './pages/Upload.tsx';
 import Check from './pages/Check.tsx';
 
 import { pdfjs } from 'react-pdf';
+import { GlobalProvider } from './GlobalState.tsx';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString();
 
@@ -75,7 +76,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     >*/}
     <QueryClientProvider client={queryClient}>
       <NDKContextProvider>
-        <RouterProvider router={router} />
+        <GlobalProvider>
+          <RouterProvider router={router} />
+        </GlobalProvider>
       </NDKContextProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

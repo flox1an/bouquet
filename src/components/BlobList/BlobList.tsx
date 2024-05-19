@@ -6,6 +6,7 @@ import {
   ListBulletIcon,
   MusicalNoteIcon,
   PhotoIcon,
+  PlayIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import { BlobDescriptor } from 'blossom-client-sdk';
@@ -13,14 +14,14 @@ import { formatDate, formatFileSize } from '../../utils/utils';
 import './BlobList.css';
 import { useEffect, useMemo, useState } from 'react';
 import { Document, Page } from 'react-pdf';
-import * as id3 from 'id3js';
-import { ID3Tag, ID3TagV2 } from 'id3js/lib/id3Tag';
 import { useQueries } from '@tanstack/react-query';
 import { useServerInfo } from '../../utils/useServerInfo';
 import useFileMetaEventsByHash, { KIND_BLOSSOM_DRIVE, KIND_FILE_META } from '../../utils/useFileMetaEvents';
 import { nip19 } from 'nostr-tools';
 import { AddressPointer, EventPointer } from 'nostr-tools/nip19';
 import { NDKEvent } from '@nostr-dev-kit/ndk';
+import { useGlobalContext } from '../../GlobalState';
+import { fetchId3Tag } from '../../utils/id3';
 
 type ListMode = 'gallery' | 'list' | 'audio' | 'video' | 'docs';
 
@@ -31,12 +32,11 @@ type BlobListProps = {
   className?: string;
 };
 
-type AudioBlob = BlobDescriptor & { id3?: ID3Tag; imageData?: string };
-
 const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => {
   const [mode, setMode] = useState<ListMode>('list');
   const { distribution } = useServerInfo();
   const fileMetaEventsByHash = useFileMetaEventsByHash();
+  const { dispatch } = useGlobalContext();
 
   const images = useMemo(
     () => blobs.filter(b => b.type?.startsWith('image/')).sort((a, b) => (a.uploaded > b.uploaded ? -1 : 1)), // descending
@@ -48,29 +48,11 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
     [blobs]
   );
 
-  const fetchId3Tag = async (blob: BlobDescriptor) => {
-    const id3Tag = await id3.fromUrl(blob.url).catch(e => console.warn(e));
-
-    if (id3Tag && id3Tag.kind == 'v2') {
-      const id3v2 = id3Tag as ID3TagV2;
-      if (id3v2.images[0].data) {
-        const base64data = btoa(
-          new Uint8Array(id3v2.images[0].data).reduce(function (data, byte) {
-            return data + String.fromCharCode(byte);
-          }, '')
-        );
-        const imageData = `data:${id3v2.images[0].type};base64,${base64data}`;
-        return { ...blob, id3: id3Tag, imageData } as AudioBlob;
-      }
-    }
-    return { ...blob, id3: id3Tag } as AudioBlob;
-  };
-
   const audioFiles = useMemo(
     () => blobs.filter(b => b.type?.startsWith('audio/')).sort((a, b) => (a.uploaded > b.uploaded ? -1 : 1)),
     [blobs]
   );
-
+console.log(audioFiles);
   const audioFilesWithId3 = useQueries({
     queries: audioFiles.map(af => ({
       queryKey: ['id3', af.sha256],
@@ -263,7 +245,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
       )}
 
       {mode == 'audio' && (
-        <div className="blob-li st flex flex-wrap justify-center">
+        <div className="blob-list flex flex-wrap justify-center">
           {audioFilesWithId3.map(
             blob =>
               blob.isSuccess && (
@@ -272,10 +254,21 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                   className="p-4 rounded-lg bg-base-300 m-2 relative flex flex-col"
                   style={{ width: '24em' }}
                 >
-                  {blob.data.id3 && (
-                    <div className="flex flex-row gap-4 pb-4">
-                      {blob.data.imageData && <img width="120" src={blob.data.imageData} />}
-
+                  <div className="flex flex-row gap-4 pb-4">
+                    <div className="cover-image">
+                      <img
+                        width={96}
+                        height={96}
+                        src={blob.data?.id3?.cover || '/music-placeholder.png'}
+                        className="cursor-pointer rounded-md"
+                        onClick={() => dispatch({ type: 'SET_CURRENT_SONG', song: {url: blob.data.url, id3: blob.data.id3 }})}
+                      />
+                      <PlayIcon
+                        className="play-icon "
+                        onClick={() => dispatch({ type: 'SET_CURRENT_SONG', song: {url: blob.data.url, id3: blob.data.id3 }})}
+                      ></PlayIcon>
+                    </div>
+                    {blob.data.id3 && (
                       <div className="flex flex-col pb-4 flex-grow">
                         {blob.data.id3.title && <span className=" font-bold">{blob.data.id3.title}</span>}
                         {blob.data.id3.artist && <span>{blob.data.id3.artist}</span>}
@@ -285,12 +278,10 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                           </span>
                         )}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  <audio className="w-full" src={blob.data.url} controls preload="metadata"></audio>
-
-                  <div className="flex flex-grow flex-row text-xs pt-12 items-end">
+                  <div className="flex flex-grow flex-row text-xs items-end">
                     <span>{formatFileSize(blob.data.size)}</span>
                     <span className=" flex-grow text-right">{formatDate(blob.data.uploaded)}</span>
                   </div>

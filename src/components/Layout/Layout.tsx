@@ -4,6 +4,8 @@ import './Layout.css';
 import { ArrowUpOnSquareIcon, MagnifyingGlassIcon, ServerStackIcon } from '@heroicons/react/24/outline';
 import { useEffect } from 'react';
 import ThemeSwitcher from '../ThemeSwitcher';
+import AudioPlayer from '../AudioPlayer';
+import BottomNavbar from '../BottomNavBar/BottomNavBar';
 
 export const Layout = () => {
   const navigate = useNavigate();
@@ -57,6 +59,7 @@ export const Layout = () => {
         </div>
         <div className="navbar-center hidden md:block">{navItems}</div>
         <div className="navbar-end">
+
           <ThemeSwitcher />
           <div className="avatar px-4">
             <div className="w-12 rounded-full">
@@ -67,6 +70,10 @@ export const Layout = () => {
       </div>
 
       <div className="content">{<Outlet />}</div>
+      <BottomNavbar>
+      <AudioPlayer />
+
+      </BottomNavbar>
       <div className="footer">
         <span className="whitespace-nowrap block">
           made with 💜 by{' '}

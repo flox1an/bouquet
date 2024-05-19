@@ -30,7 +30,7 @@ console.log(allXTags);
     const groupedByX = groupBy(allXTags, item => item.x);
     return mapValues(groupedByX, v => v.map(e => e.ev));
   }, [fileMetaSub]);
-  console.log(fileMetaEventsByHash);
+ //  console.log(fileMetaEventsByHash);
 
   return fileMetaEventsByHash;
 };
