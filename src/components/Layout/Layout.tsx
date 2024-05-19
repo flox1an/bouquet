@@ -40,12 +40,7 @@ export const Layout = () => {
                   viewBox="0 0 24 24"
                   className="inline-block w-5 h-5 stroke-current"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M4 6h16M4 12h16M4 18h16"
-                  ></path>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path>
                 </svg>
               </button>{' '}
               <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-[11em]">
@@ -73,8 +68,10 @@ export const Layout = () => {
 
       <div className="content">{<Outlet />}</div>
       <div className="footer">
-        <span className='whitespace-nowrap block'>made with 💜 by{' '}
-        <a href="https://njump.me/npub1klr0dy2ul2dx9llk58czvpx73rprcmrvd5dc7ck8esg8f8es06qs427gxc">florian</a></span>
+        <span className="whitespace-nowrap block">
+          made with 💜 by{' '}
+          <a href="https://njump.me/npub1klr0dy2ul2dx9llk58czvpx73rprcmrvd5dc7ck8esg8f8es06qs427gxc">florian</a>
+        </span>
       </div>
     </div>
   );

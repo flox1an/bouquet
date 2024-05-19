@@ -35,7 +35,7 @@ export const useServerInfo = () => {
         const blobs = await BlossomClient.listBlobs(server.url, pubkey!, undefined, listAuthEvent);
 
         // fallback to deprecated created attibute for servers that are not using 'uploaded' yet
-        return blobs.map(b => ({ ...b, uploaded: b.uploaded || b.created || dayjs().unix()}));
+        return blobs.map(b => ({ ...b, uploaded: b.uploaded || b.created || dayjs().unix() }));
       },
       enabled: !!pubkey && servers.length > 0,
       staleTime: 1000 * 60 * 5,

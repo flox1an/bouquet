@@ -6,7 +6,6 @@
   @apply flex flex-col self-center md:w-10/12 w-full min-h-[80vh] px-4 md:px-0;
 }
 
-
 .footer {
   @apply justify-center gap-1 text-base-content pt-12 pb-12;
 }

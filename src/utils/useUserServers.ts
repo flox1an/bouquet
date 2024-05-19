@@ -22,7 +22,7 @@ export const useUserServers = (): Server[] => {
   const servers = useMemo(() => {
     const serverUrls = uniqAndSort(
       [
-        ...(serverListEvent?.getMatchingTags('r').map(t => t[1]) || []),  // TODO 'r' is deprecated
+        ...(serverListEvent?.getMatchingTags('r').map(t => t[1]) || []), // TODO 'r' is deprecated
         ...(serverListEvent?.getMatchingTags('server').map(t => t[1]) || []),
         ...additionalServers,
       ].map(s => s.toLocaleLowerCase().replace(/\/$/, ''))
