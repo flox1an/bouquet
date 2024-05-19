@@ -46,7 +46,7 @@ function Home() {
     () =>
       selectedServer != undefined
         ? serverInfo[selectedServer].blobs?.sort(
-            (a, b) => (a.created > b.created ? -1 : 1) // descending
+            (a, b) => (a.uploaded > b.uploaded ? -1 : 1) // descending
           )
         : undefined,
     [serverInfo, selectedServer]
@@ -66,7 +66,7 @@ function Home() {
       {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && (
         <BlobList
           className="mt-4"
-          title={`Your objects on ${serverInfo[selectedServer].name}`}
+          title={`Content on ${serverInfo[selectedServer].name}`}
           blobs={selectedServerBlobs}
           onDelete={blob =>
             deleteBlob.mutate({

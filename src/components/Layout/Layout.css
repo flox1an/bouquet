@@ -8,7 +8,7 @@
 
 
 .footer {
-  @apply justify-center gap-1 text-base-content pt-12 pb-6;
+  @apply justify-center gap-1 text-base-content pt-12 pb-12;
 }
 
 .btn svg {

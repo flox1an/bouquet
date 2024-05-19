@@ -105,7 +105,7 @@ function Upload() {
     // for image resizing
     const fileDimensions: { [key: string]: FileEventData } = {};
     for (const file of filesToUpload) {
-      let data = { content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/,''), url: [] as string[] } as FileEventData;
+      let data = { content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/, ''), url: [] as string[] } as FileEventData;
       if (file.type.startsWith('image/')) {
         const dimensions = await getImageSize(file);
         data = { ...data, dim: `${dimensions.width}x${dimensions.height}` };
@@ -117,7 +117,9 @@ function Upload() {
       const serverUrl = serverInfo[server.name].url;
       let serverTransferred = 0;
       for (const file of filesToUpload) {
+        console.log('Creating auth ', Date.now());
         const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
+        console.log('Auth done ', Date.now(), uploadAuth);
 
         const newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
           setTransfers(ut => ({

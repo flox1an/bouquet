@@ -4,6 +4,7 @@ import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import { nip19 } from 'nostr-tools';
 import { useUserServers } from './useUserServers';
+import dayjs from 'dayjs';
 
 export type ServerInfo = {
   count: number;
@@ -32,8 +33,9 @@ export const useServerInfo = () => {
       queryFn: async () => {
         const listAuthEvent = await BlossomClient.getListAuth(signEventTemplate, 'List Blobs');
         const blobs = await BlossomClient.listBlobs(server.url, pubkey!, undefined, listAuthEvent);
-        // fix for wrong timestamps on media-server.slidestr.net (remove)
-        return blobs.map(b => ({ ...b, created: b.created > 1711200000000 ? b.created / 1000 : b.created }));
+
+        // fallback to deprecated created attibute for servers that are not using 'uploaded' yet
+        return blobs.map(b => ({ ...b, uploaded: b.uploaded || b.created || dayjs().unix()}));
       },
       enabled: !!pubkey && servers.length > 0,
       staleTime: 1000 * 60 * 5,
@@ -51,7 +53,7 @@ export const useServerInfo = () => {
         isError: blobs[sx].isError,
         count: blobs[sx].data?.length || 0,
         size: blobs[sx].data?.reduce((acc, blob) => acc + blob.size, 0) || 0,
-        lastChange: blobs[sx].data?.reduce((acc, blob) => Math.max(acc, blob.created), 0) || 0,
+        lastChange: blobs[sx].data?.reduce((acc, blob) => Math.max(acc, blob.uploaded), 0) || 0,
       };
     });
     return info;

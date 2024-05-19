@@ -67,6 +67,9 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
   }, [thumbnailSubscription.events]);
 
   const publishFileEvent = async (data: FileEventData) => {
+
+    // TODO REupload selected video thumbnail from DVM
+
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: data.content,
