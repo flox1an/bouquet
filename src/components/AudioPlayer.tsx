@@ -1,15 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-
 import { useGlobalContext } from '../GlobalState';
-import { PauseIcon, PlayIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from '@heroicons/react/24/outline';
-
+import { PauseIcon, PlayIcon, SpeakerWaveIcon, SpeakerXMarkIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 
 dayjs.extend(duration);
 
 const AudioPlayer: React.FC = () => {
-  const { state } = useGlobalContext();
+  const { state, dispatch } = useGlobalContext();
   const { currentSong } = state;
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -25,9 +23,19 @@ const AudioPlayer: React.FC = () => {
           setProgress(((audio.currentTime || 0) / audio.duration) * 100);
         }
       };
-      audio.addEventListener('timeupdate', updateProgress);
+
+      const updateProgressFrame = () => {
+        updateProgress();
+        requestAnimationFrame(updateProgressFrame);
+      };
+
+      audio.addEventListener('play', updateProgressFrame);
+      audio.addEventListener('pause', updateProgressFrame);
+      requestAnimationFrame(updateProgressFrame);
+
       return () => {
-        audio.removeEventListener('timeupdate', updateProgress);
+        audio.removeEventListener('play', updateProgressFrame);
+        audio.removeEventListener('pause', updateProgressFrame);
       };
     }
   }, [currentSong]);
@@ -61,36 +69,44 @@ const AudioPlayer: React.FC = () => {
     tuneVolume(newVolume);
   };
 
+  const resetPlayer = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setIsPlaying(false);
+    setProgress(0);
+    dispatch({ type: 'RESET_CURRENT_SONG' }); // Assuming this resets the current song in global state
+  };
+
   return (
     currentSong && (
-      <div className="audio-player flex items-center space-x-4">
+      <div className="audio-player flex items-center space-x-4 w-full">
         <audio ref={audioRef} />
-        {/*currentSong && <span className="font-semibold">{currentSong}</span>
-         */}
-        <button className="btn  btn-icon" onClick={playPause}>
+        <button className="btn btn-icon" onClick={playPause}>
           {isPlaying ? <PauseIcon className="h-6 w-6" /> : <PlayIcon className="h-6 w-6" />}
         </button>
 
         <span className="w-10 hidden md:block">
-          {' '}
           {dayjs.duration(audioRef.current?.currentTime || 0, 'seconds').format('m:ss')}
         </span>
-        <div className="flex-grow w-60 hidden md:block cursor-pointer">
+        <div className="flex-grow w-60 hidden md:block">
           <input
             type="range"
             min="0"
             max="100"
             value={progress}
-            onChange={e =>
-              audioRef.current &&
-              (audioRef.current.currentTime = (parseInt(e.target.value) / 100) * audioRef.current.duration)
-            }
-            className="progress progress-primary w-full"
+            onChange={e => {
+              if (audioRef.current) {
+                audioRef.current.currentTime = (parseInt(e.target.value) / 100) * audioRef.current.duration;
+              }
+            }}
+            className="progress progress-primary w-full cursor-pointer"
           />
         </div>
 
-        <div className="flex items-center space-x-2 cursor-pointer">
-          {volume == 0 ? (
+        <div className="flex items-center space-x-2" >
+          {volume === 0 ? (
             <SpeakerXMarkIcon
               className="h-6 w-6 text-gray-500"
               onClick={() => {
@@ -114,20 +130,25 @@ const AudioPlayer: React.FC = () => {
             step="0.01"
             value={volume}
             onChange={changeVolume}
-            className="progress progress-primary"
+            className="progress progress-primary cursor-pointer"
           />
         </div>
+
         {currentSong.id3 && (
           <>
             <div>
-              <img className="w-12 h-12" src={currentSong.id3?.cover}></img>
+              <img className="w-12 h-12" src={currentSong.id3.cover} alt={currentSong.id3.title} />
             </div>
             <div className="flex flex-col text-sm">
-              <div className="text-white">{currentSong?.id3.title}</div>
-              <div>{currentSong?.id3.artist}</div>
+              <div className="text-white">{currentSong.id3.title}</div>
+              <div>{currentSong.id3.artist}</div>
             </div>
           </>
         )}
+
+        <button className="btn btn-icon ml-auto" onClick={resetPlayer}>
+          <XMarkIcon className="h-6 w-6 text-gray-500" />
+        </button>
       </div>
     )
   );

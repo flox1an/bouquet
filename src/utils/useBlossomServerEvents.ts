@@ -4,8 +4,9 @@ import { NDKKind } from '@nostr-dev-kit/ndk';
 import countBy from 'lodash/countBy';
 import sortBy from 'lodash/sortBy';
 import toPairs from 'lodash/toPairs';
+import { USER_BLOSSOM_SERVER_LIST_KIND } from 'blossom-client-sdk';
 
-const blossomServerListFilter = { kinds: [10063 as NDKKind] };
+const blossomServerListFilter = { kinds: [USER_BLOSSOM_SERVER_LIST_KIND as NDKKind] };
 
 const useBlossomServerEvents = () => {
   const blossomServerEvents = useEvents(blossomServerListFilter);

@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import BlobList from '../components/BlobList/BlobList';
-import { ServerInfo, useServerInfo } from '../utils/useServerInfo';
+import { useServerInfo } from '../utils/useServerInfo';
 import { ServerList } from '../components/ServerList/ServerList';
 import { useNavigate } from 'react-router-dom';
 

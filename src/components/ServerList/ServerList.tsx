@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react';
 import { useNDK } from '../../utils/ndk';
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import dayjs from 'dayjs';
+import { USER_BLOSSOM_SERVER_LIST_KIND } from 'blossom-client-sdk';
 
 type ServerListProps = {
   servers: ServerInfo[];
@@ -49,7 +50,7 @@ export const ServerList = ({
 
   const handleSaveServers = async (newServers: ServerType[]) => {
     const ev = new NDKEvent(ndk, {
-      kind: 10063,
+      kind: USER_BLOSSOM_SERVER_LIST_KIND,
       created_at: dayjs().unix(),
       content: '',
       pubkey: user?.pubkey || '',

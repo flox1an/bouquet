@@ -16,7 +16,11 @@ const initialState: State = {
   songs: [],
 };
 
-type Action = { type: 'SET_CURRENT_SONG'; song: Song } | { type: 'SHUFFLE_SONGS' } | { type: 'ADD_SONG'; song: Song };
+type Action =
+  | { type: 'SET_CURRENT_SONG'; song: Song }
+  | { type: 'SHUFFLE_SONGS' }
+  | { type: 'RESET_CURRENT_SONG' }
+  | { type: 'ADD_SONG'; song: Song };
 
 const reducer = (state: State, action: Action): State => {
   switch (action.type) {
@@ -26,6 +30,8 @@ const reducer = (state: State, action: Action): State => {
       return { ...state, songs: [...state.songs].sort(() => Math.random() - 0.5) };
     case 'ADD_SONG':
       return { ...state, songs: [...state.songs, action.song] };
+    case 'RESET_CURRENT_SONG':
+      return { ...state, currentSong: undefined };
     default:
       return state;
   }

@@ -6,10 +6,12 @@ import { useEffect } from 'react';
 import ThemeSwitcher from '../ThemeSwitcher';
 import AudioPlayer from '../AudioPlayer';
 import BottomNavbar from '../BottomNavBar/BottomNavBar';
+import { useGlobalContext } from '../../GlobalState';
 
 export const Layout = () => {
   const navigate = useNavigate();
   const { loginWithExtension, user } = useNDK();
+  const { state } = useGlobalContext();
 
   useEffect(() => {
     if (!user) loginWithExtension();
@@ -69,9 +71,11 @@ export const Layout = () => {
       </div>
 
       <div className="content">{<Outlet />}</div>
-      <BottomNavbar>
-        <AudioPlayer />
-      </BottomNavbar>
+      {state.currentSong && (
+        <BottomNavbar>
+          <AudioPlayer />
+        </BottomNavbar>
+      )}
       <div className="footer">
         <span className="whitespace-nowrap block">
           made with 💜 by{' '}
