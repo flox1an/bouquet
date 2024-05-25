@@ -54,16 +54,18 @@ function Home() {
 
   return (
     <>
-      <ServerList
-        servers={Object.values(serverInfo).sort()}
-        selectedServer={selectedServer}
-        setSelectedServer={setSelectedServer}
-        onTransfer={() => navigate('/transfer/' + selectedServer)}
-        onCheck={() => navigate('/check/' + selectedServer)}
-        title={<>Servers</>}
-        manageServers={true}
-        withVirtualServers={true}
-      ></ServerList>
+      {Object.values(serverInfo).length > 1 && (
+        <ServerList
+          servers={Object.values(serverInfo).sort()}
+          selectedServer={selectedServer}
+          setSelectedServer={setSelectedServer}
+          onTransfer={() => navigate('/transfer/' + selectedServer)}
+          onCheck={() => navigate('/check/' + selectedServer)}
+          title={<>Servers</>}
+          manageServers={true}
+          withVirtualServers={true}
+        ></ServerList>
+      )}
 
       {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && (
         <BlobList

@@ -1,9 +1,10 @@
 import { formatFileSize, formatDate } from '../../utils/utils';
-import { ClipboardDocumentIcon, TrashIcon, PlayIcon } from '@heroicons/react/24/outline';
+import { ClipboardDocumentIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { fetchId3Tag } from '../../utils/id3';
 import { useQueries } from '@tanstack/react-query';
 import { useGlobalContext } from '../../GlobalState';
+import { PauseIcon, PlayIcon } from '@heroicons/react/24/solid';
 
 type AudioBlobListProps = {
   audioFiles: BlobDescriptor[];
@@ -11,7 +12,7 @@ type AudioBlobListProps = {
 };
 
 const AudioBlobList = ({ audioFiles, onDelete }: AudioBlobListProps) => {
-  const { dispatch } = useGlobalContext();
+  const { dispatch, state } = useGlobalContext();
 
   const audioFilesWithId3 = useQueries({
     queries: audioFiles.map(af => ({
@@ -43,12 +44,16 @@ const AudioBlobList = ({ audioFiles, onDelete }: AudioBlobListProps) => {
                       dispatch({ type: 'SET_CURRENT_SONG', song: { url: blob.data.url, id3: blob.data.id3 } })
                     }
                   />
-                  <PlayIcon
-                    className="play-icon "
-                    onClick={() =>
-                      dispatch({ type: 'SET_CURRENT_SONG', song: { url: blob.data.url, id3: blob.data.id3 } })
-                    }
-                  ></PlayIcon>
+                  {state.currentSong?.url == blob.data.url ? (
+                    <PauseIcon className="pause-icon"></PauseIcon>
+                  ) : (
+                    <PlayIcon
+                      className="play-icon"
+                      onClick={() =>
+                        dispatch({ type: 'SET_CURRENT_SONG', song: { url: blob.data.url, id3: blob.data.id3 } })
+                      }
+                    ></PlayIcon>
+                  )}
                 </div>
                 {blob.data.id3 && (
                   <div className="flex flex-col pb-4 flex-grow">

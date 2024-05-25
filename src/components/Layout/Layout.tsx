@@ -47,7 +47,7 @@ export const Layout = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path>
                 </svg>
               </button>{' '}
-              <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-[11em]">
+              <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow  bg-base-100 rounded-box w-[11em]">
                 {navItems}
               </ul>
             </div>
@@ -59,7 +59,7 @@ export const Layout = () => {
             <span>bouquet</span>
           </button>
         </div>
-        <div className="navbar-center hidden md:block">{navItems}</div>
+        <div className="navbar-center hidden md:flex gap-2">{navItems}</div>
         <div className="navbar-end">
           <ThemeSwitcher />
           <div className="avatar px-4">

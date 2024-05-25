@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useGlobalContext } from '../GlobalState';
-import { PauseIcon, PlayIcon, SpeakerWaveIcon, SpeakerXMarkIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { PauseIcon, PlayIcon, SpeakerWaveIcon, SpeakerXMarkIcon, XMarkIcon } from '@heroicons/react/24/solid';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 
