@@ -9,13 +9,11 @@ import {
   ShieldExclamationIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import { Server as ServerType } from '../../utils/useUserServers';
-import { ServerInfo } from '../../utils/useServerInfo';
 import { formatDate, formatFileSize } from '../../utils/utils';
+import { ServerInfo } from '../../utils/useServerInfo';
 
 type ServerProps = {
-  server: ServerType;
-  serverInfo: ServerInfo;
+  server: ServerInfo;
   selectedServer?: string | undefined;
   setSelectedServer?: React.Dispatch<React.SetStateAction<string | undefined>>;
   onTransfer?: (server: string) => void;
@@ -28,13 +26,12 @@ const Server = ({
   server,
   selectedServer,
   setSelectedServer,
-  serverInfo,
   onTransfer,
   onCancel,
   onCheck,
   blobsOnlyOnThisServer,
 }: ServerProps) => {
-  const readyToUse = !serverInfo.isLoading && !serverInfo.isError;
+  const readyToUse = !server.isLoading && !server.isError;
   return (
     <div
       className={
@@ -50,24 +47,24 @@ const Server = ({
       <div className="flex flex-col grow">
         <div className="server-name">
           {server.name}
-          {serverInfo.isLoading && <span className="ml-2 loading loading-spinner loading-sm"></span>}
+          {server.isLoading && <span className="ml-2 loading loading-spinner loading-sm"></span>}
         </div>
-        {serverInfo.isError ? (
+        {server.isError ? (
           <div className="badge badge-error">
             <ExclamationTriangleIcon className="w-4 mr-2" /> Error connecting to server
           </div>
         ) : (
           <div className="server-stats">
             <div className="server-stat tooltip text-left" data-tip="Number of blobs">
-              <DocumentDuplicateIcon /> {serverInfo.count}
+              <DocumentDuplicateIcon /> {server.count}
             </div>
             <div className="server-stat tooltip text-left" data-tip="Total size of blobs">
-              <CubeIcon /> {formatFileSize(serverInfo.size)}
+              <CubeIcon /> {formatFileSize(server.size)}
             </div>
             <div className="server-stat tooltip text-left" data-tip="Date of last change">
-              <ClockIcon /> {formatDate(serverInfo.lastChange)}
+              <ClockIcon /> {formatDate(server.lastChange)}
             </div>
-            {serverInfo.count > 0 && (
+            {server.count > 0 && !server.virtual && (
               <div className="server-stat">
                 {blobsOnlyOnThisServer > 0 ? (
                   <div>
@@ -83,7 +80,7 @@ const Server = ({
           </div>
         )}
       </div>
-      {((selectedServer == server.name && onTransfer) || onCancel) && (
+      {((selectedServer == server.name && !server.virtual && onTransfer) || onCancel) && (
         <div className="server-actions ">
           {selectedServer == server.name && (
             <>

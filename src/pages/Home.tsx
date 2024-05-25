@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import BlobList from '../components/BlobList/BlobList';
-import { useServerInfo } from '../utils/useServerInfo';
+import { ServerInfo, useServerInfo } from '../utils/useServerInfo';
 import { ServerList } from '../components/ServerList/ServerList';
 import { useNavigate } from 'react-router-dom';
 
@@ -62,6 +62,7 @@ function Home() {
         onCheck={() => navigate('/check/' + selectedServer)}
         title={<>Servers</>}
         manageServers={true}
+        withVirtualServers={true}
       ></ServerList>
 
       {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && (

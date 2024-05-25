@@ -7,6 +7,7 @@ import { useUserServers } from './useUserServers';
 import dayjs from 'dayjs';
 
 export type ServerInfo = {
+  virtual: boolean;
   count: number;
   size: number;
   lastChange: number;
@@ -19,6 +20,21 @@ export type ServerInfo = {
 
 type BlobDictionary = {
   [key: string]: { blob: BlobDescriptor; servers: string[] };
+};
+
+const mergeBlobs = (
+  baseBlobs: BlobDescriptor[],
+  newBlobs: BlobDescriptor[],
+  existingBlobs: { [key: string]: boolean }
+): BlobDescriptor[] => {
+  const result = [...baseBlobs];
+  for (const blob of newBlobs) {
+    if (!existingBlobs[blob.sha256]) {
+      existingBlobs[blob.sha256] = true;
+      result.push(blob);
+    }
+  }
+  return result;
 };
 
 export const useServerInfo = () => {
@@ -48,6 +64,7 @@ export const useServerInfo = () => {
     servers.forEach((server, sx) => {
       info[server.name] = {
         ...server,
+        virtual: false,
         blobs: blobs[sx].data,
         isLoading: blobs[sx].isLoading,
         isError: blobs[sx].isError,
@@ -58,6 +75,36 @@ export const useServerInfo = () => {
     });
     return info;
   }, [servers, blobs]);
+
+  const allServersAggregation = useMemo(() => {
+    const serversInfos = Object.values(serverInfo);
+    const existingBlobs: { [key: string]: boolean } = {};
+    const initial: ServerInfo = {
+      virtual: true,
+      count: 0,
+      size: 0,
+      lastChange: 0,
+      isLoading: false,
+      isError: false,
+      name: 'All servers',
+      url: 'all',
+      blobs: [],
+    };
+    const allInfo = serversInfos.reduce(
+      (acc, server) => ({
+        ...acc,
+        lastChange: Math.max(acc.lastChange, server.lastChange),
+        isLoading: acc.isLoading || server.isLoading,
+        isError: acc.isError || server.isError,
+        blobs: mergeBlobs(acc.blobs || [], server.blobs || [], existingBlobs),
+      }),
+      initial
+    );
+    allInfo.size = allInfo.blobs?.reduce((acc, blob) => acc + blob.size, 0) || 0;
+    allInfo.count = allInfo.blobs?.length || 0;
+
+    return { [allInfo.name]: allInfo, ...serverInfo };
+  }, [serverInfo]);
 
   const distribution = useMemo(() => {
     const dict: BlobDictionary = {};
@@ -80,5 +127,5 @@ export const useServerInfo = () => {
     return dict;
   }, [servers, serverInfo]);
 
-  return { serverInfo, distribution };
+  return { serverInfo: allServersAggregation, distribution };
 };

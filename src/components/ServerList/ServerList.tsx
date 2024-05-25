@@ -1,16 +1,16 @@
 import { Cog8ToothIcon } from '@heroicons/react/24/outline';
-import { useServerInfo } from '../../utils/useServerInfo';
+import { ServerInfo, useServerInfo } from '../../utils/useServerInfo';
 import { Server as ServerType } from '../../utils/useUserServers';
 import Server from './Server';
 import './ServerList.css';
 import ServerListPopup from '../ServerListPopup';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNDK } from '../../utils/ndk';
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import dayjs from 'dayjs';
 
 type ServerListProps = {
-  servers: ServerType[];
+  servers: ServerInfo[];
   selectedServer?: string | undefined;
   setSelectedServer?: React.Dispatch<React.SetStateAction<string | undefined>>;
   onTransfer?: (server: string) => void;
@@ -18,6 +18,7 @@ type ServerListProps = {
   onCheck?: (server: string) => void;
   title?: React.ReactElement;
   manageServers?: boolean;
+  withVirtualServers?: boolean;
 };
 
 export const ServerList = ({
@@ -28,9 +29,10 @@ export const ServerList = ({
   onCancel,
   title,
   manageServers = false,
+  withVirtualServers = false,
 }: ServerListProps) => {
   const { ndk, user } = useNDK();
-  const { serverInfo, distribution } = useServerInfo();
+  const { distribution } = useServerInfo();
   const blobsWithOnlyOneOccurance = Object.values(distribution)
     .filter(d => d.servers.length == 1)
     .map(d => ({ ...d.blob, server: d.servers[0] }));
@@ -58,6 +60,8 @@ export const ServerList = ({
     await ev.publish();
   };
 
+  const serversToList = useMemo(() => withVirtualServers ? servers : servers.filter(s => !s.virtual), [servers, withVirtualServers])
+
   return (
     <>
       <div className={`flex flex-row py-4 ${!title ? 'justify-end' : ''}`}>
@@ -76,14 +80,13 @@ export const ServerList = ({
         isOpen={isDialogOpen}
         onClose={handleCloseDialog}
         onSave={handleSaveServers}
-        initialServers={Object.values(serverInfo)}
+        initialServers={servers.filter(s => !s.virtual)}
       />
 
       <div className="server-list">
-        {servers.map(server => (
+        {serversToList.map(server => (
           <Server
             key={server.name}
-            serverInfo={serverInfo[server.name]}
             server={server}
             selectedServer={selectedServer}
             setSelectedServer={setSelectedServer}
