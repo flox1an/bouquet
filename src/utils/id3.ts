@@ -144,7 +144,7 @@ export const fetchId3Tag = async (blob: BlobDescriptor): Promise<AudioBlob> => {
       }
     }
 
-    console.log(blob.sha256, tagResult);
+    // console.log(blob.sha256, tagResult);
 
     await saveID3TagToDB(db, blob.sha256, tagResult);
     return { ...blob, id3: tagResult };

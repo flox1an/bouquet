@@ -42,23 +42,3 @@
 .server-actions a {
   @apply cursor-pointer text-center flex flex-col items-center hover:text-white opacity-80 hover:opacity-100 gap-1;
 }
-
-.server-list-header {
-  @apply flex flex-row py-4;
-}
-
-.server-list-header h2 {
-  @apply flex-grow;
-}
-
-.server-list-header button {
-  @apply bg-zinc-800 hover:bg-zinc-700 p-2 ml-2 my-2 text-white rounded-lg disabled:text-zinc-700 disabled:bg-zinc-900;
-}
-
-.server-list-header button.selected {
-  @apply bg-pink-700 text-white;
-}
-
-.server-list-header svg {
-  @apply w-6 opacity-80 hover:opacity-100;
-}

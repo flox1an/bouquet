@@ -1,8 +1,13 @@
-import { PlusIcon, ServerIcon } from '@heroicons/react/24/outline';
+import { Cog8ToothIcon } from '@heroicons/react/24/outline';
 import { useServerInfo } from '../../utils/useServerInfo';
 import { Server as ServerType } from '../../utils/useUserServers';
 import Server from './Server';
 import './ServerList.css';
+import ServerListPopup from '../ServerListPopup';
+import { useState } from 'react';
+import { useNDK } from '../../utils/ndk';
+import { NDKEvent } from '@nostr-dev-kit/ndk';
+import dayjs from 'dayjs';
 
 type ServerListProps = {
   servers: ServerType[];
@@ -12,7 +17,7 @@ type ServerListProps = {
   onCancel?: () => void;
   onCheck?: (server: string) => void;
   title?: React.ReactElement;
-  showAddButton?: boolean;
+  manageServers?: boolean;
 };
 
 export const ServerList = ({
@@ -22,26 +27,57 @@ export const ServerList = ({
   onTransfer,
   onCancel,
   title,
-  showAddButton = false,
+  manageServers = false,
 }: ServerListProps) => {
+  const { ndk, user } = useNDK();
   const { serverInfo, distribution } = useServerInfo();
   const blobsWithOnlyOneOccurance = Object.values(distribution)
     .filter(d => d.servers.length == 1)
     .map(d => ({ ...d.blob, server: d.servers[0] }));
 
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const handleOpenDialog = () => {
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+  };
+
+  const handleSaveServers = async (newServers: ServerType[]) => {
+    const ev = new NDKEvent(ndk, {
+      kind: 10063,
+      created_at: dayjs().unix(),
+      content: '',
+      pubkey: user?.pubkey || '',
+      tags: newServers.map(s => ['server', `${s.url}`]),
+    });
+    await ev.sign();
+    console.log(ev.rawEvent());
+    await ev.publish();
+  };
+
   return (
     <>
-      <div className={`server-list-header ${!title ? 'justify-end' : ''}`}>
-        {title && <h2>{title}</h2>}
-        {showAddButton && (
+      <div className={`flex flex-row py-4 ${!title ? 'justify-end' : ''}`}>
+        {title && <h2 className=" flex-grow">{title}</h2>}
+
+        {manageServers && (
           <div className="content-center">
-            <button onClick={() => {}} className="flex flex-row gap-2" title="Add server">
-              <PlusIcon />
-              <ServerIcon />
+            <button onClick={handleOpenDialog} className="btn btn-ghost btn-sm" title="Manage servers">
+              <Cog8ToothIcon className="h-6 w-6" /> Manage servers
             </button>
           </div>
         )}
       </div>
+
+      <ServerListPopup
+        isOpen={isDialogOpen}
+        onClose={handleCloseDialog}
+        onSave={handleSaveServers}
+        initialServers={Object.values(serverInfo)}
+      />
 
       <div className="server-list">
         {servers.map(server => (

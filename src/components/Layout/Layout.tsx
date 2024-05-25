@@ -59,7 +59,6 @@ export const Layout = () => {
         </div>
         <div className="navbar-center hidden md:block">{navItems}</div>
         <div className="navbar-end">
-
           <ThemeSwitcher />
           <div className="avatar px-4">
             <div className="w-12 rounded-full">
@@ -71,8 +70,7 @@ export const Layout = () => {
 
       <div className="content">{<Outlet />}</div>
       <BottomNavbar>
-      <AudioPlayer />
-
+        <AudioPlayer />
       </BottomNavbar>
       <div className="footer">
         <span className="whitespace-nowrap block">

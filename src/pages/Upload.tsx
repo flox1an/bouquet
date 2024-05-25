@@ -120,7 +120,7 @@ function Upload() {
         const authStartTime = Date.now();
         // TODO do this only once for each file. Currently this is called for every server
         const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
-        console.log(`Created auth event in ${Date.now()-authStartTime} ms`, uploadAuth);
+        console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
 
         const newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
           setTransfers(ut => ({
