@@ -15,7 +15,10 @@ export const useUserServers = (): Server[] => {
 
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type
 
-  const serverListEvent = useEvent({ kinds: [USER_BLOSSOM_SERVER_LIST_KIND as NDKKind], authors: [pubkey!] }, { disable: !pubkey });
+  const serverListEvent = useEvent(
+    { kinds: [USER_BLOSSOM_SERVER_LIST_KIND as NDKKind], authors: [pubkey!] },
+    { disable: !pubkey }
+  );
 
   const servers = useMemo(() => {
     const serverUrls = (serverListEvent?.getMatchingTags('server').map(t => t[1]) || []).map(s =>

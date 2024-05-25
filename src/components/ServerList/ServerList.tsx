@@ -61,7 +61,10 @@ export const ServerList = ({
     await ev.publish();
   };
 
-  const serversToList = useMemo(() => withVirtualServers ? servers : servers.filter(s => !s.virtual), [servers, withVirtualServers])
+  const serversToList = useMemo(
+    () => (withVirtualServers ? servers : servers.filter(s => !s.virtual)),
+    [servers, withVirtualServers]
+  );
 
   return (
     <>

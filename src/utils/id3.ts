@@ -1,7 +1,6 @@
 import * as id3 from 'id3js';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { ID3TagV2 } from 'id3js/lib/id3Tag';
-import { Reader } from 'id3js/lib/reader';
 
 export type AudioBlob = BlobDescriptor & { id3?: ID3Tag };
 

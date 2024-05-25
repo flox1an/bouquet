@@ -105,7 +105,7 @@ const AudioPlayer: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center space-x-2" >
+        <div className="flex items-center space-x-2">
           {volume === 0 ? (
             <SpeakerXMarkIcon
               className="h-6 w-6 text-gray-500"
