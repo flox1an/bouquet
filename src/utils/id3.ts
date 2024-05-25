@@ -1,6 +1,7 @@
 import * as id3 from 'id3js';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { ID3TagV2 } from 'id3js/lib/id3Tag';
+import { Reader } from 'id3js/lib/reader';
 
 export type AudioBlob = BlobDescriptor & { id3?: ID3Tag };
 
@@ -128,7 +129,24 @@ export const fetchId3Tag = async (blob: BlobDescriptor): Promise<AudioBlob> => {
     return { ...blob, id3: cachedID3Tag } as AudioBlob;
   }
 
-  const id3Tag = await id3.fromUrl(blob.url).catch(e => console.warn(e));
+  function arrayBufferToFile(arrayBuffer: ArrayBuffer, fileName: string, mimeType: string) {
+    const fileBlob = new Blob([arrayBuffer], { type: mimeType });
+    const file = new File([fileBlob], fileName, { type: mimeType });
+    return file;
+  }
+
+  // Getting from URL would be the best but it requires working Range requests
+  // an the servers. Currently non of the blossom servers are working.
+  // HEAD -> content-length would also be required and is missing in some
+  // instances. Consequently we need to download the whole file first :-(((
+  // const id3Tag = await id3.fromUrl(blob.url).catch(e => console.warn(e));
+
+  // download the whole song, convert to blob and file to read mp3 tag
+  const response = await fetch(blob.url);
+  const buffer = await response.arrayBuffer();
+  const file = arrayBufferToFile(buffer, `${blob.sha256}.mp3`, blob.type || 'audio/mpeg');
+  const id3Tag = await id3.fromFile(file).catch(e => console.warn(e));
+
   if (id3Tag) {
     const tagResult: ID3Tag = {
       title: id3Tag.title || undefined,
