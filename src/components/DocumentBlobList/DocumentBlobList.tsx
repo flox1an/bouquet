@@ -9,14 +9,13 @@ type DocumentBlobListProps = {
 };
 
 const DocumentBlobList = ({ docs, onDelete }: DocumentBlobListProps) => (
-  <div className="blob-list flex flex-wrap justify-center">
+  <div className="blob-list grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2 justify-center">
     {docs.map(blob => (
       <div
         key={blob.sha256}
-        className="p-4 rounded-lg bg-base-300 m-2 relative flex flex-col"
-        style={{ width: '22em' }}
+        className="p-4 rounded-lg bg-base-300 relative flex flex-col"
       >
-        <a href={blob.url} target="_blank" className="block overflow-clip text-ellipsis py-2">
+        <a href={blob.url} target="_blank" className="block overflow-clip text-ellipsis py-2 m-auto ">
           <Document file={blob.url}>
             <Page pageIndex={0} width={300} renderTextLayer={false} renderAnnotationLayer={false} renderForms={false} />
           </Document>

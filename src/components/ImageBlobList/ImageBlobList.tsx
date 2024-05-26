@@ -8,9 +8,9 @@ type ImageBlobListProps = {
 };
 
 const ImageBlobList = ({ images, onDelete }: ImageBlobListProps) => (
-  <div className="blob-list flex flex-wrap justify-center flex-grow">
+  <div className="blob-list grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 justify-center">
     {images.map(blob => (
-      <div key={blob.sha256} className="p-2 rounded-lg bg-base-300 m-2 relative inline-block text-center">
+      <div key={blob.sha256} className="p-2 rounded-lg bg-base-300 relative flex flex-col text-center">
         <a href={blob.url} target="_blank">
           <div
             className="bg-center bg-no-repeat bg-contain cursor-pointer inline-block w-[90vw] md:w-[200px] h-[200px]"

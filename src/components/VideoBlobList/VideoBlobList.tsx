@@ -8,14 +8,10 @@ type VideoBlobListProps = {
 };
 
 const VideoBlobList = ({ videos, onDelete }: VideoBlobListProps) => (
-  <div className="blob-list flex flex-wrap justify-center">
+  <div className="blob-list grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2 justify-center">
     {videos.map(blob => (
-      <div
-        key={blob.sha256}
-        className="p-4 rounded-lg bg-base-300 m-2 relative flex flex-col"
-        style={{ width: '340px' }}
-      >
-        <video src={blob.url} preload="metadata" width={320} controls playsInline></video>
+      <div key={blob.sha256} className="p-4 rounded-lg bg-base-300 relative text-center">
+        <video src={blob.url} className="m-auto max-h-[40dvh]" preload="metadata" controls playsInline></video>
         <div className="flex flex-grow flex-row text-xs pt-12 items-end">
           <span>{formatFileSize(blob.size)}</span>
           <span className=" flex-grow text-right">{formatDate(blob.uploaded)}</span>

@@ -27,28 +27,30 @@ const AudioBlobList = ({ audioFiles, onDelete }: AudioBlobListProps) => {
   });
 
   return (
-    <div className="blob-list flex flex-wrap justify-center">
+    <div className="blob-list grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2 justify-center">
       {audioFilesWithId3.map(
         blob =>
           blob.isSuccess && (
             <div
               key={blob.data.sha256}
-              className="p-4 rounded-lg bg-base-300 m-2 relative flex flex-col"
-              style={{ width: '24em' }}
+              className="p-4 rounded-lg bg-base-300 w-full relative flex flex-col"
+
             >
-              <div className="flex flex-row gap-4 pb-4">
-                <div className="cover-image">
+              <div className="flex flex-row gap-4 pb-1">
+                <div className="cover-image" >
                   <img
                     width={96}
                     height={96}
                     src={blob.data?.id3?.cover || '/music-placeholder.png'}
-                    className="cursor-pointer rounded-md"
+                    className="cursor-pointer rounded-md w-[64px] h-[64px] md:w-[96px] md:h-[96px]"
                     onClick={() =>
                       dispatch({ type: 'SET_CURRENT_SONG', song: { url: blob.data.url, id3: blob.data.id3 } })
                     }
                   />
                   {state.currentSong?.url == blob.data.url ? (
-                    <PauseIcon className="pause-icon"></PauseIcon>
+                    <PauseIcon className="pause-icon" onClick={() =>
+                      dispatch({ type: 'RESET_CURRENT_SONG'})
+                    }></PauseIcon>
                   ) : (
                     <PlayIcon
                       className="play-icon"
@@ -59,11 +61,11 @@ const AudioBlobList = ({ audioFiles, onDelete }: AudioBlobListProps) => {
                   )}
                 </div>
                 {blob.data.id3 && (
-                  <div className="flex flex-col pb-4 flex-grow">
-                    {blob.data.id3.title && <span className=" font-bold">{blob.data.id3.title}</span>}
-                    {blob.data.id3.artist && <span>{blob.data.id3.artist}</span>}
+                  <div className="flex flex-col pb-1 md:pb-4 flex-grow">
+                    {blob.data.id3.title && <span className="font-bold">{blob.data.id3.title}</span>}
+                    {blob.data.id3.artist && <span className=" text-sm"> {blob.data.id3.artist}</span>}
                     {blob.data.id3.album && (
-                      <span>
+                      <span className="text-sm">
                         {blob.data.id3.album} {blob.data.id3.year ? `(${blob.data.id3.year})` : ''}
                       </span>
                     )}

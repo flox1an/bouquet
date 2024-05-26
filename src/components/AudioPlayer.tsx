@@ -81,7 +81,7 @@ const AudioPlayer: React.FC = () => {
 
   return (
     currentSong && (
-      <div className="audio-player flex items-center space-x-4 w-full">
+      <div className="audio-player flex items-center md:gap-4 gap-2 w-full">
         <audio ref={audioRef} />
         <button className="btn btn-icon" onClick={playPause}>
           {isPlaying ? <PauseIcon className="h-6 w-6" /> : <PlayIcon className="h-6 w-6" />}
@@ -105,7 +105,7 @@ const AudioPlayer: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="items-center md:space-x-2 hidden md:flex">
           {volume === 0 ? (
             <SpeakerXMarkIcon
               className="h-6 w-6 text-gray-500"
@@ -130,7 +130,7 @@ const AudioPlayer: React.FC = () => {
             step="0.01"
             value={volume}
             onChange={changeVolume}
-            className="progress progress-primary cursor-pointer"
+            className="progress progress-primary cursor-pointer hidden md:block"
           />
         </div>
 

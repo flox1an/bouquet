@@ -54,7 +54,7 @@ export const usePublishing = () => {
         ['x', data.x],
         ...uniq(data.url).map(du => ['imeta', `url ${du}`, `m ${data.m}`]),
       ],
-      kind: 31337,
+      kind: 31337, // TODO vertical video event based on dim?!
       pubkey: user?.pubkey || '',
     };
 
