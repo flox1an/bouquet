@@ -31,7 +31,7 @@ const BlobListTypeMenu = ({ mode, setMode, hasImages, hasAudio, hasDocs, hasVide
   }, [hasAudio, hasDocs, hasImages, hasVideo, mode, setMode]);
 
   return (
-    <ul className="menu menu-horizontal  menu-active bg-base-200 rounded-box">
+    <ul className="menu menu-horizontal menu-active bg-base-200 rounded-box gap-1">
       <li>
         <a
           className={' tooltip ' + (mode == 'list' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}

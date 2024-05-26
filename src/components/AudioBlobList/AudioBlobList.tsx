@@ -1,7 +1,7 @@
 import { formatFileSize, formatDate } from '../../utils/utils';
 import { ClipboardDocumentIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { fetchId3Tag } from '../../utils/id3';
+import { AudioBlob, fetchId3Tag } from '../../utils/id3';
 import { useQueries } from '@tanstack/react-query';
 import { useGlobalContext } from '../../GlobalState';
 import { PauseIcon, PlayIcon } from '@heroicons/react/24/solid';
@@ -17,7 +17,10 @@ const AudioBlobList = ({ audioFiles, onDelete }: AudioBlobListProps) => {
   const audioFilesWithId3 = useQueries({
     queries: audioFiles.map(af => ({
       queryKey: ['id3', af.sha256],
-      queryFn: async () => await fetchId3Tag(af),
+      queryFn: async () => {
+        const id3Tag = await fetchId3Tag(af.sha256, af.url);
+        return { ...af, id3: id3Tag?.id3 } as AudioBlob;
+      },
       staleTime: 1000 * 60 * 5,
       cacheTime: 1000 * 60 * 5,
     })),

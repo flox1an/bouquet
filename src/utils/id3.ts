@@ -67,11 +67,8 @@ function saveID3TagToDB(db: IDBDatabase, key: string, id3Tag: ID3Tag): Promise<v
 }
 
 // Function to resize image
-function resizeImage(imageArray: ArrayBuffer, maxWidth: number, maxHeight: number): Promise<string> {
+function resizeImage(imageBlobUrl: string, maxWidth: number, maxHeight: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const blob = new Blob([imageArray], { type: 'image/jpeg' });
-    const url = URL.createObjectURL(blob);
-
     const img = new Image();
     img.onload = () => {
       let width = img.width;
@@ -108,24 +105,29 @@ function resizeImage(imageArray: ArrayBuffer, maxWidth: number, maxHeight: numbe
         reject(new Error('Canvas context could not be retrieved'));
       }
 
-      URL.revokeObjectURL(url); // Clean up
+      // URL.revokeObjectURL(url); // Clean up
     };
 
     img.onerror = () => {
       reject(new Error('Image could not be loaded'));
-      URL.revokeObjectURL(url); // Clean up
+      // URL.revokeObjectURL(url); // Clean up
     };
 
-    img.src = url;
+    img.src = imageBlobUrl;
   });
 }
 
-export const fetchId3Tag = async (blob: BlobDescriptor): Promise<AudioBlob> => {
+export const fetchId3Tag = async (
+  blobHash: string,
+  blobUrl?: string,
+  localFile?: File
+): Promise<{ id3: ID3Tag; coverFull?: string } | undefined> => {
   const db = await openIndexedDB();
-  const cachedID3Tag = await getID3TagFromDB(db, blob.sha256);
+  const cachedID3Tag = await getID3TagFromDB(db, blobHash);
 
-  if (cachedID3Tag) {
-    return { ...blob, id3: cachedID3Tag } as AudioBlob;
+  // Don't cache the ID3 tag if we have a local file
+  if (!localFile && cachedID3Tag) {
+    return { id3: cachedID3Tag };
   }
 
   function arrayBufferToFile(arrayBuffer: ArrayBuffer, fileName: string, mimeType: string) {
@@ -141,10 +143,18 @@ export const fetchId3Tag = async (blob: BlobDescriptor): Promise<AudioBlob> => {
   // const id3Tag = await id3.fromUrl(blob.url).catch(e => console.warn(e));
 
   // download the whole song, convert to blob and file to read mp3 tag
-  const response = await fetch(blob.url);
-  const buffer = await response.arrayBuffer();
-  const file = arrayBufferToFile(buffer, `${blob.sha256}.mp3`, blob.type || 'audio/mpeg');
+  let file = localFile;
+  if (!file) {
+    if (!blobUrl) return undefined;
+
+    // if we don't have a local file, download from blob url
+    const response = await fetch(blobUrl);
+    const buffer = await response.arrayBuffer();
+    file = arrayBufferToFile(buffer, `${blobHash}.mp3`, 'audio/mpeg');
+  }
+
   const id3Tag = await id3.fromFile(file).catch(e => console.warn(e));
+  let imageBlobUrl: string | undefined;
 
   if (id3Tag) {
     const tagResult: ID3Tag = {
@@ -157,16 +167,16 @@ export const fetchId3Tag = async (blob: BlobDescriptor): Promise<AudioBlob> => {
     if (id3Tag.kind == 'v2') {
       const id3v2 = id3Tag as ID3TagV2;
       if (id3v2.images[0].data) {
-        tagResult.cover = await resizeImage(id3v2.images[0].data, 128, 128);
+        const blob = new Blob([id3v2.images[0].data], { type: 'image/jpeg' });
+        imageBlobUrl = URL.createObjectURL(blob);
+        tagResult.cover = await resizeImage(imageBlobUrl, 128, 128);
       }
     }
 
-    // console.log(blob.sha256, tagResult);
+    console.log(blobHash, blobUrl, tagResult);
 
-    await saveID3TagToDB(db, blob.sha256, tagResult);
-    return { ...blob, id3: tagResult };
+    await saveID3TagToDB(db, blobHash, tagResult);
+    return { id3: tagResult, coverFull: imageBlobUrl };
   }
-  console.log('No ID3 tag found for ' + blob.sha256);
-
-  return blob; // only when ID3 fails completely
+  console.log('No ID3 tag found for ' + blobHash);
 };

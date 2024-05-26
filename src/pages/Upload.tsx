@@ -105,7 +105,11 @@ function Upload() {
     // for image resizing
     const fileDimensions: { [key: string]: FileEventData } = {};
     for (const file of filesToUpload) {
-      let data = { content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/, ''), url: [] as string[] } as FileEventData;
+      let data = {
+        content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/, ''),
+        url: [] as string[],
+        originalFile: file,
+      } as FileEventData;
       if (file.type.startsWith('image/')) {
         const dimensions = await getImageSize(file);
         data = { ...data, dim: `${dimensions.width}x${dimensions.height}` };
@@ -199,23 +203,6 @@ function Upload() {
 
   useEffect(() => {
     clearTransfers();
-    /*
-    setFileEventsToPublish([
-      {
-        content: '_DSF3852.jpg',
-        dim: '1365x2048',
-        m: 'image/jpeg',
-        size: 599988,
-        url: [
-          'https://test-store.slidestr.net/d32b7eff53919bc38b59e05b2fe4bda3067c46589eeee743a46649ae71f4b659',
-
-          'https://media-server.slidestr.net/d32b7eff53919bc38b59e05b2fe4bda3067c46589eeee743a46649ae71f4b659',
-
-          'https://cdn.satellite.earth/d32b7eff53919bc38b59e05b2fe4bda3067c46589eeee743a46649ae71f4b659.jpg',
-        ],
-        x: 'd32b7eff53919bc38b59e05b2fe4bda3067c46589eeee743a46649ae71f4b659',
-      },
-    ]);*/
   }, [servers]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
