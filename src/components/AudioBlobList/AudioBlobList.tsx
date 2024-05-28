@@ -31,13 +31,9 @@ const AudioBlobList = ({ audioFiles, onDelete }: AudioBlobListProps) => {
       {audioFilesWithId3.map(
         blob =>
           blob.isSuccess && (
-            <div
-              key={blob.data.sha256}
-              className="p-4 rounded-lg bg-base-300 w-full relative flex flex-col"
-
-            >
+            <div key={blob.data.sha256} className="p-4 rounded-lg bg-base-300 w-full relative flex flex-col">
               <div className="flex flex-row gap-4 pb-1">
-                <div className="cover-image" >
+                <div className="cover-image">
                   <img
                     width={96}
                     height={96}
@@ -48,9 +44,10 @@ const AudioBlobList = ({ audioFiles, onDelete }: AudioBlobListProps) => {
                     }
                   />
                   {state.currentSong?.url == blob.data.url ? (
-                    <PauseIcon className="pause-icon" onClick={() =>
-                      dispatch({ type: 'RESET_CURRENT_SONG'})
-                    }></PauseIcon>
+                    <PauseIcon
+                      className="pause-icon"
+                      onClick={() => dispatch({ type: 'RESET_CURRENT_SONG' })}
+                    ></PauseIcon>
                   ) : (
                     <PlayIcon
                       className="play-icon"

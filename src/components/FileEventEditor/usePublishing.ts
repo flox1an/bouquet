@@ -7,7 +7,7 @@ import { useNDK } from '../../utils/ndk';
 export const usePublishing = () => {
   const { ndk, user } = useNDK();
 
-  const publishFileEvent = async (data: FileEventData) => {
+  const publishFileEvent = async (data: FileEventData): Promise<string> => {
     // TODO REupload selected video thumbnail from DVM
 
     const e: NostrEvent = {
@@ -42,9 +42,10 @@ export const usePublishing = () => {
     await ev.sign();
     console.log(ev.rawEvent());
     // await ev.publish();
+    return JSON.stringify(ev.rawEvent(), null, 2);
   };
 
-  const publishAudioEvent = async (data: FileEventData) => {
+  const publishAudioEvent = async (data: FileEventData): Promise<string> => {
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: `${data.artist} - ${data.title}`,
@@ -76,9 +77,10 @@ export const usePublishing = () => {
     await ev.sign();
     console.log(ev.rawEvent());
     // await ev.publish();
+    return JSON.stringify(ev.rawEvent(), null, 2);
   };
 
-  const publishVideoEvent = async (data: FileEventData) => {
+  const publishVideoEvent = async (data: FileEventData): Promise<string> => {
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: data.content,
@@ -115,6 +117,7 @@ export const usePublishing = () => {
     await ev.sign();
     console.log(ev.rawEvent());
     // await ev.publish();
+    return JSON.stringify(ev.rawEvent(), null, 2);
   };
 
   return {

@@ -27,6 +27,7 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
   const [fileEventData, setFileEventData] = useState(data);
   const { createDvmThumbnailRequest, thumbnailRequestEventId } = useVideoThumbnailDvm(setFileEventData);
   const { publishAudioEvent, publishFileEvent, publishVideoEvent } = usePublishing();
+  const [jsonOutput, setJsonOutput] = useState('');
 
   useEffect(() => {
     if (fileEventData.m?.startsWith('video/') && fileEventData.thumbnails == undefined) {
@@ -169,16 +170,26 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
           DEVELOPMENT ZONE! These publish buttons do not work yet. Events are only shown in the browser console.
         </div>
         <div className="flex gap-2">
-          <button className="btn btn-primary" onClick={() => publishFileEvent(fileEventData)}>
+          <button
+            className="btn btn-primary"
+            onClick={async () => setJsonOutput(await publishFileEvent(fileEventData))}
+          >
             Create File Event
           </button>
-          <button className="btn btn-primary" onClick={() => publishAudioEvent(fileEventData)}>
+          <button
+            className="btn btn-primary"
+            onClick={async () => setJsonOutput(await publishAudioEvent(fileEventData))}
+          >
             Create Audio Event
           </button>
-          <button className="btn btn-primary" onClick={() => publishVideoEvent(fileEventData)}>
+          <button
+            className="btn btn-primary"
+            onClick={async () => setJsonOutput(await publishVideoEvent(fileEventData))}
+          >
             Create Video Event
           </button>
         </div>
+        <div className="font-mono text-xs whitespace-pre">{jsonOutput}</div>
       </div>
     </>
   );
