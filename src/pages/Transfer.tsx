@@ -8,13 +8,14 @@ import {
 import { ServerList } from '../components/ServerList/ServerList';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useMemo, useState } from 'react';
-import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
+import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatFileSize } from '../utils/utils';
 import BlobList from '../components/BlobList/BlobList';
 import './Transfer.css';
 import { useNavigate, useParams } from 'react-router-dom';
+import axios, { AxiosProgressEvent } from 'axios';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
 
 type TransferStatus = {
@@ -23,6 +24,8 @@ type TransferStatus = {
     status: 'pending' | 'done' | 'error';
     message?: string;
     size: number;
+    transferred?: number;
+    rate?: number;
   };
 };
 
@@ -54,25 +57,71 @@ export const Transfer = () => {
     }
     return [];
   }, [serverInfo, transferSource, transferTarget]);
-  // https://github.com/sindresorhus/p-limit
-  //
+
+  const uploadBlob = async (
+    server: string,
+    file: File,
+    auth?: SignedEvent,
+    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+  ) => {
+    const headers = {
+      Accept: 'application/json',
+      'Content-Type': file.type,
+    };
+
+    const res = await axios.put<BlobDescriptor>(`${server}/upload`, file, {
+      headers: auth ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(auth) } : headers,
+      onUploadProgress,
+    });
+
+    return res.data;
+  };
+
   const performTransfer = async (sourceServer: string, targetServer: string, blobs: BlobDescriptor[]) => {
     setTransferLog({});
     setStarted(true);
     for (const b of blobs) {
       try {
-        // BlossomClient.getGetAuth()
-        setTransferLog(ts => ({ ...ts, [b.sha256]: { sha256: b.sha256, status: 'pending', size: b.size } }));
+        setTransferLog(ts => ({
+          ...ts,
+          [b.sha256]: { sha256: b.sha256, status: 'pending', size: b.size, transferred: 0, rate: 0 },
+        }));
 
-        const data = await BlossomClient.getBlob(serverInfo[sourceServer].url, b.sha256);
+        const data = await BlossomClient.getBlob(serverInfo[sourceServer].url, b.sha256).catch(e => {
+          if (e.response?.status === 404) {
+            setTransferLog(ts => ({
+              ...ts,
+              [b.sha256]: { sha256: b.sha256, status: 'error', message: 'Blob not found (404)', size: b.size },
+            }));
+            return null;
+          }
+          throw e;
+        });
+
+        if (!data) continue;
+
         const file = new File([data], b.sha256, { type: b.type, lastModified: b.created });
         const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
-        await BlossomClient.uploadBlob(serverInfo[targetServer].url, file, uploadAuth);
-        setTransferLog(ts => ({ ...ts, [b.sha256]: { sha256: b.sha256, status: 'done', size: b.size } }));
+
+        await uploadBlob(serverInfo[targetServer].url, file, uploadAuth, progressEvent => {
+          setTransferLog(ts => ({
+            ...ts,
+            [b.sha256]: {
+              ...ts[b.sha256],
+              transferred: progressEvent.loaded,
+              rate: progressEvent.rate || 0,
+            },
+          }));
+        });
+
+        setTransferLog(ts => ({
+          ...ts,
+          [b.sha256]: { sha256: b.sha256, status: 'done', size: b.size },
+        }));
       } catch (e) {
         setTransferLog(ts => ({
           ...ts,
-          [b.sha256]: { sha256: b.sha256, status: 'error', message: (e as Error).message, size: blobs.length },
+          [b.sha256]: { sha256: b.sha256, status: 'error', message: (e as Error).message, size: b.size },
         }));
         console.warn(e);
       }
@@ -100,6 +149,8 @@ export const Transfer = () => {
     );
     return { ...stats, fullSize: transferJobs?.reduce((acc, b) => acc + b.size, 0) || 0 };
   }, [transferLog, transferJobs]);
+
+  const transferErrors = useMemo(() => Object.values(transferLog).filter(b => b.status == 'error'), [transferLog]);
 
   return transferSource ? (
     <>
@@ -148,11 +199,10 @@ export const Transfer = () => {
                 }
               />
               {<div className="message"></div>}
-              <div className="error-log">
-                {Object.values(transferLog)
-                  .filter(b => b.status == 'error')
-                  .map(t => (
-                    <div>
+              {transferErrors.length > 0 && (
+                <div className="error-log">
+                  {transferErrors.map(t => (
+                    <div key={t.sha256}>
                       <span>
                         <DocumentIcon />
                       </span>
@@ -162,7 +212,8 @@ export const Transfer = () => {
                       <span>{t.message}</span>
                     </div>
                   ))}
-              </div>
+                </div>
+              )}
             </div>
           </div>
           {!started && <BlobList blobs={transferJobs}></BlobList>}
