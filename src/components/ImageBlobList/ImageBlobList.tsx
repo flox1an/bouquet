@@ -1,16 +1,23 @@
 import { formatFileSize, formatDate } from '../../utils/utils';
 import { ClipboardDocumentIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { BlobDescriptor } from 'blossom-client-sdk';
+import { HandleSelectBlobType } from '../BlobList/useBlobSelection';
 
 type ImageBlobListProps = {
   images: BlobDescriptor[];
   onDelete?: (blob: BlobDescriptor) => void;
+  handleSelectBlob: HandleSelectBlobType;
+  selectedBlobs: string[];
 };
 
-const ImageBlobList = ({ images, onDelete }: ImageBlobListProps) => (
+const ImageBlobList = ({ images, onDelete, handleSelectBlob, selectedBlobs }: ImageBlobListProps) => (
   <div className="blob-list grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 justify-center">
     {images.map(blob => (
-      <div key={blob.sha256} className="p-2 rounded-lg bg-base-300 relative flex flex-col text-center">
+      <div
+        key={blob.sha256}
+        className="p-2 rounded-lg bg-base-300 relative flex flex-col text-center"
+        onClick={e => handleSelectBlob(blob.sha256, e)}
+      >
         <a href={blob.url} target="_blank">
           <div
             className="bg-center bg-no-repeat bg-contain cursor-pointer inline-block w-[90vw] md:w-[200px] h-[200px]"
@@ -20,6 +27,13 @@ const ImageBlobList = ({ images, onDelete }: ImageBlobListProps) => (
           ></div>
         </a>
         <div className="flex flex-row text-xs">
+          <input
+            type="checkbox"
+            className="checkbox checkbox-primary checkbox-sm mr-2"
+            checked={selectedBlobs.includes(blob.sha256)}
+            onChange={e => handleSelectBlob(blob.sha256, e)}
+            onClick={e => e.stopPropagation()}
+          />
           <span>{formatFileSize(blob.size)}</span>
           <span className=" flex-grow text-right">{formatDate(blob.uploaded)}</span>
         </div>

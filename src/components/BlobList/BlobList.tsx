@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { ClipboardDocumentIcon, DocumentIcon, ExclamationTriangleIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { formatFileSize, formatDate } from '../../utils/utils';
@@ -11,6 +11,7 @@ import Badge from './Badge';
 import BlobListTypeMenu, { ListMode } from './BlobListTypeMenu';
 import useFileMetaEventsByHash from '../../utils/useFileMetaEvents';
 import './BlobList.css';
+import { useBlobSelection } from './useBlobSelection';
 
 type BlobListProps = {
   blobs: BlobDescriptor[];
@@ -23,8 +24,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   const [mode, setMode] = useState<ListMode>('list');
   const { distribution } = useServerInfo();
   const fileMetaEventsByHash = useFileMetaEventsByHash();
-  const [selectedBlobs, setSelectedBlobs] = useState<string[]>([]);
-
+  const { handleSelectBlob, selectedBlobs } = useBlobSelection(blobs);
   const images = useMemo(
     () => blobs.filter(b => b.type?.startsWith('image/')).sort((a, b) => (a.uploaded > b.uploaded ? -1 : 1)), // descending
     [blobs]
@@ -43,24 +43,6 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   const docs = useMemo(
     () => blobs.filter(b => b.type?.startsWith('application/pdf')).sort((a, b) => (a.uploaded > b.uploaded ? -1 : 1)), // descending
     [blobs]
-  );
-
-  const handleSelectBlob = useCallback(
-    (sha256: string, event: React.MouseEvent) => {
-      event.preventDefault();
-      if (event.ctrlKey || event.metaKey) {
-        setSelectedBlobs(prev => (prev.includes(sha256) ? prev.filter(blob => blob !== sha256) : [...prev, sha256]));
-      } else if (event.shiftKey) {
-        const lastSelectedIndex = blobs.findIndex(blob => blob.sha256 === selectedBlobs[selectedBlobs.length - 1]);
-        const currentIndex = blobs.findIndex(blob => blob.sha256 === sha256);
-        const [start, end] = [lastSelectedIndex, currentIndex].sort((a, b) => a - b);
-        const newSelection = blobs.slice(start, end + 1).map(blob => blob.sha256);
-        setSelectedBlobs(prev => Array.from(new Set([...prev, ...newSelection])));
-      } else {
-        setSelectedBlobs([sha256]);
-      }
-    },
-    [blobs, selectedBlobs]
   );
 
   const Actions = ({ blob, className }: { blob: BlobDescriptor; className?: string }) => (
@@ -108,7 +90,14 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
         />
       </div>
 
-      {mode == 'gallery' && <ImageBlobList images={images} onDelete={onDelete} />}
+      {mode == 'gallery' && (
+        <ImageBlobList
+          images={images}
+          onDelete={onDelete}
+          selectedBlobs={selectedBlobs}
+          handleSelectBlob={handleSelectBlob}
+        />
+      )}
 
       {mode == 'video' && <VideoBlobList videos={videos} onDelete={onDelete} />}
 
@@ -142,7 +131,8 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                       type="checkbox"
                       className="checkbox checkbox-primary checkbox-sm mr-2"
                       checked={selectedBlobs.includes(blob.sha256)}
-                      onChange={() => {}}
+                      onChange={(e) => handleSelectBlob(blob.sha256, e)}
+                      onClick={(e) => e.stopPropagation()}
                     />
                     <DocumentIcon />
                     <a className="link link-primary" href={blob.url} target="_blank">
