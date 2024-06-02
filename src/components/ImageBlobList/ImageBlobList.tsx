@@ -7,7 +7,7 @@ type ImageBlobListProps = {
   images: BlobDescriptor[];
   onDelete?: (blob: BlobDescriptor) => void;
   handleSelectBlob: HandleSelectBlobType;
-  selectedBlobs: string[];
+  selectedBlobs: { [key: string]: boolean };
 };
 
 const ImageBlobList = ({ images, onDelete, handleSelectBlob, selectedBlobs }: ImageBlobListProps) => (
@@ -30,7 +30,7 @@ const ImageBlobList = ({ images, onDelete, handleSelectBlob, selectedBlobs }: Im
           <input
             type="checkbox"
             className="checkbox checkbox-primary checkbox-sm mr-2"
-            checked={selectedBlobs.includes(blob.sha256)}
+            checked={selectedBlobs[blob.sha256]}
             onChange={e => handleSelectBlob(blob.sha256, e)}
             onClick={e => e.stopPropagation()}
           />

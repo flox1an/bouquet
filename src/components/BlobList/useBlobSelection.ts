@@ -6,7 +6,7 @@ export type HandleSelectBlobType = (
   event: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>
 ) => void;
 export const useBlobSelection = (blobs: BlobDescriptor[]) => {
-  const [selectedBlobs, setSelectedBlobs] = useState<string[]>([]);
+    const [selectedBlobs, setSelectedBlobs] = useState<{ [key: string]: boolean }>({});
 
   const handleSelectBlob: HandleSelectBlobType = useCallback(
     (sha256: string, event: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>) => {
@@ -19,18 +19,27 @@ export const useBlobSelection = (blobs: BlobDescriptor[]) => {
 
       if (isMouseEvent(event)) {
         if (event.ctrlKey || event.metaKey) {
-          setSelectedBlobs(prev => (prev.includes(sha256) ? prev.filter(blob => blob !== sha256) : [...prev, sha256]));
+          setSelectedBlobs(prev => ({
+            ...prev,
+            [sha256]: !prev[sha256]
+          }));
         } else if (event.shiftKey) {
-          const lastSelectedIndex = blobs.findIndex(blob => blob.sha256 === selectedBlobs[selectedBlobs.length - 1]);
+          const lastSelectedIndex = blobs.findIndex(blob => blob.sha256 === Object.keys(selectedBlobs).find(key => selectedBlobs[key]));
           const currentIndex = blobs.findIndex(blob => blob.sha256 === sha256);
           const [start, end] = [lastSelectedIndex, currentIndex].sort((a, b) => a - b);
-          const newSelection = blobs.slice(start, end + 1).map(blob => blob.sha256);
-          setSelectedBlobs(prev => Array.from(new Set([...prev, ...newSelection])));
+          const newSelection = blobs.slice(start, end + 1).reduce((acc, blob) => {
+            acc[blob.sha256] = true;
+            return acc;
+          }, {} as { [key: string]: boolean });
+          setSelectedBlobs(prev => ({
+            ...prev,
+            ...newSelection
+          }));
         } else {
-          setSelectedBlobs([sha256]);
+          setSelectedBlobs({ [sha256]: true });
         }
       } else {
-        setSelectedBlobs([sha256]);
+        setSelectedBlobs({ [sha256]: true });
       }
     },
     [blobs, selectedBlobs]

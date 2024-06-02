@@ -122,7 +122,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
             <tbody>
               {blobs.map((blob: BlobDescriptor) => (
                 <tr
-                  className={`hover ${selectedBlobs.includes(blob.sha256) ? 'selected' : ''}`}
+                  className={`hover ${selectedBlobs[blob.sha256] ? 'selected' : ''}`}
                   key={blob.sha256}
                   onClick={e => handleSelectBlob(blob.sha256, e)}
                 >
@@ -130,9 +130,9 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                     <input
                       type="checkbox"
                       className="checkbox checkbox-primary checkbox-sm mr-2"
-                      checked={selectedBlobs.includes(blob.sha256)}
-                      onChange={(e) => handleSelectBlob(blob.sha256, e)}
-                      onClick={(e) => e.stopPropagation()}
+                      checked={selectedBlobs[blob.sha256]}
+                      onChange={e => handleSelectBlob(blob.sha256, e)}
+                      onClick={e => e.stopPropagation()}
                     />
                     <DocumentIcon />
                     <a className="link link-primary" href={blob.url} target="_blank">
