@@ -24,8 +24,9 @@ type TransferStatus = {
     status: 'pending' | 'done' | 'error';
     message?: string;
     size: number;
-    transferred?: number;
+    uploaded?: number;
     rate?: number;
+    downloaded?: number; // Bytes downloaded
   };
 };
 
@@ -38,6 +39,7 @@ export const Transfer = () => {
   const { signEventTemplate } = useNDK();
   const queryClient = useQueryClient();
   const [started, setStarted] = useState(false);
+  const [transferCancelled, setTransferCancelled] = useState(false);
 
   const [transferLog, setTransferLog] = useState<TransferStatus>({});
 
@@ -77,21 +79,57 @@ export const Transfer = () => {
     return res.data;
   };
 
+  const downloadBlob = async (
+    server: string,
+    sha256: string,
+    onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void
+  ) => {
+    const response = await axios.get(`${server}/${sha256}`, {
+      responseType: 'blob',
+      onDownloadProgress,
+    });
+
+    return response.data;
+  };
+
   const performTransfer = async (sourceServer: string, targetServer: string, blobs: BlobDescriptor[]) => {
     setTransferLog({});
+    setTransferCancelled(false);
     setStarted(true);
     for (const b of blobs) {
+      if (transferCancelled) break;
       try {
         setTransferLog(ts => ({
           ...ts,
-          [b.sha256]: { sha256: b.sha256, status: 'pending', size: b.size, transferred: 0, rate: 0 },
+          [b.sha256]: {
+            sha256: b.sha256,
+            status: 'pending',
+            size: b.size,
+            uploaded: 0,
+            rate: 0,
+            downloaded: 0,
+          },
         }));
 
-        const data = await BlossomClient.getBlob(serverInfo[sourceServer].url, b.sha256).catch(e => {
+        const data = await downloadBlob(serverInfo[sourceServer].url, b.sha256, progressEvent => {
+          setTransferLog(ts => ({
+            ...ts,
+            [b.sha256]: {
+              ...ts[b.sha256],
+              downloaded: progressEvent.loaded,
+            },
+          }));
+        }).catch(e => {
           if (e.response?.status === 404) {
             setTransferLog(ts => ({
               ...ts,
-              [b.sha256]: { sha256: b.sha256, status: 'error', message: 'Blob not found (404)', size: b.size },
+              [b.sha256]: {
+                sha256: b.sha256,
+                status: 'error',
+                message: 'Blob not found (404)',
+                size: b.size,
+                downloaded: 0,
+              },
             }));
             return null;
           }
@@ -108,7 +146,7 @@ export const Transfer = () => {
             ...ts,
             [b.sha256]: {
               ...ts[b.sha256],
-              transferred: progressEvent.loaded,
+              uploaded: progressEvent.loaded,
               rate: progressEvent.rate || 0,
             },
           }));
@@ -116,12 +154,12 @@ export const Transfer = () => {
 
         setTransferLog(ts => ({
           ...ts,
-          [b.sha256]: { sha256: b.sha256, status: 'done', size: b.size },
+          [b.sha256]: { ...ts[b.sha256], status: 'done' },
         }));
       } catch (e) {
         setTransferLog(ts => ({
           ...ts,
-          [b.sha256]: { sha256: b.sha256, status: 'error', message: (e as Error).message, size: b.size },
+          [b.sha256]: { ...ts[b.sha256], status: 'error', message: (e as Error).message },
         }));
         console.warn(e);
       }
@@ -143,9 +181,11 @@ export const Transfer = () => {
           acc.pending += 1;
         }
         acc.size += t.status == 'done' ? t.size : 0;
+        acc.downloaded += t.downloaded || 0;
+        acc.uploaded += t.uploaded || 0;
         return acc;
       },
-      { pending: 0, done: 0, error: 0, size: 0 }
+      { pending: 0, done: 0, error: 0, size: 0, downloaded: 0, uploaded: 0 }
     );
     return { ...stats, fullSize: transferJobs?.reduce((acc, b) => acc + b.size, 0) || 0 };
   }, [transferLog, transferJobs]);
@@ -192,29 +232,50 @@ export const Transfer = () => {
             </div>
             <div className="w-5/6">
               <ProgressBar
-                value={transferStatus.size}
+                value={transferStatus.downloaded}
                 max={transferStatus.fullSize}
                 description={
-                  formatFileSize(transferStatus.size) + ' / ' + formatFileSize(transferStatus.fullSize) + ' transferred'
+                  formatFileSize(transferStatus.downloaded) +
+                  ' / ' +
+                  formatFileSize(transferStatus.fullSize) +
+                  ' downloaded'
                 }
               />
+
+              <ProgressBar
+                value={transferStatus.uploaded}
+                max={transferStatus.fullSize}
+                description={
+                  formatFileSize(transferStatus.uploaded) +
+                  ' / ' +
+                  formatFileSize(transferStatus.fullSize) +
+                  ' uploaded'
+                }
+              />
+
               {<div className="message"></div>}
               {transferErrors.length > 0 && (
-                <div className="error-log">
-                  {transferErrors.map(t => (
-                    <div key={t.sha256}>
-                      <span>
-                        <DocumentIcon />
-                      </span>
-                      <span>{t.sha256}</span>
-                      <span>{formatFileSize(t.size)}</span>
-                      <span>{t.status && (t.status == 'error' ? <ExclamationTriangleIcon /> : '')}</span>
-                      <span>{t.message}</span>
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <h2>Errors</h2>
+                  <div className="error-log">
+                    {transferErrors.map(t => (
+                      <div key={t.sha256}>
+                        <span>
+                          <DocumentIcon />
+                        </span>
+                        <span>{t.sha256}</span>
+                        <span>{formatFileSize(t.size)}</span>
+                        <span>{t.status && (t.status == 'error' ? <ExclamationTriangleIcon /> : '')}</span>
+                        <span>{t.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
+            <button className="btn btn-primary" onClick={() => setTransferCancelled(true)}>
+              Cancel transfer
+            </button>
           </div>
           {!started && <BlobList blobs={transferJobs}></BlobList>}
         </>
