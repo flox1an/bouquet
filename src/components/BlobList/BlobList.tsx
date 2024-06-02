@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { ClipboardDocumentIcon, DocumentIcon, ExclamationTriangleIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { formatFileSize, formatDate } from '../../utils/utils';
@@ -23,6 +23,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   const [mode, setMode] = useState<ListMode>('list');
   const { distribution } = useServerInfo();
   const fileMetaEventsByHash = useFileMetaEventsByHash();
+  const [selectedBlobs, setSelectedBlobs] = useState<string[]>([]);
 
   const images = useMemo(
     () => blobs.filter(b => b.type?.startsWith('image/')).sort((a, b) => (a.uploaded > b.uploaded ? -1 : 1)), // descending
@@ -42,6 +43,24 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   const docs = useMemo(
     () => blobs.filter(b => b.type?.startsWith('application/pdf')).sort((a, b) => (a.uploaded > b.uploaded ? -1 : 1)), // descending
     [blobs]
+  );
+
+  const handleSelectBlob = useCallback(
+    (sha256: string, event: React.MouseEvent) => {
+      event.preventDefault();
+      if (event.ctrlKey || event.metaKey) {
+        setSelectedBlobs(prev => (prev.includes(sha256) ? prev.filter(blob => blob !== sha256) : [...prev, sha256]));
+      } else if (event.shiftKey) {
+        const lastSelectedIndex = blobs.findIndex(blob => blob.sha256 === selectedBlobs[selectedBlobs.length - 1]);
+        const currentIndex = blobs.findIndex(blob => blob.sha256 === sha256);
+        const [start, end] = [lastSelectedIndex, currentIndex].sort((a, b) => a - b);
+        const newSelection = blobs.slice(start, end + 1).map(blob => blob.sha256);
+        setSelectedBlobs(prev => Array.from(new Set([...prev, ...newSelection])));
+      } else {
+        setSelectedBlobs([sha256]);
+      }
+    },
+    [blobs, selectedBlobs]
   );
 
   const Actions = ({ blob, className }: { blob: BlobDescriptor; className?: string }) => (
@@ -69,14 +88,14 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
 
   const Badges = ({ blob }: { blob: BlobDescriptor }) => {
     const events = fileMetaEventsByHash[blob.sha256];
-    if (!events) return;
+    if (!events) return null;
 
     return events.map(ev => <Badge ev={ev} key={ev.id}></Badge>);
   };
 
   return (
     <>
-      <div className={`blog-list-header ${className} ${!title ? 'justify-end' : ''}`}>
+      <div className={`blob-list-header ${className} ${!title ? 'justify-end' : ''}`}>
         {title && <h2>{title}</h2>}
 
         <BlobListTypeMenu
@@ -102,6 +121,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
           <table className="table hover">
             <thead>
               <tr>
+                <th></th>
                 <th>Hash</th>
                 <th>Uses</th>
                 <th>Size</th>
@@ -112,8 +132,18 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
             </thead>
             <tbody>
               {blobs.map((blob: BlobDescriptor) => (
-                <tr className="hover" key={blob.sha256}>
+                <tr
+                  className={`hover ${selectedBlobs.includes(blob.sha256) ? 'selected' : ''}`}
+                  key={blob.sha256}
+                  onClick={e => handleSelectBlob(blob.sha256, e)}
+                >
                   <td className="whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-primary checkbox-sm mr-2"
+                      checked={selectedBlobs.includes(blob.sha256)}
+                      onChange={() => {}}
+                    />
                     <DocumentIcon />
                     <a className="link link-primary" href={blob.url} target="_blank">
                       {blob.sha256.slice(0, 15)}

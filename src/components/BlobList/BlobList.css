@@ -1,21 +1,13 @@
+.blob-list {
+  @apply select-none;
+}
+
 .blob-list .table :where(th, td) {
   padding: 0.25em;
 }
 
 .blob-list svg {
   @apply w-5 inline align-text-bottom mr-1;
-}
-
-.blog-list-header {
-  @apply flex flex-col md:flex-row py-2 items-center;
-}
-
-.blog-list-header h2 {
-  @apply flex-grow;
-}
-
-.blog-list-header svg {
-  @apply w-6 opacity-80 hover:opacity-100;
 }
 
 .blob-list .cover-image:hover .play-icon {
@@ -28,4 +20,16 @@
 
 .blob-list .cover-image .pause-icon {
   @apply absolute text-white top-6 left-6 w-12 h-12 md:top-8 md:left-8 md:w-16 md:h-16 rounded-full bg-[rgba(0,0,0,.4)] p-2 cursor-pointer;
+}
+
+.blob-list-header {
+  @apply flex flex-col md:flex-row py-2 items-center;
+}
+
+.blob-list-header h2 {
+  @apply flex-grow;
+}
+
+.blob-list-header svg {
+  @apply w-6 opacity-80 hover:opacity-100;
 }
