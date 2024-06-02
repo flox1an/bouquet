@@ -1,6 +1,14 @@
 import { useState, useMemo } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { ClipboardDocumentIcon, DocumentIcon, ExclamationTriangleIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+  ClipboardDocumentIcon,
+  DocumentIcon,
+  ExclamationTriangleIcon,
+  FilmIcon,
+  MusicalNoteIcon,
+  PhotoIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline';
 import { formatFileSize, formatDate } from '../../utils/utils';
 import ImageBlobList from '../ImageBlobList/ImageBlobList';
 import VideoBlobList from '../VideoBlobList/VideoBlobList';
@@ -68,6 +76,15 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
     </div>
   );
 
+  const getMimeTypeIcon = (type: string | undefined) => {
+    if (!type) return <DocumentIcon />;
+    if (type.startsWith('image/')) return <PhotoIcon />;
+    if (type.startsWith('video/')) return <FilmIcon />;
+    if (type.startsWith('audio/')) return <MusicalNoteIcon />;
+    if (type === 'application/pdf') return <DocumentIcon />;
+    return <DocumentIcon />;
+  };
+
   const Badges = ({ blob }: { blob: BlobDescriptor }) => {
     const events = fileMetaEventsByHash[blob.sha256];
     if (!events) return null;
@@ -75,11 +92,16 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
     return events.map(ev => <Badge ev={ev} key={ev.id}></Badge>);
   };
 
+  const selectedCount = useMemo(() => Object.values(selectedBlobs).filter(v => v).length, [selectedBlobs]);
+
   return (
     <>
       <div className={`blob-list-header ${className} ${!title ? 'justify-end' : ''}`}>
         {title && <h2>{title}</h2>}
 
+        {selectedCount > 0 && (
+          <div className="flex bg-base-200 rounded-box gap-1 mr-2 py-4 px-8">{selectedCount} blobs selected </div>
+        )}
         <BlobListTypeMenu
           mode={mode}
           setMode={setMode}
@@ -114,7 +136,6 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                 <th>Hash</th>
                 <th>Uses</th>
                 <th>Size</th>
-                <th>Type</th>
                 <th>Date</th>
                 <th>Actions</th>
               </tr>
@@ -134,7 +155,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                       onChange={e => handleSelectBlob(blob.sha256, e)}
                       onClick={e => e.stopPropagation()}
                     />
-                    <DocumentIcon />
+                    {getMimeTypeIcon(blob.type)}
                     <a className="link link-primary" href={blob.url} target="_blank">
                       {blob.sha256.slice(0, 15)}
                     </a>
@@ -146,7 +167,6 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                     </span>
                   </td>
                   <td>{formatFileSize(blob.size)}</td>
-                  <td>{blob.type && `${blob.type}`}</td>
                   <td>{formatDate(blob.uploaded)}</td>
                   <td className="whitespace-nowrap">
                     <Actions blob={blob}></Actions>
