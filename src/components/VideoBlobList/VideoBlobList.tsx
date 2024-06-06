@@ -1,13 +1,12 @@
 import { formatFileSize, formatDate } from '../../utils/utils';
-import { ClipboardDocumentIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { BlobDescriptor } from 'blossom-client-sdk';
 
 type VideoBlobListProps = {
   videos: BlobDescriptor[];
-  onDelete?: (blob: BlobDescriptor) => void;
 };
 
-const VideoBlobList = ({ videos, onDelete }: VideoBlobListProps) => (
+const VideoBlobList = ({ videos }: VideoBlobListProps) => (
   <div className="blob-list grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2 justify-center">
     {videos.map(blob => (
       <div key={blob.sha256} className="p-4 rounded-lg bg-base-300 relative text-center">
@@ -26,13 +25,6 @@ const VideoBlobList = ({ videos, onDelete }: VideoBlobListProps) => (
               <ClipboardDocumentIcon />
             </a>
           </span>
-          {onDelete && (
-            <span>
-              <a onClick={() => onDelete(blob)} className="link link-primary tooltip" data-tip="Delete this blob">
-                <TrashIcon />
-              </a>
-            </span>
-          )}
         </div>
       </div>
     ))}

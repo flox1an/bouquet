@@ -8,6 +8,7 @@ import {
   MusicalNoteIcon,
   PhotoIcon,
   TrashIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { formatFileSize, formatDate } from '../../utils/utils';
 import ImageBlobList from '../ImageBlobList/ImageBlobList';
@@ -23,7 +24,7 @@ import { useBlobSelection } from './useBlobSelection';
 
 type BlobListProps = {
   blobs: BlobDescriptor[];
-  onDelete?: (blob: BlobDescriptor) => void;
+  onDelete?: (blobs: BlobDescriptor[]) => void;
   title?: string;
   className?: string;
 };
@@ -32,7 +33,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   const [mode, setMode] = useState<ListMode>('list');
   const { distribution } = useServerInfo();
   const fileMetaEventsByHash = useFileMetaEventsByHash();
-  const { handleSelectBlob, selectedBlobs } = useBlobSelection(blobs);
+  const { handleSelectBlob, selectedBlobs, setSelectedBlobs } = useBlobSelection(blobs);
   const images = useMemo(
     () => blobs.filter(b => b.type?.startsWith('image/')).sort((a, b) => (a.uploaded > b.uploaded ? -1 : 1)), // descending
     [blobs]
@@ -66,13 +67,6 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
           <ClipboardDocumentIcon />
         </a>
       </span>
-      {onDelete && (
-        <span>
-          <a onClick={() => onDelete(blob)} className="link link-primary tooltip" data-tip="Delete this blob">
-            <TrashIcon />
-          </a>
-        </span>
-      )}
     </div>
   );
 
@@ -100,7 +94,24 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
         {title && <h2>{title}</h2>}
 
         {selectedCount > 0 && (
-          <div className="flex bg-base-200 rounded-box gap-1 mr-2 py-4 px-8">{selectedCount} blobs selected </div>
+          <div className="flex bg-base-200 rounded-box gap-2 mr-2 py-2 px-8 align-middle items-center">
+            {selectedCount} blobs selected
+            {onDelete && (
+              <button
+                className="btn btn-icon btn-primary btn-sm tooltip"
+                onClick={async () => {
+                  await onDelete(blobs.filter(b => selectedBlobs[b.sha256]));
+                  setSelectedBlobs({});
+                }}
+                data-tip="Delete the selected blobs"
+              >
+                <TrashIcon />
+              </button>
+            )}
+            <button className="btn btn-icon btn-sm" onClick={() => setSelectedBlobs({})}>
+              <XMarkIcon className="h-6 w-6 text-gray-500" />
+            </button>
+          </div>
         )}
         <BlobListTypeMenu
           mode={mode}
@@ -113,19 +124,14 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
       </div>
 
       {mode == 'gallery' && (
-        <ImageBlobList
-          images={images}
-          onDelete={onDelete}
-          selectedBlobs={selectedBlobs}
-          handleSelectBlob={handleSelectBlob}
-        />
+        <ImageBlobList images={images} selectedBlobs={selectedBlobs} handleSelectBlob={handleSelectBlob} />
       )}
 
-      {mode == 'video' && <VideoBlobList videos={videos} onDelete={onDelete} />}
+      {mode == 'video' && <VideoBlobList videos={videos} />}
 
-      {mode == 'audio' && <AudioBlobList audioFiles={audioFiles} onDelete={onDelete} />}
+      {mode == 'audio' && <AudioBlobList audioFiles={audioFiles} />}
 
-      {mode == 'docs' && <DocumentBlobList docs={docs} onDelete={onDelete} />}
+      {mode == 'docs' && <DocumentBlobList docs={docs} />}
 
       {mode == 'list' && (
         <div className="blob-list">
@@ -147,15 +153,17 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                   key={blob.sha256}
                   onClick={e => handleSelectBlob(blob.sha256, e)}
                 >
-                  <td className="whitespace-nowrap">
+                  <td className="whitespace-nowrap w-12">
                     <input
                       type="checkbox"
                       className="checkbox checkbox-primary checkbox-sm mr-2"
-                      checked={selectedBlobs[blob.sha256]}
+                      checked={!!selectedBlobs[blob.sha256]}
                       onChange={e => handleSelectBlob(blob.sha256, e)}
                       onClick={e => e.stopPropagation()}
                     />
                     {getMimeTypeIcon(blob.type)}
+                  </td>
+                  <td className="whitespace-nowrap">
                     <a className="link link-primary" href={blob.url} target="_blank">
                       {blob.sha256.slice(0, 15)}
                     </a>

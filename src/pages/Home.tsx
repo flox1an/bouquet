@@ -72,13 +72,15 @@ function Home() {
           className="mt-4"
           title={`Content on ${serverInfo[selectedServer].name}`}
           blobs={selectedServerBlobs}
-          onDelete={blob =>
-            deleteBlob.mutate({
-              serverName: serverInfo[selectedServer].name,
-              serverUrl: serverInfo[selectedServer].url,
-              hash: blob.sha256,
-            })
-          }
+          onDelete={async blobs => {
+            for (const blob of blobs) {
+              await deleteBlob.mutateAsync({
+                serverName: serverInfo[selectedServer].name,
+                serverUrl: serverInfo[selectedServer].url,
+                hash: blob.sha256,
+              });
+            }
+          }}
         ></BlobList>
       )}
     </>
