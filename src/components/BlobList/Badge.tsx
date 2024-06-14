@@ -25,14 +25,15 @@ const Badge = ({ ev }: { ev: NDKEvent }) => {
   }
 
   if (ev.kind == KIND_BLOSSOM_DRIVE) {
+    const driveIdentifier = ev.tagValue('d');
     const naddr = nip19.naddrEncode({
       kind: ev.kind,
-      identifier: ev.tagValue('d'),
+      identifier: driveIdentifier,
       pubkey: ev.author.pubkey,
       relays: ev.onRelays.map(r => r.url),
     } as AddressPointer);
     return (
-      <a target="_blank" className="badge badge-primary mr-2" href={`https://blossom.hzrd149.com/#/drive/${naddr}`}>
+      <a target="_blank" className="badge badge-primary mr-2 tooltip" href={`https://blossom.hzrd149.com/#/drive/${naddr}`} data-tip={driveIdentifier}>
         🌸 drive
       </a>
     );

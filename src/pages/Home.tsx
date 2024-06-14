@@ -54,7 +54,6 @@ function Home() {
 
   return (
     <>
-      {Object.values(serverInfo).length > 1 && (
         <ServerList
           servers={Object.values(serverInfo).sort()}
           selectedServer={selectedServer}
@@ -65,7 +64,6 @@ function Home() {
           manageServers={true}
           withVirtualServers={true}
         ></ServerList>
-      )}
 
       {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && (
         <BlobList
