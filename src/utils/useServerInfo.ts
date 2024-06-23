@@ -3,18 +3,16 @@ import { useQueries } from '@tanstack/react-query';
 import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import { nip19 } from 'nostr-tools';
-import { useUserServers } from './useUserServers';
+import { Server, useUserServers } from './useUserServers';
 import dayjs from 'dayjs';
 
-export type ServerInfo = {
+export interface ServerInfo extends Server {
   virtual: boolean;
   count: number;
   size: number;
   lastChange: number;
   isLoading: boolean;
   isError: boolean;
-  name: string;
-  url: string;
   blobs?: BlobDescriptor[];
 };
 
@@ -89,6 +87,7 @@ export const useServerInfo = () => {
       name: 'All servers',
       url: 'all',
       blobs: [],
+      type: 'blossom'
     };
     const allInfo = serversInfos.reduce(
       (acc, server) => ({

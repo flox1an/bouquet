@@ -28,7 +28,7 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
 
   const handleAddServer = () => {
     if (newServer.trim()) {
-      setServers([...servers, { name: newServer.trim(), url: newServer.trim() }]);
+      setServers([...servers, { name: newServer.trim(), url: newServer.trim(), type: 'blossom' }]);
       setNewServer('');
     }
   };

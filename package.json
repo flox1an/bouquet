@@ -20,7 +20,7 @@
     "@tanstack/react-query-devtools": "^5.39.0",
     "add": "^2.0.6",
     "axios": "^1.7.2",
-    "blossom-client-sdk": "^0.8.0",
+    "blossom-client-sdk": "^0.9.0",
     "dayjs": "^1.11.11",
     "id3js": "^2.1.1",
     "lodash": "^4.17.21",
