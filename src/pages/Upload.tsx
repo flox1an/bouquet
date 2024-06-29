@@ -232,7 +232,7 @@ function Upload() {
   return (
     <>
       <h2 className=" py-4">Upload</h2>
-      {/* 
+      
       <button className='btn btn-primary' onClick={async () => {
 
          const url = "https://media-server.slidestr.net/3c3f3f0b67c17953e59ebdb53b7fd83bf68b552823b927fa9718a52e12d53c0a";
@@ -255,7 +255,7 @@ function Upload() {
           console.log(res.data);
 
       }}>Test Mirror</button>
-      */}
+   
       <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
         <input
           id="browse"

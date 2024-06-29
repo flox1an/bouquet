@@ -1,24 +1,36 @@
 import { formatFileSize, formatDate } from '../../utils/utils';
 import { ClipboardDocumentIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { AudioBlob, fetchId3Tag } from '../../utils/id3';
+import { AudioBlob, ID3Tag, fetchId3Tag } from '../../utils/id3';
 import { useQueries } from '@tanstack/react-query';
 import { useGlobalContext } from '../../GlobalState';
 import { PauseIcon, PlayIcon } from '@heroicons/react/24/solid';
+import { HandleSelectBlobType } from '../BlobList/useBlobSelection';
 
 type AudioBlobListProps = {
   audioFiles: BlobDescriptor[];
-  onDelete?: (blob: BlobDescriptor) => void;
+  handleSelectBlob: HandleSelectBlobType;
+  selectedBlobs: { [key: string]: boolean };
 };
 
-const AudioBlobList = ({ audioFiles, onDelete }: AudioBlobListProps) => {
+const AudioBlobList = ({ audioFiles, handleSelectBlob, selectedBlobs }: AudioBlobListProps) => {
   const { dispatch, state } = useGlobalContext();
 
   const audioFilesWithId3 = useQueries({
     queries: audioFiles.map(af => ({
       queryKey: ['id3', af.sha256],
       queryFn: async () => {
-        const id3Tag = await fetchId3Tag(af.sha256, af.url);
+        let id3Tag:
+          | {
+              id3: ID3Tag;
+              coverFull?: string | undefined;
+            }
+          | undefined;
+        try {
+          id3Tag = await fetchId3Tag(af.sha256, af.url);
+        } catch (e) {
+          // ignore
+        }
         return { ...af, id3: id3Tag?.id3 } as AudioBlob;
       },
       staleTime: 1000 * 60 * 5,
@@ -70,7 +82,21 @@ const AudioBlobList = ({ audioFiles, onDelete }: AudioBlobListProps) => {
                 )}
               </div>
 
-              <div className="flex flex-grow flex-row text-xs items-end">
+              <div
+                className="flex flex-grow flex-row text-xs items-end mt-2 cursor-pointer"
+                onClick={e => {
+                  e.stopPropagation();
+                  handleSelectBlob(blob.data.sha256, e);
+                }}
+              >
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-primary checkbox-sm mr-2"
+                  checked={selectedBlobs[blob.data.sha256]}
+                  onChange={e => handleSelectBlob(blob.data.sha256, e)}
+                  onClick={e => e.stopPropagation()}
+                />
+
                 <span>{formatFileSize(blob.data.size)}</span>
                 <span className=" flex-grow text-right">{formatDate(blob.data.uploaded)}</span>
               </div>
@@ -84,17 +110,6 @@ const AudioBlobList = ({ audioFiles, onDelete }: AudioBlobListProps) => {
                     <ClipboardDocumentIcon />
                   </a>
                 </span>
-                {onDelete && (
-                  <span>
-                    <a
-                      onClick={() => onDelete(blob.data)}
-                      className="link link-primary tooltip"
-                      data-tip="Delete this blob"
-                    >
-                      <TrashIcon />
-                    </a>
-                  </span>
-                )}
               </div>
             </div>
           )

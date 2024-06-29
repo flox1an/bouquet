@@ -60,7 +60,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
         <a
           className="link link-primary tooltip"
           data-tip="Copy link to clipboard"
-          onClick={(e) => {
+          onClick={e => {
             e.stopPropagation();
             navigator.clipboard.writeText(blob.url);
           }}
@@ -128,9 +128,13 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
         <ImageBlobList images={images} selectedBlobs={selectedBlobs} handleSelectBlob={handleSelectBlob} />
       )}
 
-      {mode == 'video' && <VideoBlobList videos={videos} selectedBlobs={selectedBlobs} handleSelectBlob={handleSelectBlob} />}
+      {mode == 'video' && (
+        <VideoBlobList videos={videos} selectedBlobs={selectedBlobs} handleSelectBlob={handleSelectBlob} />
+      )}
 
-      {mode == 'audio' && <AudioBlobList audioFiles={audioFiles} />}
+      {mode == 'audio' && (
+        <AudioBlobList audioFiles={audioFiles} selectedBlobs={selectedBlobs} handleSelectBlob={handleSelectBlob} />
+      )}
 
       {mode == 'docs' && <DocumentBlobList docs={docs} />}
 
