@@ -1,5 +1,5 @@
 import { formatFileSize, formatDate } from '../../utils/utils';
-import { ClipboardDocumentIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { AudioBlob, ID3Tag, fetchId3Tag } from '../../utils/id3';
 import { useQueries } from '@tanstack/react-query';

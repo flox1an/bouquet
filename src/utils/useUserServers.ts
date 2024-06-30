@@ -36,7 +36,7 @@ export const useUserServers = (): Server[] => {
         url: s.toLocaleLowerCase().replace(/\/$/, ''),
         type: 'blossom' as ServerType,
       })),
-     /* ...(nip96ServerListEvent?.getMatchingTags('server').map(t => t[1]) || []).map(s => ({
+      /* ...(nip96ServerListEvent?.getMatchingTags('server').map(t => t[1]) || []).map(s => ({
         url: s.toLocaleLowerCase().replace(/\/$/, ''),
         type: 'nip96' as ServerType,
       })),*/
@@ -48,7 +48,7 @@ export const useUserServers = (): Server[] => {
       url: s.url,
     }));
   }, [blossomServerListEvent, nip96ServerListEvent]);
-  
+
   // console.log(servers);
   return servers;
 };

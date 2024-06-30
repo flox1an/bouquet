@@ -14,7 +14,7 @@ export interface ServerInfo extends Server {
   isLoading: boolean;
   isError: boolean;
   blobs?: BlobDescriptor[];
-};
+}
 
 type BlobDictionary = {
   [key: string]: { blob: BlobDescriptor; servers: string[] };
@@ -87,7 +87,7 @@ export const useServerInfo = () => {
       name: 'All servers',
       url: 'all',
       blobs: [],
-      type: 'blossom'
+      type: 'blossom',
     };
     const allInfo = serversInfos.reduce(
       (acc, server) => ({

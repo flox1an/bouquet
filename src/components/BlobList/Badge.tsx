@@ -33,7 +33,12 @@ const Badge = ({ ev }: { ev: NDKEvent }) => {
       relays: ev.onRelays.map(r => r.url),
     } as AddressPointer);
     return (
-      <a target="_blank" className="badge badge-primary mr-2 tooltip" href={`https://blossom.hzrd149.com/#/drive/${naddr}`} data-tip={driveIdentifier}>
+      <a
+        target="_blank"
+        className="badge badge-primary mr-2 tooltip"
+        href={`https://blossom.hzrd149.com/#/drive/${naddr}`}
+        data-tip={driveIdentifier}
+      >
         🌸 drive
       </a>
     );

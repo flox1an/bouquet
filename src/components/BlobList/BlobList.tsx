@@ -61,6 +61,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
           className="link link-primary tooltip"
           data-tip="Copy link to clipboard"
           onClick={e => {
+            e.preventDefault();
             e.stopPropagation();
             navigator.clipboard.writeText(blob.url);
           }}

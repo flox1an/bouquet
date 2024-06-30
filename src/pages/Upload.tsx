@@ -12,6 +12,7 @@ import { formatFileSize } from '../utils/utils';
 import FileEventEditor, { FileEventData } from '../components/FileEventEditor/FileEventEditor';
 import pLimit from 'p-limit';
 import { Server, useUserServers } from '../utils/useUserServers';
+import { resizeImage } from '../utils/resize';
 
 type TransferStats = {
   enabled: boolean;
@@ -33,6 +34,31 @@ steps
 - 
 */
 
+type ResizeOptionType = {
+  name: string;
+  format?: string;
+  width?: number;
+  height?: number;
+};
+
+const ResizeOptions: ResizeOptionType[] = [
+  {
+    name: 'Orignal Image',
+    width: undefined,
+    height: undefined,
+  },
+  {
+    name: 'max. 2048x2048 pixels',
+    width: 2048,
+    height: 2048,
+  },
+  {
+    name: 'max. 1080x1080 pixels',
+    width: 1080,
+    height: 1080,
+  },
+];
+
 function Upload() {
   const servers = useUserServers();
   const { signEventTemplate } = useNDK();
@@ -48,6 +74,8 @@ function Upload() {
 
   const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [imageResize, setImageResize] = useState(0);
+
   // const [resizeImages, setResizeImages] = useState(false);
   // const [publishToNostr, setPublishToNostr] = useState(false);
 
@@ -94,15 +122,22 @@ function Upload() {
 
     const filesToUpload: File[] = [];
     for (const f of files) {
-      if (cleanPrivateData) {
-        filesToUpload.push(await removeExifData(f));
-      } else {
-        filesToUpload.push(f);
+      let processedFile = f;
+
+      if (processedFile.type.startsWith('image/')) {
+        // Do image processing according to options
+        if (imageResize > 0) {
+          const { width, height } = ResizeOptions[imageResize];
+          processedFile = await resizeImage(processedFile, width, height);
+        }
+        if (cleanPrivateData) {
+          processedFile = await removeExifData(processedFile);
+        }
       }
+
+      filesToUpload.push(processedFile);
     }
 
-    // TODO use https://github.com/davejm/client-compress
-    // for image resizing
     const fileDimensions: { [key: string]: FileEventData } = {};
     for (const file of filesToUpload) {
       let data = {
@@ -232,30 +267,44 @@ function Upload() {
   return (
     <>
       <h2 className=" py-4">Upload</h2>
-      
-      <button className='btn btn-primary' onClick={async () => {
 
-         const url = "https://media-server.slidestr.net/3c3f3f0b67c17953e59ebdb53b7fd83bf68b552823b927fa9718a52e12d53c0a";
-          const targetServer= "https://test-store.slidestr.net";
+      {/*
+      <button
+        className="btn btn-primary"
+        onClick={async () => {
+          const url =
+            'https://media-server.slidestr.net/3c3f3f0b67c17953e59ebdb53b7fd83bf68b552823b927fa9718a52e12d53c0a';
+          const targetServer = 'https://test-store.slidestr.net';
 
           const headers = {
             Accept: 'application/json',
-            'Content-Type':'application/json',
+            'Content-Type': 'application/json',
           };
 
           const blossomClient = new BlossomClient(targetServer, signEventTemplate);
-          const mirrorAuth = await blossomClient.getMirrorAuth('3c3f3f0b67c17953e59ebdb53b7fd83bf68b552823b927fa9718a52e12d53c0a', 'Upload Blob');
+          const mirrorAuth = await blossomClient.getMirrorAuth(
+            '3c3f3f0b67c17953e59ebdb53b7fd83bf68b552823b927fa9718a52e12d53c0a',
+            'Upload Blob'
+          );
 
-          const res = await axios.put<BlobDescriptor>(`${targetServer}/mirror`, { url }, {
-            headers: mirrorAuth ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(mirrorAuth) } : headers,
-            
-          });
+          const res = await axios.put<BlobDescriptor>(
+            `${targetServer}/mirror`,
+            { url },
+            {
+              headers: mirrorAuth
+                ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(mirrorAuth) }
+                : headers,
+            }
+          );
 
           console.log(res.status);
           console.log(res.data);
+        }}
+      >
+        Test Mirror
+      </button>
+      */}
 
-      }}>Test Mirror</button>
-   
       <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
         <input
           id="browse"
@@ -299,8 +348,8 @@ function Upload() {
             </>
           ))}
         </div>
-        <h3 className="text-lg text-neutral-content">Options</h3>
-        <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em auto' }}>
+        <h3 className="text-lg text-neutral-content">Image Options</h3>
+        <div className="cursor-pointer grid gap-2 items-center" style={{ gridTemplateColumns: '1.5em auto' }}>
           <CheckBox
             name="cleanData"
             disabled={uploadBusy}
@@ -308,20 +357,31 @@ function Upload() {
             setChecked={c => setCleanPrivateData(c)}
             label="Clean private data in images (EXIF)"
           ></CheckBox>
-          {/* 
-          <CheckBox
-            name="resize"
-            checked={resizeImages}
-            setChecked={c => setResizeImages(c)}
-            label="Resize images to max. 2048 x 2048 (NOT IMPLEMENTED YET!)"
-          ></CheckBox>
-          <CheckBox
-            name="publish"
-            checked={publishToNostr}
-            setChecked={c => setPublishToNostr(c)}
-            label="Publish to NOSTR (as 1063 file metadata event) (NOT IMPLEMENTED YET!)"
-          ></CheckBox>
-          */}
+          <input
+            className="checkbox checkbox-primary "
+            id="resizeOption"
+            disabled={uploadBusy}
+            type="checkbox"
+            checked={imageResize > 0}
+            onChange={() => setImageResize(irs => (irs > 0 ? 0 : 1))}
+          />
+          <div>
+            <label htmlFor="resizeOption" className="cursor-pointer select-none">
+              Resize Image
+            </label>
+            <select
+              disabled={uploadBusy || imageResize == 0}
+              className="select select-bordered select-sm ml-4 w-full max-w-xs"
+              onChange={e => setImageResize(e.target.selectedIndex)}
+              value={imageResize}
+            >
+              {ResizeOptions.map((ro, i) => (
+                <option key={ro.name} disabled={i == 0}>
+                  {ro.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="flex flex-row gap-2">
           <button className="btn btn-primary" onClick={() => upload()} disabled={uploadBusy || files.length == 0}>
@@ -347,7 +407,7 @@ function Upload() {
         <>
           <h2 className="py-4">Publish events</h2>
           {fileEventsToPublish.map(fe => (
-            <FileEventEditor data={fe} />
+            <FileEventEditor key={fe.x} data={fe} />
           ))}
         </>
       )}
