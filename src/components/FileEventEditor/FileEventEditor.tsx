@@ -22,6 +22,7 @@ export type FileEventData = {
   thumbnail?: string;
   blurHash?: string;
   tags: string[];
+  duration?: string;
 
   artist?: string;
   title?: string;

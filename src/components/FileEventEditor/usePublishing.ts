@@ -9,7 +9,6 @@ export const usePublishing = () => {
   const { ndk, user } = useNDK();
 
   const publishFileEvent = async (data: FileEventData): Promise<string> => {
-    // TODO where to put video title?
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: data.content,
@@ -113,15 +112,16 @@ export const usePublishing = () => {
     if (data.dim) {
       e.tags.push(['dim', data.dim]);
     }
+    if (data.duration) {
+      e.tags.push(['duration', data.duration]);
+    }
     if (data.m) {
       e.tags.push(['m', data.m]);
     }
     if (data.thumbnail) {
       e.tags.push(['thumb', data.thumbnail]);
-      e.tags.push(['preview', data.thumbnail]);
+      e.tags.push(['image', data.thumbnail]);
     }
-
-    // TODO add tags ("t")
 
     const ev = new NDKEvent(ndk, e);
     await ev.sign();

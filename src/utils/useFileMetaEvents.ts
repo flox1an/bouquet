@@ -16,7 +16,7 @@ export const KIND_AUDIO = 31337;
 const extractFromEvent = (ev: NDKEvent) => {
   const tags = ev.tags.filter(t => t[0] == 'x').map(t => t[1]);
   const hashesFromUrls = ev.tags
-    .filter(t => t[0] == 'url' || t[0] == 'thumb' || t[0] == 'preview')
+    .filter(t => t[0] == 'url' || t[0] == 'thumb' || t[0] == 'image')
     .flatMap(t => extractHashesFromContent(t[1]));
   const hashesFromContent = extractHashesFromContent(ev.content);
   const uniqueHashes = [...new Set([...tags, ...hashesFromUrls, ...hashesFromContent])];

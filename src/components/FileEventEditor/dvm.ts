@@ -30,7 +30,7 @@ import dayjs from 'dayjs';
 
 const NPUB_DVM_THUMBNAIL_CREATION = 'npub1q8cv87l47fql2xer2uyw509y5n5s9f53h76hvf9377efdptmsvusxf3n8s';
 
-const ensureDecrypted = async (dvm: NDKUser, event: NDKEvent) => {
+const ensureDecrypted = async (dvm: NDKUser, event: NDKEvent): Promise<NDKEvent | undefined> => {
   if (!event) return undefined;
 
   const encrypted = event.tags.some(t => t[0] == 'encrypted');
@@ -39,10 +39,8 @@ const ensureDecrypted = async (dvm: NDKUser, event: NDKEvent) => {
     const decryptedContent = await event.ndk?.signer?.decrypt(dvm, event.content);
 
     if (decryptedContent) {
-      return {
-        ...event,
-        tags: event.tags.filter(t => t[0] !== 'encrypted').concat(JSON.parse(decryptedContent)),
-      };
+      event.tags = event.tags.filter(t => t[0] !== 'encrypted').concat(JSON.parse(decryptedContent));
+      return event;
     }
   }
   return event;
@@ -66,9 +64,11 @@ const useVideoThumbnailDvm = (setFileEventData: React.Dispatch<React.SetStateAct
     const doASync = async () => {
       const firstEvent = await ensureDecrypted(dvm, thumbnailSubscription.events[0]);
       if (firstEvent) {
+        console.log(firstEvent.rawEvent());
         const urls = firstEvent.tags.filter(t => t[0] === 'thumb').map(t => t[1]);
         const dim = firstEvent.tags.find(t => t[0] === 'dim')?.[1];
-        setFileEventData(ed => ({ ...ed, thumbnails: urls, dim }));
+        const duration = firstEvent.tags.find(t => t[0] === 'duration')?.[1];
+        setFileEventData(ed => ({ ...ed, thumbnails: urls, dim, duration }));
       }
     };
     doASync();
