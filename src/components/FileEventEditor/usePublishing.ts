@@ -3,26 +3,24 @@ import dayjs from 'dayjs';
 import { FileEventData } from './FileEventEditor';
 import { uniq } from 'lodash';
 import { useNDK } from '../../utils/ndk';
+import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../../utils/useFileMetaEvents';
 
 export const usePublishing = () => {
   const { ndk, user } = useNDK();
 
   const publishFileEvent = async (data: FileEventData): Promise<string> => {
-    // TODO REupload selected video thumbnail from DVM
-
+    // TODO where to put video title?
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: data.content,
-      tags: [
-        ...uniq(data.url).map(du => ['url', du]),
-        ['x', data.x],
-        //['summary', data.summary],
-        //['alt', data.alt],
-      ],
-      kind: 1063,
+      tags: [...uniq(data.url).map(du => ['url', du]), ['x', data.x], ['summary', data.content]],
+      kind: KIND_FILE_META,
       pubkey: user?.pubkey || '',
     };
 
+    if (data.title) {
+      e.tags.push(['alt', `${data.title}`]);
+    }
     if (data.size) {
       e.tags.push(['size', `${data.size}`]);
     }
@@ -32,8 +30,10 @@ export const usePublishing = () => {
     if (data.m) {
       e.tags.push(['m', data.m]);
     }
+    if (data.blurHash) {
+      e.tags.push(['blurhash', data.blurHash]);
+    }
     if (data.thumbnail) {
-      // TODO upload thumbnail to own storage
       e.tags.push(['thumb', data.thumbnail]);
       e.tags.push(['image', data.thumbnail]);
     }
@@ -55,7 +55,7 @@ export const usePublishing = () => {
         ['x', data.x],
         ...uniq(data.url).map(du => ['imeta', `url ${du}`, `m ${data.m}`]),
       ],
-      kind: 31337, // TODO vertical video event based on dim?!
+      kind: KIND_AUDIO,
       pubkey: user?.pubkey || '',
     };
 
@@ -81,6 +81,8 @@ export const usePublishing = () => {
   };
 
   const publishVideoEvent = async (data: FileEventData): Promise<string> => {
+    const videoIsHorizontal = data.width == undefined || data.height == undefined || data.width > data.height;
+
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: data.content,
@@ -88,14 +90,16 @@ export const usePublishing = () => {
         ['d', data.x],
         ['x', data.x],
         ['url', data.url[0]],
-        ['title', data.content],
-        // ['summary', data.], TODO add summary
+        ['summary', data.content],
         ['published_at', `${dayjs().unix()}`],
         ['client', 'bouquet'],
       ],
-      kind: 31337,
+      kind: videoIsHorizontal ? KIND_VIDEO_HORIZONTAL : KIND_VIDEO_VERTICAL,
       pubkey: user?.pubkey || '',
     };
+    if (data.title) {
+      e.tags.push(['title', data.title]);
+    }
     if (data.size) {
       e.tags.push(['size', `${data.size}`]);
     }
@@ -106,7 +110,6 @@ export const usePublishing = () => {
       e.tags.push(['m', data.m]);
     }
     if (data.thumbnail) {
-      // TODO upload to own blossom instance
       e.tags.push(['thumb', data.thumbnail]);
       e.tags.push(['preview', data.thumbnail]);
     }

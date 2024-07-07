@@ -13,6 +13,8 @@ import FileEventEditor, { FileEventData } from '../components/FileEventEditor/Fi
 import pLimit from 'p-limit';
 import { Server, useUserServers } from '../utils/useUserServers';
 import { resizeImage } from '../utils/resize';
+import { getImageSize } from '../utils/image';
+import { getBlurhashFromFile } from '../utils/blur';
 
 type TransferStats = {
   enabled: boolean;
@@ -79,25 +81,6 @@ function Upload() {
   // const [resizeImages, setResizeImages] = useState(false);
   // const [publishToNostr, setPublishToNostr] = useState(false);
 
-  type ImageSize = {
-    width: number;
-    height: number;
-  };
-
-  const getImageSize = async (imageFile: File): Promise<ImageSize> => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(imageFile);
-    const promise = new Promise<ImageSize>((resolve, reject) => {
-      img.onload = () => {
-        resolve({ width: img.width, height: img.height });
-        URL.revokeObjectURL(objectUrl);
-      };
-      img.onerror = () => reject();
-    });
-    img.src = objectUrl;
-    return promise;
-  };
-
   async function uploadBlob(
     server: string,
     file: File,
@@ -147,10 +130,27 @@ function Upload() {
       } as FileEventData;
       if (file.type.startsWith('image/')) {
         const dimensions = await getImageSize(file);
-        data = { ...data, dim: `${dimensions.width}x${dimensions.height}` };
+        data = {
+          ...data,
+          width: dimensions.width,
+          height: dimensions.height,
+          dim: `${dimensions.width}x${dimensions.height}`,
+        };
+
+        // TODO maybe combine fileSize and Hash!
+        const blur = await getBlurhashFromFile(file);
+        if (blur) {
+          data = {
+            ...data,
+            blurHash: blur,
+          };
+        }
       }
       fileDimensions[file.name] = data;
     }
+
+    // TODO icon to cancel upload
+    // TODO detect if the file already exists? if we have the hash??
 
     const startTransfer = async (server: Server, primary: boolean) => {
       const serverUrl = serverInfo[server.name].url;

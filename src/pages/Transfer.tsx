@@ -8,15 +8,15 @@ import {
 import { ServerList } from '../components/ServerList/ServerList';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useMemo, useState } from 'react';
-import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
+import { BlobDescriptor } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatFileSize } from '../utils/utils';
 import BlobList from '../components/BlobList/BlobList';
 import './Transfer.css';
 import { useNavigate, useParams } from 'react-router-dom';
-import axios, { AxiosProgressEvent } from 'axios';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
+import { downloadBlob, uploadBlob } from '../utils/transfer';
 
 type TransferStatus = {
   [key: string]: {
@@ -31,6 +31,9 @@ type TransferStatus = {
 };
 
 export const Transfer = () => {
+  // TODO add transfer for single files
+  // TODO add support for mirror command (fallback to upload)
+
   const { source } = useParams();
   const [transferSource, setTransferSource] = useState(source);
   const navigate = useNavigate();
@@ -60,38 +63,6 @@ export const Transfer = () => {
     return [];
   }, [serverInfo, transferSource, transferTarget]);
 
-  const uploadBlob = async (
-    server: string,
-    file: File,
-    auth?: SignedEvent,
-    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
-  ) => {
-    const headers = {
-      Accept: 'application/json',
-      'Content-Type': file.type,
-    };
-
-    const res = await axios.put<BlobDescriptor>(`${server}/upload`, file, {
-      headers: auth ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(auth) } : headers,
-      onUploadProgress,
-    });
-
-    return res.data;
-  };
-
-  const downloadBlob = async (
-    server: string,
-    sha256: string,
-    onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void
-  ) => {
-    const response = await axios.get(`${server}/${sha256}`, {
-      responseType: 'blob',
-      onDownloadProgress,
-    });
-
-    return response.data;
-  };
-
   const performTransfer = async (sourceServer: string, targetServer: string, blobs: BlobDescriptor[]) => {
     setTransferLog({});
     setTransferCancelled(false);
@@ -111,7 +82,7 @@ export const Transfer = () => {
           },
         }));
 
-        const data = await downloadBlob(serverInfo[sourceServer].url, b.sha256, progressEvent => {
+        const result = await downloadBlob(`${serverInfo[sourceServer].url}/${b.sha256}`, progressEvent => {
           setTransferLog(ts => ({
             ...ts,
             [b.sha256]: {
@@ -136,12 +107,11 @@ export const Transfer = () => {
           throw e;
         });
 
-        if (!data) continue;
+        if (!result) continue;
 
-        const file = new File([data], b.sha256, { type: b.type, lastModified: b.created });
-        const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
+        const file = new File([result.data], b.sha256, { type: b.type, lastModified: b.created });
 
-        await uploadBlob(serverInfo[targetServer].url, file, uploadAuth, progressEvent => {
+        await uploadBlob(serverInfo[targetServer].url, file, signEventTemplate, progressEvent => {
           setTransferLog(ts => ({
             ...ts,
             [b.sha256]: {
