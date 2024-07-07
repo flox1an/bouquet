@@ -40,13 +40,13 @@ export const ServerList = ({
     .filter(d => d.servers.length == 1)
     .map(d => ({ ...d.blob, server: d.servers[0] }));
 
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isServerListDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleOpenDialog = () => {
     setIsDialogOpen(true);
   };
 
-  const handleCloseDialog = () => {
+  const handleServerListDialogClose = () => {
     setIsDialogOpen(false);
   };
 
@@ -70,7 +70,7 @@ export const ServerList = ({
 
   const handleRefresh = () => {
     queryClient.refetchQueries({ queryKey: ['blobs'] });
-    queryClient.refetchQueries({ queryKey: ['blobs'] });
+    queryClient.refetchQueries({ queryKey: ['use-event'] });
   };
 
   return (
@@ -91,8 +91,8 @@ export const ServerList = ({
       </div>
 
       <ServerListPopup
-        isOpen={isDialogOpen}
-        onClose={handleCloseDialog}
+        isOpen={isServerListDialogOpen}
+        onClose={handleServerListDialogClose}
         onSave={handleSaveServers}
         initialServers={servers.filter(s => !s.virtual)}
       />

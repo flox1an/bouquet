@@ -5,8 +5,11 @@ import {
   DocumentIcon,
   ExclamationTriangleIcon,
   FilmIcon,
+  FolderIcon,
+  FolderPlusIcon,
   MusicalNoteIcon,
   PhotoIcon,
+  PlusIcon,
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -90,6 +93,17 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
 
   const selectedCount = useMemo(() => Object.values(selectedBlobs).filter(v => v).length, [selectedBlobs]);
 
+  const addSelectedBlobsToCollection = (collectionName: string) => {
+    // TODO store collections in DB
+    console.log('Add to collection', collectionName, selectedBlobs);
+  };
+
+  const createNewCollection = () => {
+    // TODO Show new collction dialog
+
+    console.log('Show new collction dialog');
+  };
+
   return (
     <>
       <div className={`blob-list-header ${className} ${!title ? 'justify-end' : ''}`}>
@@ -98,6 +112,34 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
         {selectedCount > 0 && (
           <div className="flex bg-base-200 rounded-box gap-2 mr-2 py-2 px-8 align-middle items-center">
             {selectedCount} blobs selected
+            <div className="dropdown">
+              <div
+                tabIndex={0}
+                role="button"
+                className="btn btn-icon btn-primary btn-sm tooltip flex"
+                data-tip="Add selected blobs to collection"
+              >
+                <PlusIcon />
+                <FolderIcon />
+              </div>
+              <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-[1] w-52 p-2 shadow">
+                <li>
+                  <a onClick={() => addSelectedBlobsToCollection('Collection 1')}>
+                    <FolderIcon /> Collection 1
+                  </a>
+                </li>
+                <li>
+                  <a onClick={() => addSelectedBlobsToCollection('Collection 2')}>
+                    <FolderIcon /> Collection 2
+                  </a>
+                </li>
+                <li className=" border-t-2 border-base-300">
+                  <a onClick={() => createNewCollection()}>
+                    <FolderPlusIcon /> new collection
+                  </a>
+                </li>
+              </ul>
+            </div>
             {onDelete && (
               <button
                 className="btn btn-icon btn-primary btn-sm tooltip"
