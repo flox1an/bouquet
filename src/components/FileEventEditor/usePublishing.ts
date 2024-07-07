@@ -13,7 +13,12 @@ export const usePublishing = () => {
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: data.content,
-      tags: [...uniq(data.url).map(du => ['url', du]), ['x', data.x], ['summary', data.content]],
+      tags: [
+        ...uniq(data.url).map(du => ['url', du]),
+        ['x', data.x],
+        ['summary', data.content],
+        ...data.tags.map(t => ['t', t]),
+      ],
       kind: KIND_FILE_META,
       pubkey: user?.pubkey || '',
     };
@@ -54,6 +59,7 @@ export const usePublishing = () => {
         ...uniq(data.url).map(du => ['media', du]),
         ['x', data.x],
         ...uniq(data.url).map(du => ['imeta', `url ${du}`, `m ${data.m}`]),
+        ...data.tags.map(t => ['t', t]),
       ],
       kind: KIND_AUDIO,
       pubkey: user?.pubkey || '',
@@ -93,6 +99,7 @@ export const usePublishing = () => {
         ['summary', data.content],
         ['published_at', `${dayjs().unix()}`],
         ['client', 'bouquet'],
+        ...data.tags.map(t => ['t', t]),
       ],
       kind: videoIsHorizontal ? KIND_VIDEO_HORIZONTAL : KIND_VIDEO_VERTICAL,
       pubkey: user?.pubkey || '',

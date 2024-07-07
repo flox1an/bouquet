@@ -68,7 +68,7 @@ const useVideoThumbnailDvm = (setFileEventData: React.Dispatch<React.SetStateAct
       if (firstEvent) {
         const urls = firstEvent.tags.filter(t => t[0] === 'thumb').map(t => t[1]);
         const dim = firstEvent.tags.find(t => t[0] === 'dim')?.[1];
-        setFileEventData(ed => ({ ...ed, thumbnails: urls, dim, thumbnail: urls[0] }));
+        setFileEventData(ed => ({ ...ed, thumbnails: urls, dim }));
       }
     };
     doASync();

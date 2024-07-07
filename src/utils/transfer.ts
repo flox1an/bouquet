@@ -1,5 +1,6 @@
 import axios, { AxiosProgressEvent } from 'axios';
 import { BlobDescriptor, BlossomClient, EventTemplate, SignedEvent } from 'blossom-client-sdk';
+import { extractHashFromUrl } from './blossom';
 
 export const uploadBlob = async (
   server: string,
@@ -31,6 +32,35 @@ export const downloadBlob = async (url: string, onDownloadProgress?: (progressEv
   return { data: response.data, type: response.headers['Content-Type']?.toString() };
 };
 
+export const mirrordBlob = async (
+  targetServer: string,
+  sourceUrl: string,
+  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
+) => {
+  console.log({ sourceUrl });
+  const hash = extractHashFromUrl(sourceUrl);
+  if (!hash) throw 'The soureUrl does not contain a blossom hash.';
+
+  const blossomClient = new BlossomClient(targetServer, signEventTemplate);
+  const mirrorAuth = await blossomClient.getMirrorAuth(hash, 'Upload Blob');
+
+  const headers = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+
+  const res = await axios.put<BlobDescriptor>(
+    `${targetServer}/mirror`,
+    { url: sourceUrl },
+    {
+      headers: mirrorAuth
+        ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(mirrorAuth) }
+        : headers,
+    }
+  );
+  return res.data;
+};
+
 export const transferBlob = async (
   sourceUrl: string,
   targetServer: string,
@@ -38,6 +68,11 @@ export const transferBlob = async (
   onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
 ): Promise<BlobDescriptor> => {
   console.log({ sourceUrl, targetServer });
+
+  const blob = await mirrordBlob(targetServer, sourceUrl, signEventTemplate);
+  if (blob) return blob;
+  console.log('Mirror failed. Using download + upload instead.');
+
   const result = await downloadBlob(sourceUrl, onUploadProgress);
 
   const fileName = sourceUrl.replace(/.*\//, '');

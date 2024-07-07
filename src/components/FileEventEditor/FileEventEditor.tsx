@@ -6,6 +6,7 @@ import { usePublishing } from './usePublishing';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { transferBlob } from '../../utils/transfer';
 import { useNDK } from '../../utils/ndk';
+import TagInput from '../TagInput';
 
 export type FileEventData = {
   originalFile: File;
@@ -20,6 +21,7 @@ export type FileEventData = {
   thumbnails?: string[];
   thumbnail?: string;
   blurHash?: string;
+  tags: string[];
 
   artist?: string;
   title?: string;
@@ -78,7 +80,8 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
     return match ? match[0] : null;
   }
 
-  const publishSelectedThumbnailToOwnServer = async () => {
+  const publishSelectedThumbnailToOwnServer = async (): Promise<BlobDescriptor | undefined> => {
+    // TODO investigate why mimetype is not set for reuploaded thumbnail (on mediaserver)
     const servers = data.url.map(extractProtocolAndDomain);
 
     // upload selected thumbnail to the same blossom servers as the video
@@ -91,13 +94,18 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
           })
         )
       ).filter(t => t !== undefined) as BlobDescriptor[];
-    }
 
-    if (uploadedThumbnails.length > 0) {
-      data.thumbnail = uploadedThumbnails[0].url; // TODO do we need multiple thumbsnails?? or server URLs?
+      return uploadedThumbnails.length > 0 ? uploadedThumbnails[0] : undefined; // TODO do we need multiple thumbsnails?? or server URLs?
     }
   };
 
+  useEffect(() => {
+    if (selectedThumbnail == undefined) {
+      if (fileEventData.thumbnails && fileEventData.thumbnails?.length > 0) {
+        setSelectedThumbnail(fileEventData.thumbnails[0]);
+      }
+    }
+  }, [fileEventData.thumbnails, selectedThumbnail]);
 
   // TODO add tags editor
   return (
@@ -111,7 +119,12 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
                   <div className="carousel w-full">
                     {fileEventData.thumbnails.map((t, i) => (
                       <div id={`item${i + 1}`} key={`item${i + 1}`} className="carousel-item w-full">
-                        <img src={t} className="w-full" />
+                        <img
+                          width={300}
+                          height={300}
+                          src={`https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${t}`}
+                          className="w-full"
+                        />
                       </div>
                     ))}
                   </div>
@@ -121,7 +134,7 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
                         key={`link${i + 1}`}
                         href={`#item${i + 1}`}
                         onClick={() => setSelectedThumbnail(t)}
-                        className={'btn btn-xs ' + (t == fileEventData.thumbnail ? 'btn-primary' : '')}
+                        className={'btn btn-xs ' + (t == selectedThumbnail ? 'btn-primary' : '')}
                       >{`${i + 1}`}</a>
                     ))}
                   </div>
@@ -135,7 +148,12 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
         )}
         {isAudio && fileEventData.thumbnail && (
           <div className="w-2/6">
-            <img src={fileEventData.thumbnail || selectedThumbnail} className="w-full" />
+            <img
+              width={300}
+              height={300}
+              src={`https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${fileEventData.thumbnail || selectedThumbnail}`}
+              className="w-full"
+            />
           </div>
         )}
 
@@ -144,7 +162,7 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
             <img
               width={300}
               height={300}
-              src={`https://images.slidestr.net/insecure/f:webp/rs:fill:300/plain/${fileEventData.url[0]}`}
+              src={`https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${fileEventData.url[0]}`}
             ></img>
           </div>
         )}
@@ -186,6 +204,12 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
             className="textarea textarea-primary"
             placeholder="Caption"
           ></textarea>
+
+          <span className="font-bold">Tags</span>
+          <TagInput
+            tags={fileEventData.tags}
+            setTags={(tags: string[]) => setFileEventData(ed => ({ ...ed, tags }))}
+          ></TagInput>
 
           <span className="font-bold">Type</span>
           <span>{fileEventData.m}</span>
@@ -235,9 +259,25 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
             className="btn btn-primary"
             onClick={async () => {
               if (!data.thumbnail) {
-                await publishSelectedThumbnailToOwnServer();
+                const selfHostedThumbnail = await publishSelectedThumbnailToOwnServer();
+                if (selfHostedThumbnail) {
+                  const newData = {
+                    ...fileEventData,
+                    thumbnail: selfHostedThumbnail.url,
+                    thumbnails: [selfHostedThumbnail.url],
+                  };
+                  setFileEventData(newData);
+                  setJsonOutput(await publishVideoEvent(newData));
+                } else {
+                  // self hosting failed
+                  console.log('self hosting failed');
+                  setJsonOutput(await publishVideoEvent(fileEventData));
+                }
+              } else {
+                // data thumbnail already defined
+                console.log('data thumbnail already defined');
+                setJsonOutput(await publishVideoEvent(fileEventData));
               }
-              setJsonOutput(await publishVideoEvent(fileEventData));
             }}
           >
             Create Video Event

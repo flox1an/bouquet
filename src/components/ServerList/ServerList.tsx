@@ -1,4 +1,4 @@
-import { Cog8ToothIcon } from '@heroicons/react/24/outline';
+import { ArrowPathRoundedSquareIcon, Cog8ToothIcon } from '@heroicons/react/24/outline';
 import { ServerInfo, useServerInfo } from '../../utils/useServerInfo';
 import { Server as ServerType } from '../../utils/useUserServers';
 import Server from './Server';
@@ -9,6 +9,7 @@ import { useNDK } from '../../utils/ndk';
 import { NDKEvent } from '@nostr-dev-kit/ndk';
 import dayjs from 'dayjs';
 import { USER_BLOSSOM_SERVER_LIST_KIND } from 'blossom-client-sdk';
+import { useQueryClient } from '@tanstack/react-query';
 
 type ServerListProps = {
   servers: ServerInfo[];
@@ -34,6 +35,7 @@ export const ServerList = ({
 }: ServerListProps) => {
   const { ndk, user } = useNDK();
   const { distribution } = useServerInfo();
+  const queryClient = useQueryClient();
   const blobsWithOnlyOneOccurance = Object.values(distribution)
     .filter(d => d.servers.length == 1)
     .map(d => ({ ...d.blob, server: d.servers[0] }));
@@ -66,6 +68,11 @@ export const ServerList = ({
     [servers, withVirtualServers]
   );
 
+  const handleRefresh = () => {
+    queryClient.refetchQueries({ queryKey: ['blobs'] });
+    queryClient.refetchQueries({ queryKey: ['blobs'] });
+  };
+
   return (
     <>
       <div className={`flex flex-row py-4 ${!title ? 'justify-end' : ''}`}>
@@ -73,6 +80,9 @@ export const ServerList = ({
 
         {manageServers && (
           <div className="content-center">
+            <button onClick={handleRefresh} className="btn btn-ghost btn-sm" title="Refresh">
+              <ArrowPathRoundedSquareIcon className="h-6 w-6" /> Refresh
+            </button>
             <button onClick={handleOpenDialog} className="btn btn-ghost btn-sm" title="Manage servers">
               <Cog8ToothIcon className="h-6 w-6" /> Manage servers
             </button>

@@ -4,6 +4,7 @@ import groupBy from 'lodash/groupBy';
 import { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk';
 import { useNDK } from '../utils/ndk';
 import { mapValues } from 'lodash';
+import { extractHashesFromContent } from './blossom';
 
 export const KIND_FILE_META = 1063;
 export const KIND_BLOSSOM_DRIVE = 30563;
@@ -11,17 +12,6 @@ export const KIND_SOCIAL_POST = 1;
 export const KIND_VIDEO_HORIZONTAL = 34235;
 export const KIND_VIDEO_VERTICAL = 34236;
 export const KIND_AUDIO = 31337;
-
-const blossomUrlRegex = /https?:\/\/(?:www\.)?[^\s/]+\/([a-fA-F0-9]{64})(?:\.[a-zA-Z0-9]+)?/g;
-
-function extractHashesFromContent(text: string) {
-  let match;
-  const hashes = [];
-  while ((match = blossomUrlRegex.exec(text)) !== null) {
-    hashes.push(match[1]);
-  }
-  return hashes;
-}
 
 const extractFromEvent = (ev: NDKEvent) => {
   const tags = ev.tags.filter(t => t[0] == 'x').map(t => t[1]);
@@ -57,7 +47,6 @@ const useFileMetaEventsByHash = () => {
     const groupedByX = groupBy(allXTags, item => item.x);
     return mapValues(groupedByX, v => v.map(e => e.ev));
   }, [fileMetaSub]);
-  console.log(fileMetaEventsByHash);
 
   return fileMetaEventsByHash;
 };

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
@@ -14,10 +14,15 @@ export interface ServerInfo extends Server {
   isLoading: boolean;
   isError: boolean;
   blobs?: BlobDescriptor[];
+  features: { mirror?: boolean };
 }
 
 type BlobDictionary = {
   [key: string]: { blob: BlobDescriptor; servers: string[] };
+};
+
+type SupportedFeatures = {
+  [key: string]: { mirror?: boolean };
 };
 
 const mergeBlobs = (
@@ -38,6 +43,7 @@ const mergeBlobs = (
 export const useServerInfo = () => {
   const servers = useUserServers();
   const { user, signEventTemplate } = useNDK();
+  const [features, setFeatures] = useState<SupportedFeatures>({});
 
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type
 
@@ -52,10 +58,15 @@ export const useServerInfo = () => {
         return blobs.map(b => ({ ...b, uploaded: b.uploaded || b.created || dayjs().unix() }));
       },
       enabled: !!pubkey && servers.length > 0,
-      staleTime: 1000 * 60 * 5,
+      staleTime: Infinity,
       retryOnMount: false,
+      refetchOnWindowFocus: false,
     })),
   });
+
+  const setMirrorSupported = (serverName: string, supported: boolean) => {
+    setFeatures(f => ({ ...f, [serverName]: { ...f[serverName], mirror: supported } }));
+  };
 
   const serverInfo = useMemo(() => {
     const info: { [key: string]: ServerInfo } = {};
@@ -69,6 +80,7 @@ export const useServerInfo = () => {
         count: blobs[sx].data?.length || 0,
         size: blobs[sx].data?.reduce((acc, blob) => acc + blob.size, 0) || 0,
         lastChange: blobs[sx].data?.reduce((acc, blob) => Math.max(acc, blob.uploaded), 0) || 0,
+        features: features[server.name] || {},
       };
     });
     return info;
@@ -88,6 +100,7 @@ export const useServerInfo = () => {
       url: 'all',
       blobs: [],
       type: 'blossom',
+      features: {},
     };
     const allInfo = serversInfos.reduce(
       (acc, server) => ({
@@ -126,5 +139,5 @@ export const useServerInfo = () => {
     return dict;
   }, [servers, serverInfo]);
 
-  return { serverInfo: allServersAggregation, distribution };
+  return { serverInfo: allServersAggregation, distribution, setMirrorSupported };
 };

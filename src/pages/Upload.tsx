@@ -71,15 +71,9 @@ function Upload() {
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
   const limit = pLimit(3);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  // const bs = useBlossomServerEvents();
-  // console.log(bs);
-
   const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [imageResize, setImageResize] = useState(0);
-
-  // const [resizeImages, setResizeImages] = useState(false);
-  // const [publishToNostr, setPublishToNostr] = useState(false);
 
   async function uploadBlob(
     server: string,
@@ -127,6 +121,7 @@ function Upload() {
         content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/, ''),
         url: [] as string[],
         originalFile: file,
+        tags: [] as string[],
       } as FileEventData;
       if (file.type.startsWith('image/')) {
         const dimensions = await getImageSize(file);
@@ -267,44 +262,6 @@ function Upload() {
   return (
     <>
       <h2 className=" py-4">Upload</h2>
-
-      {/*
-      <button
-        className="btn btn-primary"
-        onClick={async () => {
-          const url =
-            'https://media-server.slidestr.net/3c3f3f0b67c17953e59ebdb53b7fd83bf68b552823b927fa9718a52e12d53c0a';
-          const targetServer = 'https://test-store.slidestr.net';
-
-          const headers = {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          };
-
-          const blossomClient = new BlossomClient(targetServer, signEventTemplate);
-          const mirrorAuth = await blossomClient.getMirrorAuth(
-            '3c3f3f0b67c17953e59ebdb53b7fd83bf68b552823b927fa9718a52e12d53c0a',
-            'Upload Blob'
-          );
-
-          const res = await axios.put<BlobDescriptor>(
-            `${targetServer}/mirror`,
-            { url },
-            {
-              headers: mirrorAuth
-                ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(mirrorAuth) }
-                : headers,
-            }
-          );
-
-          console.log(res.status);
-          console.log(res.data);
-        }}
-      >
-        Test Mirror
-      </button>
-      */}
-
       <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
         <input
           id="browse"
