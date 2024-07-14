@@ -74,6 +74,7 @@ function Upload() {
   const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [imageResize, setImageResize] = useState(0);
+  const [uploadStep, setUploadStep] = useState(0);
 
   async function uploadBlob(
     server: string,
@@ -96,6 +97,7 @@ function Upload() {
 
   const upload = async () => {
     setUploadBusy(true);
+    setUploadStep(1);
 
     const filesToUpload: File[] = [];
     for (const f of files) {
@@ -212,6 +214,7 @@ function Upload() {
     }
 
     setUploadBusy(false);
+    setUploadStep(2);
   };
 
   const clearTransfers = () => {
@@ -229,10 +232,12 @@ function Upload() {
       )
     );
     setFileEventsToPublish([]);
+    setUploadStep(0);
   };
 
   useEffect(() => {
     clearTransfers();
+    setUploadStep(0);
   }, [servers]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -261,105 +266,112 @@ function Upload() {
   const sizeOfFilesToUpload = useMemo(() => files.reduce((acc, file) => (acc += file.size), 0), [files]);
   return (
     <>
-      <h2 className=" py-4">Upload</h2>
-      <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
-        <input
-          id="browse"
-          type="file"
-          ref={fileInputRef}
-          disabled={uploadBusy}
-          hidden
-          multiple
-          onChange={handleFileChange}
-        />
-        <label
-          htmlFor="browse"
-          className="p-8 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
-          onDrop={handleDrop}
-          onDragOver={event => event.preventDefault()}
-        >
-          <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
-        </label>
-        <h3 className="text-lg">Servers</h3>
-        <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
-          {servers.map(s => (
-            <>
-              <CheckBox
-                name={s.name}
-                disabled={uploadBusy}
-                checked={transfers[s.name]?.enabled || false}
-                setChecked={c =>
-                  setTransfers(ut => ({ ...ut, [s.name]: { enabled: c, transferred: 0, size: 0, rate: 0 } }))
-                }
-                label={s.name}
-              ></CheckBox>
-              {transfers[s.name]?.enabled ? (
-                <ProgressBar
-                  value={transfers[s.name].transferred}
-                  max={transfers[s.name].size}
-                  description={transfers[s.name].rate > 0 ? '' + formatFileSize(transfers[s.name].rate) + '/s' : ''}
-                />
-              ) : (
-                <div></div>
-              )}
-            </>
-          ))}
-        </div>
-        <h3 className="text-lg text-neutral-content">Image Options</h3>
-        <div className="cursor-pointer grid gap-2 items-center" style={{ gridTemplateColumns: '1.5em auto' }}>
-          <CheckBox
-            name="cleanData"
-            disabled={uploadBusy}
-            checked={cleanPrivateData}
-            setChecked={c => setCleanPrivateData(c)}
-            label="Clean private data in images (EXIF)"
-          ></CheckBox>
+      <ul className="steps p-8">
+        <li className={`step ${uploadStep >= 0 ? 'step-primary' : ''}`}>Choose files to upload</li>
+        <li className={`step ${uploadStep >= 1 ? 'step-primary' : ''}`}>Upload progress</li>
+        <li className={`step ${uploadStep >= 2 ? 'step-primary' : ''}`}>Extend Metadata</li>
+        <li className={`step ${uploadStep >= 3 ? 'step-primary' : ''}`}>Publish to NOSTR</li>
+      </ul>
+      {uploadStep <= 1 && (
+        <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
           <input
-            className="checkbox checkbox-primary "
-            id="resizeOption"
+            id="browse"
+            type="file"
+            ref={fileInputRef}
             disabled={uploadBusy}
-            type="checkbox"
-            checked={imageResize > 0}
-            onChange={() => setImageResize(irs => (irs > 0 ? 0 : 1))}
+            hidden
+            multiple
+            onChange={handleFileChange}
           />
-          <div>
-            <label htmlFor="resizeOption" className="cursor-pointer select-none">
-              Resize Image
-            </label>
-            <select
-              disabled={uploadBusy || imageResize == 0}
-              className="select select-bordered select-sm ml-4 w-full max-w-xs"
-              onChange={e => setImageResize(e.target.selectedIndex)}
-              value={imageResize}
+          <label
+            htmlFor="browse"
+            className="p-8 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
+            onDrop={handleDrop}
+            onDragOver={event => event.preventDefault()}
+          >
+            <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
+          </label>
+          <h3 className="text-lg">Servers</h3>
+          <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
+            {servers.map(s => (
+              <>
+                <CheckBox
+                  name={s.name}
+                  disabled={uploadBusy}
+                  checked={transfers[s.name]?.enabled || false}
+                  setChecked={c =>
+                    setTransfers(ut => ({ ...ut, [s.name]: { enabled: c, transferred: 0, size: 0, rate: 0 } }))
+                  }
+                  label={s.name}
+                ></CheckBox>
+                {transfers[s.name]?.enabled ? (
+                  <ProgressBar
+                    value={transfers[s.name].transferred}
+                    max={transfers[s.name].size}
+                    description={transfers[s.name].rate > 0 ? '' + formatFileSize(transfers[s.name].rate) + '/s' : ''}
+                  />
+                ) : (
+                  <div></div>
+                )}
+              </>
+            ))}
+          </div>
+          <h3 className="text-lg text-neutral-content">Image Options</h3>
+          <div className="cursor-pointer grid gap-2 items-center" style={{ gridTemplateColumns: '1.5em auto' }}>
+            <CheckBox
+              name="cleanData"
+              disabled={uploadBusy}
+              checked={cleanPrivateData}
+              setChecked={c => setCleanPrivateData(c)}
+              label="Clean private data in images (EXIF)"
+            ></CheckBox>
+            <input
+              className="checkbox checkbox-primary "
+              id="resizeOption"
+              disabled={uploadBusy}
+              type="checkbox"
+              checked={imageResize > 0}
+              onChange={() => setImageResize(irs => (irs > 0 ? 0 : 1))}
+            />
+            <div>
+              <label htmlFor="resizeOption" className="cursor-pointer select-none">
+                Resize Image
+              </label>
+              <select
+                disabled={uploadBusy || imageResize == 0}
+                className="select select-bordered select-sm ml-4 w-full max-w-xs"
+                onChange={e => setImageResize(e.target.selectedIndex)}
+                value={imageResize}
+              >
+                {ResizeOptions.map((ro, i) => (
+                  <option key={ro.name} disabled={i == 0}>
+                    {ro.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex flex-row gap-2">
+            <button className="btn btn-primary" onClick={() => upload()} disabled={uploadBusy || files.length == 0}>
+              Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
+              {formatFileSize(sizeOfFilesToUpload)}
+            </button>
+            <button
+              className="btn  btn-secondary  "
+              disabled={uploadBusy || files.length == 0}
+              onClick={() => {
+                clearTransfers();
+                setFiles([]);
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = '';
+                }
+              }}
             >
-              {ResizeOptions.map((ro, i) => (
-                <option key={ro.name} disabled={i == 0}>
-                  {ro.name}
-                </option>
-              ))}
-            </select>
+              <TrashIcon className="w-6" />
+            </button>
           </div>
         </div>
-        <div className="flex flex-row gap-2">
-          <button className="btn btn-primary" onClick={() => upload()} disabled={uploadBusy || files.length == 0}>
-            Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
-            {formatFileSize(sizeOfFilesToUpload)}
-          </button>
-          <button
-            className="btn  btn-secondary  "
-            disabled={uploadBusy || files.length == 0}
-            onClick={() => {
-              clearTransfers();
-              setFiles([]);
-              if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-              }
-            }}
-          >
-            <TrashIcon className="w-6" />
-          </button>
-        </div>
-      </div>
+      )}
       {fileEventsToPublish.length > 0 && (
         <>
           <h2 className="py-4">Publish events</h2>

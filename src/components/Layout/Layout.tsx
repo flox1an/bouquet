@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useNDK } from '../../utils/ndk';
 import './Layout.css';
 import { ArrowUpOnSquareIcon, MagnifyingGlassIcon, ServerStackIcon } from '@heroicons/react/24/outline';
@@ -10,6 +10,7 @@ import { useGlobalContext } from '../../GlobalState';
 
 export const Layout = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { loginWithExtension, user } = useNDK();
   const { state } = useGlobalContext();
 
@@ -19,13 +20,19 @@ export const Layout = () => {
 
   const navItems = (
     <>
-      <button className="btn" onClick={() => navigate('/upload')}>
+      <button
+        className={`btn ${location.pathname == '/upload' ? 'btn-neutral' : ''} `}
+        onClick={() => navigate('/upload')}
+      >
         <ArrowUpOnSquareIcon /> Upload
       </button>
-      <button className="btn" onClick={() => navigate('/')}>
+      <button className={`btn ${location.pathname == '/' ? 'btn-neutral' : ''} `} onClick={() => navigate('/')}>
         <MagnifyingGlassIcon /> Browse
       </button>
-      <button className="btn" onClick={() => navigate('/transfer')}>
+      <button
+        className={`btn ${location.pathname == '/transfer' ? 'btn-neutral' : ''} `}
+        onClick={() => navigate('/transfer')}
+      >
         <ServerStackIcon /> Sync
       </button>
     </>

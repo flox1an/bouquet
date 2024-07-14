@@ -61,14 +61,14 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
   return (
     <>
       {isOpen && <div className="fixed top-0 left-0 w-full h-full bg-black opacity-50 z-50" />}
-      <dialog ref={dialogRef} className="p-6 bg-base-300 rounded-lg shadow-lg w-full max-w-lg mx-auto">
+      <dialog ref={dialogRef} className="p-6 bg-base-300 rounded-lg shadow-lg w-full max-w-xl mx-auto">
         <div>
           <h2 className="text-xl font-semibold">Manage Servers</h2>
 
           <ul className="mt-4">
             {servers.map((server, index) => (
               <li key={server.url} className="flex items-center justify-between mt-2">
-                <span>{server.url}</span>
+                <span>{server.url} <div className='badge badge-neutral'>{server.type}</div></span>
                 <div className="flex items-center space-x-2">
                   <button className="btn btn-ghost btn-sm" onClick={() => handleMoveUp(index)}>
                     <ArrowUpIcon className="h-5 w-5" />
