@@ -100,7 +100,6 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
 
   const createNewCollection = () => {
     // TODO Show new collction dialog
-
     console.log('Show new collction dialog');
   };
 
@@ -116,26 +115,25 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
               <div
                 tabIndex={0}
                 role="button"
-                className="btn btn-icon btn-primary btn-sm tooltip flex"
+                className="btn btn-icon btn-primary btn-sm tooltip flex whitespace-nowrap"
                 data-tip="Add selected blobs to collection"
               >
-                <PlusIcon />
-                <FolderIcon />
+                <PlusIcon /><FolderIcon />
               </div>
-              <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-[1] w-52 p-2 shadow">
+              <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-[1] w-[30em] p-2 shadow">
                 <li>
                   <a onClick={() => addSelectedBlobsToCollection('Collection 1')}>
-                    <FolderIcon /> Collection 1
+                    <FolderIcon /> Collection 1 (NOT IMPLEMENTED YET)
                   </a>
                 </li>
                 <li>
                   <a onClick={() => addSelectedBlobsToCollection('Collection 2')}>
-                    <FolderIcon /> Collection 2
+                    <FolderIcon /> Collection 2 (NOT IMPLEMENTED YET)
                   </a>
                 </li>
                 <li className=" border-t-2 border-base-300">
                   <a onClick={() => createNewCollection()}>
-                    <FolderPlusIcon /> new collection
+                    <FolderPlusIcon /> new collection (NOT IMPLEMENTED YET)
                   </a>
                 </li>
               </ul>

@@ -35,6 +35,7 @@ export default function useEvent(filter: NDKFilter, opts?: SubscriptionOptions, 
       );
     },
     enabled: !opts?.disable,
+    refetchOnWindowFocus: false,
   });
 
   return query.data;
