@@ -1,14 +1,16 @@
+import { ReactNode } from "react";
+
 const CheckBox = ({
   name,
   checked,
   setChecked,
-  label,
+  children,
   disabled = false,
 }: {
   name: string;
   checked: boolean;
   setChecked: (checked: boolean) => void;
-  label: string;
+  children: ReactNode;
   disabled: boolean;
 }) => (
   <>
@@ -20,8 +22,8 @@ const CheckBox = ({
       checked={checked}
       onChange={e => setChecked(e.currentTarget.checked)}
     />
-    <label htmlFor={name} className="cursor-pointer select-none">
-      {label}
+    <label htmlFor={name} className="cursor-pointer select-none flex flex-row gap-2">
+      {children}
     </label>
   </>
 );

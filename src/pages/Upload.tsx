@@ -4,8 +4,8 @@ import { useNDK } from '../utils/ndk';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
 import { removeExifData } from '../utils/exif';
-import axios, { AxiosProgressEvent } from 'axios';
-import { ArrowUpOnSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
+import axios, { AxiosError, AxiosProgressEvent } from 'axios';
+import { ArrowUpOnSquareIcon, ServerIcon, TrashIcon } from '@heroicons/react/24/outline';
 import CheckBox from '../components/CheckBox/CheckBox';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { formatFileSize } from '../utils/utils';
@@ -21,6 +21,7 @@ type TransferStats = {
   size: number;
   transferred: number;
   rate: number;
+  error?: string;
 };
 
 /*
@@ -118,6 +119,7 @@ function Upload() {
     }
 
     const fileDimensions: { [key: string]: FileEventData } = {};
+
     for (const file of filesToUpload) {
       let data = {
         content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/, ''),
@@ -158,32 +160,44 @@ function Upload() {
         const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
         console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
 
-        const newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
+        try {
+          const newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
+            setTransfers(ut => ({
+              ...ut,
+              [server.name]: {
+                ...ut[server.name],
+                transferred: serverTransferred + progressEvent.loaded,
+                rate: progressEvent.rate || 0,
+              },
+            }));
+          });
+
+          serverTransferred += file.size;
           setTransfers(ut => ({
             ...ut,
-            [server.name]: {
-              ...ut[server.name],
-              transferred: serverTransferred + progressEvent.loaded,
-              rate: progressEvent.rate || 0,
-            },
+            [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
           }));
-        });
 
-        serverTransferred += file.size;
-        setTransfers(ut => ({
-          ...ut,
-          [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
-        }));
-
-        fileDimensions[file.name] = {
-          ...fileDimensions[file.name],
-          x: newBlob.sha256,
-          url: primary
-            ? [newBlob.url, ...fileDimensions[file.name].url]
-            : [...fileDimensions[file.name].url, newBlob.url],
-          size: newBlob.size,
-          m: newBlob.type,
-        };
+          fileDimensions[file.name] = {
+            ...fileDimensions[file.name],
+            x: newBlob.sha256,
+            url: primary
+              ? [newBlob.url, ...fileDimensions[file.name].url]
+              : [...fileDimensions[file.name].url, newBlob.url],
+            size: newBlob.size,
+            m: newBlob.type,
+          };
+        } catch (e) {
+          const axiosError = e as AxiosError;
+          const response = axiosError.response?.data as {message?: string} 
+          console.error(e);
+          console.warn();
+          // Record error in transfer log
+          setTransfers(ut => ({
+            ...ut,
+            [server.name]: { ...ut[server.name], error: `${axiosError.message} / ${response.message}` },
+          }));
+        }
       }
       queryClient.invalidateQueries({ queryKey: ['blobs', server.name] });
     };
@@ -198,6 +212,7 @@ function Upload() {
         for (const server of servers) {
           if (newTransfers[server.name].enabled) {
             newTransfers[server.name].size = totalSize;
+            newTransfers[server.name].error = undefined;
           }
         }
         return newTransfers;
@@ -214,7 +229,14 @@ function Upload() {
     }
 
     setUploadBusy(false);
-    setUploadStep(2);
+
+    //console.log(transfers);
+    // TODO transfer can not be accessed yet, errors are not visible here. TODO pout errors somewhere else
+    const errorsTransfers = Object.keys(transfers).filter(ts => transfers[ts].enabled && !!transfers[ts].error);
+    if (errorsTransfers.length == 0) {
+      // Only go to the next step if no errors have occured
+      setUploadStep(2);
+    }
   };
 
   const clearTransfers = () => {
@@ -264,6 +286,8 @@ function Upload() {
   };
 
   const sizeOfFilesToUpload = useMemo(() => files.reduce((acc, file) => (acc += file.size), 0), [files]);
+  const imagesAreUploaded = useMemo(() => files.some(file => file.type.startsWith('image/')), [files]);
+
   return (
     <>
       <ul className="steps p-8">
@@ -273,103 +297,140 @@ function Upload() {
         <li className={`step ${uploadStep >= 3 ? 'step-primary' : ''}`}>Publish to NOSTR</li>
       </ul>
       {uploadStep <= 1 && (
-        <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
-          <input
-            id="browse"
-            type="file"
-            ref={fileInputRef}
-            disabled={uploadBusy}
-            hidden
-            multiple
-            onChange={handleFileChange}
-          />
-          <label
-            htmlFor="browse"
-            className="p-8 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
-            onDrop={handleDrop}
-            onDragOver={event => event.preventDefault()}
-          >
-            <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
-          </label>
-          <h3 className="text-lg">Servers</h3>
-          <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
-            {servers.map(s => (
-              <>
-                <CheckBox
-                  name={s.name}
-                  disabled={uploadBusy}
-                  checked={transfers[s.name]?.enabled || false}
-                  setChecked={c =>
-                    setTransfers(ut => ({ ...ut, [s.name]: { enabled: c, transferred: 0, size: 0, rate: 0 } }))
-                  }
-                  label={s.name}
-                ></CheckBox>
-                {transfers[s.name]?.enabled ? (
-                  <ProgressBar
-                    value={transfers[s.name].transferred}
-                    max={transfers[s.name].size}
-                    description={transfers[s.name].rate > 0 ? '' + formatFileSize(transfers[s.name].rate) + '/s' : ''}
-                  />
-                ) : (
-                  <div></div>
-                )}
-              </>
-            ))}
-          </div>
-          <h3 className="text-lg text-neutral-content">Image Options</h3>
-          <div className="cursor-pointer grid gap-2 items-center" style={{ gridTemplateColumns: '1.5em auto' }}>
-            <CheckBox
-              name="cleanData"
-              disabled={uploadBusy}
-              checked={cleanPrivateData}
-              setChecked={c => setCleanPrivateData(c)}
-              label="Clean private data in images (EXIF)"
-            ></CheckBox>
-            <input
-              className="checkbox checkbox-primary "
-              id="resizeOption"
-              disabled={uploadBusy}
-              type="checkbox"
-              checked={imageResize > 0}
-              onChange={() => setImageResize(irs => (irs > 0 ? 0 : 1))}
-            />
-            <div>
-              <label htmlFor="resizeOption" className="cursor-pointer select-none">
-                Resize Image
-              </label>
-              <select
-                disabled={uploadBusy || imageResize == 0}
-                className="select select-bordered select-sm ml-4 w-full max-w-xs"
-                onChange={e => setImageResize(e.target.selectedIndex)}
-                value={imageResize}
+        <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
+          {uploadStep == 0 && (
+            <>
+              <input
+                id="browse"
+                type="file"
+                ref={fileInputRef}
+                disabled={uploadBusy}
+                hidden
+                multiple
+                onChange={handleFileChange}
+              />
+              <label
+                htmlFor="browse"
+                className="p-8 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
+                onDrop={handleDrop}
+                onDragOver={event => event.preventDefault()}
               >
-                {ResizeOptions.map((ro, i) => (
-                  <option key={ro.name} disabled={i == 0}>
-                    {ro.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-row gap-2">
-            <button className="btn btn-primary" onClick={() => upload()} disabled={uploadBusy || files.length == 0}>
-              Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
-              {formatFileSize(sizeOfFilesToUpload)}
-            </button>
-            <button
-              className="btn  btn-secondary  "
-              disabled={uploadBusy || files.length == 0}
-              onClick={() => {
-                clearTransfers();
-                setFiles([]);
-                if (fileInputRef.current) {
-                  fileInputRef.current.value = '';
-                }
-              }}
-            >
-              <TrashIcon className="w-6" />
-            </button>
-          </div>
+                <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
+              </label>
+
+              <div className="cursor-pointer gap-2 flex flex-row">
+                <div className="flex flex-col gap-4 w-1/2">
+                  <h3 className="text-lg text-neutral-content">Servers</h3>
+                  <div className="grid gap-2" style={{ gridTemplateColumns: '2em auto' }}>
+                    {servers.map(s => (
+                      <CheckBox
+                        name={s.name}
+                        disabled={uploadBusy}
+                        checked={transfers[s.name]?.enabled || false}
+                        setChecked={c =>
+                          setTransfers(ut => ({ ...ut, [s.name]: { enabled: c, transferred: 0, size: 0, rate: 0 } }))
+                        }
+                      >
+                        <ServerIcon className="w-6" />
+                        {s.name} <div className="badge badge-neutral">{serverInfo[s.name].type}</div>
+                      </CheckBox>
+                    ))}
+                  </div>
+                </div>
+                {imagesAreUploaded && (
+                  <div className="flex flex-col gap-4 w-1/2">
+                    <h3 className="text-lg text-neutral-content">Image Options</h3>
+                    <div
+                      className="cursor-pointer grid gap-2 items-center"
+                      style={{ gridTemplateColumns: '1.5em auto' }}
+                    >
+                      <CheckBox
+                        name="cleanData"
+                        disabled={uploadBusy}
+                        checked={cleanPrivateData}
+                        setChecked={c => setCleanPrivateData(c)}
+                      >
+                        Clean private data in images (EXIF)
+                      </CheckBox>
+                      <input
+                        className="checkbox checkbox-primary "
+                        id="resizeOption"
+                        disabled={uploadBusy}
+                        type="checkbox"
+                        checked={imageResize > 0}
+                        onChange={() => setImageResize(irs => (irs > 0 ? 0 : 1))}
+                      />
+                      <div>
+                        <label htmlFor="resizeOption" className="cursor-pointer select-none">
+                          Resize Image
+                        </label>
+                        <select
+                          disabled={uploadBusy || imageResize == 0}
+                          className="select select-bordered select-sm ml-4 w-full max-w-xs"
+                          onChange={e => setImageResize(e.target.selectedIndex)}
+                          value={imageResize}
+                        >
+                          {ResizeOptions.map((ro, i) => (
+                            <option key={ro.name} disabled={i == 0}>
+                              {ro.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-row gap-2">
+                <button className="btn btn-primary" onClick={() => upload()} disabled={uploadBusy || files.length == 0}>
+                  Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
+                  {formatFileSize(sizeOfFilesToUpload)}
+                </button>
+                <button
+                  className="btn  btn-secondary  "
+                  disabled={uploadBusy || files.length == 0}
+                  onClick={() => {
+                    clearTransfers();
+                    setFiles([]);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
+                  }}
+                >
+                  <TrashIcon className="w-6" />
+                </button>
+              </div>
+            </>
+          )}
+
+          {uploadStep == 1 && (
+            <>
+              <h3 className="text-lg">Servers</h3>
+              <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
+                {servers.map(
+                  s =>
+                    transfers[s.name]?.enabled && (
+                      <>
+                        <ServerIcon></ServerIcon> {s.name}
+                        <div className="flex flex-col gap-2">
+                          <ProgressBar
+                            value={transfers[s.name].transferred}
+                            max={transfers[s.name].size}
+                            description={
+                              transfers[s.name].rate > 0 ? '' + formatFileSize(transfers[s.name].rate) + '/s' : ''
+                            }
+                          />
+                          {transfers[s.name].error && (
+                            <div className="alert alert-error">{transfers[s.name].error}</div>
+                          )}
+                        </div>
+                      </>
+                    )
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
       {fileEventsToPublish.length > 0 && (

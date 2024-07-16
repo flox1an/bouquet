@@ -7,6 +7,7 @@ import { BlobDescriptor } from 'blossom-client-sdk';
 import { transferBlob } from '../../utils/transfer';
 import { useNDK } from '../../utils/ndk';
 import TagInput from '../TagInput';
+import { allGenres } from '../../utils/genres';
 
 export type FileEventData = {
   originalFile: File;
@@ -19,7 +20,7 @@ export type FileEventData = {
   m?: string;
   size: number;
   thumbnails?: string[];
-  thumbnail?: string;
+  publishedThumbnail?: string;
   blurHash?: string;
   tags: string[];
   duration?: string;
@@ -28,6 +29,8 @@ export type FileEventData = {
   title?: string;
   album?: string;
   year?: string;
+  genre?: string;
+  subgenre?: string;
 };
 
 const FileEventEditor = ({ data }: { data: FileEventData }) => {
@@ -53,7 +56,7 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
         fileEventData.artist ||
         fileEventData.album ||
         fileEventData.year ||
-        fileEventData.thumbnail
+        fileEventData.publishedThumbnail
       )
     ) {
       console.log('getting id3 cover image', fileEventData.x, fileEventData.url[0], fileEventData.originalFile);
@@ -68,9 +71,9 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
           album: id3.album,
           title: id3.title,
           year: id3.year,
-          thumbnail: res.coverFull,
           thumbnails: res.coverFull ? [res.coverFull] : [],
         });
+        setSelectedThumbnail(res.coverFull);
       });
     }
   }, [fileEventData]);
@@ -81,9 +84,9 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
     return match ? match[0] : null;
   }
 
-  const publishSelectedThumbnailToOwnServer = async (): Promise<BlobDescriptor | undefined> => {
+  const publishSelectedThumbnailToAllOwnServers = async (): Promise<BlobDescriptor | undefined> => {
     // TODO investigate why mimetype is not set for reuploaded thumbnail (on mediaserver)
-    const servers = data.url.map(extractProtocolAndDomain);
+    const servers = fileEventData.url.map(extractProtocolAndDomain);
 
     // upload selected thumbnail to the same blossom servers as the video
     let uploadedThumbnails: BlobDescriptor[] = [];
@@ -107,7 +110,6 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
       }
     }
   }, [fileEventData.thumbnails, selectedThumbnail]);
-
   // TODO add tags editor
   return (
     <>
@@ -147,12 +149,16 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
               ))}
           </>
         )}
-        {isAudio && fileEventData.thumbnail && (
+        {isAudio && (fileEventData.publishedThumbnail || selectedThumbnail) && (
           <div className="w-2/6">
             <img
               width={300}
               height={300}
-              src={`https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${fileEventData.thumbnail || selectedThumbnail}`}
+              src={
+                fileEventData.publishedThumbnail
+                  ? `https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${fileEventData.publishedThumbnail}`
+                  : selectedThumbnail
+              }
               className="w-full"
             />
           </div>
@@ -206,6 +212,44 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
             placeholder="Caption"
           ></textarea>
 
+          <span className="font-bold">Genre</span>
+          <div>
+            <select
+              className="select select-bordered select-primary w-full max-w-xs"
+              value={fileEventData.genre}
+              onChange={e => setFileEventData(ed => ({ ...ed, genre: e.target.value, subgenre: '' }))}
+            >
+              <option disabled>Select a genre</option>
+              {Object.keys(allGenres).map(g => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+            <select
+              className="select select-bordered select-primary w-full max-w-xs mt-2"
+              value={fileEventData.subgenre}
+              disabled={
+                fileEventData.genre == undefined ||
+                allGenres[fileEventData.genre] == undefined ||
+                allGenres[fileEventData.genre].length == 0
+              }
+              onChange={e => setFileEventData(ed => ({ ...ed, subgenre: e.target.value }))}
+            >
+              <option disabled value="">
+                Select a sub genre
+              </option>
+              {fileEventData.genre &&
+                allGenres[fileEventData.genre] &&
+                allGenres[fileEventData.genre].length > 0 &&
+                allGenres[fileEventData.genre].map(g => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+            </select>
+          </div>
+
           <span className="font-bold">Tags</span>
           <TagInput
             tags={fileEventData.tags}
@@ -242,8 +286,8 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
           <button
             className="btn btn-primary"
             onClick={async () => {
-              if (!data.thumbnail) {
-                await publishSelectedThumbnailToOwnServer();
+              if (!fileEventData.publishedThumbnail) {
+                await publishSelectedThumbnailToAllOwnServers();
               }
               setJsonOutput(await publishFileEvent(fileEventData));
             }}
@@ -252,19 +296,40 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
           </button>
           <button
             className="btn btn-primary"
-            onClick={async () => setJsonOutput(await publishAudioEvent(fileEventData))}
+            onClick={async () => {
+              if (!fileEventData.publishedThumbnail) {
+                const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers();
+                if (selfHostedThumbnail) {
+                  const newData: FileEventData = {
+                    ...fileEventData,
+                    publishedThumbnail: selfHostedThumbnail.url,
+                    thumbnails: [selfHostedThumbnail.url],
+                  };
+                  setFileEventData(newData);
+                  setJsonOutput(await publishAudioEvent(newData));
+                } else {
+                  // self hosting failed
+                  console.log('self hosting failed');
+                  setJsonOutput(await publishAudioEvent(fileEventData));
+                }
+              } else {
+                // data thumbnail already defined
+                console.log('data thumbnail already defined');
+                setJsonOutput(await publishAudioEvent(fileEventData));
+              }
+            }}
           >
             Create Audio Event
           </button>
           <button
             className="btn btn-primary"
             onClick={async () => {
-              if (!data.thumbnail) {
-                const selfHostedThumbnail = await publishSelectedThumbnailToOwnServer();
+              if (!fileEventData.publishedThumbnail) {
+                const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers();
                 if (selfHostedThumbnail) {
-                  const newData = {
+                  const newData: FileEventData = {
                     ...fileEventData,
-                    thumbnail: selfHostedThumbnail.url,
+                    publishedThumbnail: selfHostedThumbnail.url,
                     thumbnails: [selfHostedThumbnail.url],
                   };
                   setFileEventData(newData);

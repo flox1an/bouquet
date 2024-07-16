@@ -61,6 +61,13 @@ export const mirrordBlob = async (
   return res.data;
 };
 
+async function blobUrlToFile(blobUrl: string, fileName: string): Promise<File> {
+  const response = await fetch(blobUrl);
+  const blob = await response.blob();
+  const fileOptions = { type: blob.type, lastModified: Date.now() };
+  return new File([blob], fileName, fileOptions);
+}
+
 export const transferBlob = async (
   sourceUrl: string,
   targetServer: string,
@@ -69,15 +76,21 @@ export const transferBlob = async (
 ): Promise<BlobDescriptor> => {
   console.log({ sourceUrl, targetServer });
 
-  const blob = await mirrordBlob(targetServer, sourceUrl, signEventTemplate);
-  if (blob) return blob;
-  console.log('Mirror failed. Using download + upload instead.');
+  if (sourceUrl.startsWith('blob:')) {
+      const file = await blobUrlToFile(sourceUrl, 'cover.jpg');
+      return await uploadBlob(targetServer, file, signEventTemplate, onUploadProgress);
 
-  const result = await downloadBlob(sourceUrl, onUploadProgress);
+  } else {
+    const blob = await mirrordBlob(targetServer, sourceUrl, signEventTemplate);
+    if (blob) return blob;
+    console.log('Mirror failed. Using download + upload instead.');
 
-  const fileName = sourceUrl.replace(/.*\//, '');
+    const result = await downloadBlob(sourceUrl, onUploadProgress);
 
-  const file = new File([result.data], fileName, { type: result.type, lastModified: new Date().getTime() });
+    const fileName = sourceUrl.replace(/.*\//, '');
 
-  return await uploadBlob(targetServer, file, signEventTemplate, onUploadProgress);
+    const file = new File([result.data], fileName, { type: result.type, lastModified: new Date().getTime() });
+
+    return await uploadBlob(targetServer, file, signEventTemplate, onUploadProgress);
+  }
 };

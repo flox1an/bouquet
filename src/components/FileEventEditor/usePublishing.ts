@@ -37,9 +37,9 @@ export const usePublishing = () => {
     if (data.blurHash) {
       e.tags.push(['blurhash', data.blurHash]);
     }
-    if (data.thumbnail) {
-      e.tags.push(['thumb', data.thumbnail]);
-      e.tags.push(['image', data.thumbnail]);
+    if (data.publishedThumbnail) {
+      e.tags.push(['thumb', data.publishedThumbnail]);
+      e.tags.push(['image', data.publishedThumbnail]);
     }
 
     const ev = new NDKEvent(ndk, e);
@@ -56,8 +56,7 @@ export const usePublishing = () => {
       tags: [
         ['d', data.x],
         ...uniq(data.url).map(du => ['media', du]),
-        ['x', data.x],
-        ...uniq(data.url).map(du => ['imeta', `url ${du}`, `m ${data.m}`]),
+        ...uniq(data.url).map(du => ['imeta', `url ${du}`, `m ${data.m}`, `x ${data.x}`]),
         ...data.tags.map(t => ['t', t]),
       ],
       kind: KIND_AUDIO,
@@ -70,13 +69,26 @@ export const usePublishing = () => {
     }
 
     if (data.artist) {
-      e.tags.push(['creator', `${data.artist}`]);
-      e.tags.push(['creator', `${data.artist}`, 'Artist']);
+      e.tags.push(['c', `${data.artist}`, 'artist']);
     }
 
     if (data.album) {
-      e.tags.push(['album', `${data.album}`]);
+      e.tags.push(['c', `${data.album}`, 'album']);
     }
+
+    if (data.publishedThumbnail) {
+      e.tags.push(['cover', `${data.publishedThumbnail}`]);
+    }
+
+    if (data.genre) {
+      e.tags.push(['c', `${data.genre}`, 'genre']);
+
+      if (data.subgenre) {
+        e.tags.push(['c', `${data.subgenre}`, 'subgenre']);
+      }
+    }
+
+    // published_at
 
     const ev = new NDKEvent(ndk, e);
     await ev.sign();
@@ -118,9 +130,9 @@ export const usePublishing = () => {
     if (data.m) {
       e.tags.push(['m', data.m]);
     }
-    if (data.thumbnail) {
-      e.tags.push(['thumb', data.thumbnail]);
-      e.tags.push(['image', data.thumbnail]);
+    if (data.publishedThumbnail) {
+      e.tags.push(['thumb', data.publishedThumbnail]);
+      e.tags.push(['image', data.publishedThumbnail]);
     }
 
     const ev = new NDKEvent(ndk, e);
