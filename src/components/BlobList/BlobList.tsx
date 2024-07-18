@@ -118,7 +118,8 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                 className="btn btn-icon btn-primary btn-sm tooltip flex whitespace-nowrap"
                 data-tip="Add selected blobs to collection"
               >
-                <PlusIcon /><FolderIcon />
+                <PlusIcon />
+                <FolderIcon />
               </div>
               <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-[1] w-[30em] p-2 shadow">
                 <li>

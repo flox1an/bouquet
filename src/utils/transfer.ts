@@ -77,9 +77,8 @@ export const transferBlob = async (
   console.log({ sourceUrl, targetServer });
 
   if (sourceUrl.startsWith('blob:')) {
-      const file = await blobUrlToFile(sourceUrl, 'cover.jpg');
-      return await uploadBlob(targetServer, file, signEventTemplate, onUploadProgress);
-
+    const file = await blobUrlToFile(sourceUrl, 'cover.jpg');
+    return await uploadBlob(targetServer, file, signEventTemplate, onUploadProgress);
   } else {
     const blob = await mirrordBlob(targetServer, sourceUrl, signEventTemplate);
     if (blob) return blob;

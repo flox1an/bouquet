@@ -68,7 +68,9 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
           <ul className="mt-4">
             {servers.map((server, index) => (
               <li key={server.url} className="flex items-center justify-between mt-2">
-                <span>{server.url} <div className='badge badge-neutral'>{server.type}</div></span>
+                <span>
+                  {server.url} <div className="badge badge-neutral">{server.type}</div>
+                </span>
                 <div className="flex items-center space-x-2">
                   <button className="btn btn-ghost btn-sm" onClick={() => handleMoveUp(index)}>
                     <ArrowUpIcon className="h-5 w-5" />
