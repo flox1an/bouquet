@@ -19,7 +19,6 @@ export type Server = {
 const USER_NIP96_SERVER_LIST_KIND = 10096;
 
 export const useUserServers = (): Server[] => {
-
   const { user } = useNDK();
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type
 

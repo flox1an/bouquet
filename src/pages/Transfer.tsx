@@ -16,7 +16,7 @@ import BlobList from '../components/BlobList/BlobList';
 import './Transfer.css';
 import { useNavigate, useParams } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
-import { downloadBlob, uploadBlob } from '../utils/transfer';
+import { downloadBlossomBlob, uploadBlossomBlob } from '../utils/blossom';
 
 type TransferStatus = {
   [key: string]: {
@@ -82,7 +82,7 @@ export const Transfer = () => {
           },
         }));
 
-        const result = await downloadBlob(`${serverInfo[sourceServer].url}/${b.sha256}`, progressEvent => {
+        const result = await downloadBlossomBlob(`${serverInfo[sourceServer].url}/${b.sha256}`, progressEvent => {
           setTransferLog(ts => ({
             ...ts,
             [b.sha256]: {
@@ -111,7 +111,7 @@ export const Transfer = () => {
 
         const file = new File([result.data], b.sha256, { type: b.type, lastModified: b.created });
 
-        await uploadBlob(serverInfo[targetServer].url, file, signEventTemplate, progressEvent => {
+        await uploadBlossomBlob(serverInfo[targetServer].url, file, signEventTemplate, progressEvent => {
           setTransferLog(ts => ({
             ...ts,
             [b.sha256]: {

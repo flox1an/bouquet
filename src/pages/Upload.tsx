@@ -1,4 +1,4 @@
-import {  useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -12,6 +12,7 @@ import { resizeImage } from '../utils/resize';
 import { getBlurhashAndSizeFromFile } from '../utils/blur';
 import UploadFileSelection, { ResizeOptions, TransferStats } from '../components/UploadFileSelection';
 import UploadProgress from '../components/UploadProgress';
+import { uploadNip96File } from '../utils/nip96';
 
 function Upload() {
   const servers = useUserServers();
@@ -116,17 +117,21 @@ function Upload() {
         console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
 
         try {
-          const newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
-            setTransfers(ut => ({
-              ...ut,
-              [server.name]: {
-                ...ut[server.name],
-                transferred: serverTransferred + progressEvent.loaded,
-                rate: progressEvent.rate || 0,
-              },
-            }));
-          });
-
+          let newBlob: BlobDescriptor;
+          if (server.type == 'blossom') {
+            newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
+              setTransfers(ut => ({
+                ...ut,
+                [server.name]: {
+                  ...ut[server.name],
+                  transferred: serverTransferred + progressEvent.loaded,
+                  rate: progressEvent.rate || 0,
+                },
+              }));
+            });
+          } else {
+            newBlob = await uploadNip96File(server, file, '', signEventTemplate);
+          }
           serverTransferred += file.size;
           setTransfers(ut => ({
             ...ut,
@@ -149,7 +154,7 @@ function Upload() {
           // Record error in transfer log
           setTransfers(ut => ({
             ...ut,
-            [server.name]: { ...ut[server.name], error: `${axiosError.message} / ${response.message}` },
+            [server.name]: { ...ut[server.name], error: `${axiosError.message} / ${response?.message}` },
           }));
         }
       }
@@ -214,7 +219,6 @@ function Upload() {
 
   const [transfersInitialized, setTransfersInitialized] = useState(false);
 
-
   useEffect(() => {
     if (servers.length > 0 && !transfersInitialized) {
       clearTransfers();
@@ -234,7 +238,7 @@ function Upload() {
         <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
           {uploadStep == 0 && (
             <UploadFileSelection
-              servers={servers.filter(s => s.type == 'blossom')}
+              servers={servers}
               transfers={transfers}
               setTransfers={setTransfers}
               cleanPrivateData={cleanPrivateData}

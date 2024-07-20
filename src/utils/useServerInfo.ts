@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
+import { BlobDescriptor } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import { nip19 } from 'nostr-tools';
 import { Server, useUserServers } from './useUserServers';
-import dayjs from 'dayjs';
 import { fetchBlossomList } from './blossom';
 import { fetchNip96List } from './nip96';
 
