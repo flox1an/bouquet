@@ -5,6 +5,8 @@ import { useNDK } from '../utils/ndk';
 import { nip19 } from 'nostr-tools';
 import { Server, useUserServers } from './useUserServers';
 import dayjs from 'dayjs';
+import { fetchBlossomList } from './blossom';
+import { fetchNip96List } from './nip96';
 
 export interface ServerInfo extends Server {
   virtual: boolean;
@@ -51,11 +53,12 @@ export const useServerInfo = () => {
     queries: servers.map(server => ({
       queryKey: ['blobs', server.name],
       queryFn: async () => {
-        const listAuthEvent = await BlossomClient.getListAuth(signEventTemplate, 'List Blobs');
-        const blobs = await BlossomClient.listBlobs(server.url, pubkey!, undefined, listAuthEvent);
-
-        // fallback to deprecated created attibute for servers that are not using 'uploaded' yet
-        return blobs.map(b => ({ ...b, uploaded: b.uploaded || b.created || dayjs().unix() }));
+        if (server.type === 'blossom') {
+          return fetchBlossomList(server.url, pubkey!, signEventTemplate);
+        } else if (server.type === 'nip96') {
+          return fetchNip96List(server, signEventTemplate);
+        }
+        return [];
       },
       enabled: !!pubkey && servers.length > 0,
       staleTime: Infinity,

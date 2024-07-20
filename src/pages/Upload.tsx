@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import {  useEffect, useState } from 'react';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -207,14 +207,20 @@ function Upload() {
         {}
       )
     );
+
     setFileEventsToPublish([]);
     setUploadStep(0);
   };
 
+  const [transfersInitialized, setTransfersInitialized] = useState(false);
+
+
   useEffect(() => {
-    clearTransfers();
-    setUploadStep(0);
-  }, [servers]);
+    if (servers.length > 0 && !transfersInitialized) {
+      clearTransfers();
+      setTransfersInitialized(true);
+    }
+  }, [servers, transfersInitialized]);
 
   return (
     <>
@@ -228,7 +234,7 @@ function Upload() {
         <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
           {uploadStep == 0 && (
             <UploadFileSelection
-              servers={servers}
+              servers={servers.filter(s => s.type == 'blossom')}
               transfers={transfers}
               setTransfers={setTransfers}
               cleanPrivateData={cleanPrivateData}

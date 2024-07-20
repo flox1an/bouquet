@@ -72,13 +72,25 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
                   {server.url} <div className="badge badge-neutral">{server.type}</div>
                 </span>
                 <div className="flex items-center space-x-2">
-                  <button className="btn btn-ghost btn-sm" onClick={() => handleMoveUp(index)}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    disabled={server.type != 'blossom'}
+                    onClick={() => handleMoveUp(index)}
+                  >
                     <ArrowUpIcon className="h-5 w-5" />
                   </button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => handleMoveDown(index)}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    disabled={server.type != 'blossom'}
+                    onClick={() => handleMoveDown(index)}
+                  >
                     <ArrowDownIcon className="h-5 w-5" />
                   </button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => handleDeleteServer(server.url)}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    disabled={server.type != 'blossom'}
+                    onClick={() => handleDeleteServer(server.url)}
+                  >
                     <TrashIcon className="h-5 w-5" />
                   </button>
                 </div>

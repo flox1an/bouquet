@@ -56,7 +56,7 @@ export const ServerList = ({
       created_at: dayjs().unix(),
       content: '',
       pubkey: user?.pubkey || '',
-      tags: newServers.map(s => ['server', `${s.url}`]),
+      tags: newServers.filter(s => s.type == 'blossom').map(s => ['server', `${s.url}`]),
     });
     await ev.sign();
     console.log(ev.rawEvent());

@@ -165,7 +165,9 @@ export const Transfer = () => {
   return transferSource ? (
     <>
       <ServerList
-        servers={Object.values(serverInfo).filter(s => s.name == transferSource)}
+        servers={Object.values(serverInfo)
+          .filter(s => s.type == 'blossom')
+          .filter(s => s.name == transferSource)}
         onCancel={() => closeTransferMode()}
         title={
           <>
@@ -175,6 +177,7 @@ export const Transfer = () => {
       ></ServerList>
       <ServerList
         servers={Object.values(serverInfo)
+          .filter(s => s.type == 'blossom')
           .filter(s => s.name != transferSource)
           .sort()}
         selectedServer={transferTarget}
