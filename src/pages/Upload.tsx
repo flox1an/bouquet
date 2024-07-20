@@ -9,23 +9,9 @@ import FileEventEditor, { FileEventData } from '../components/FileEventEditor/Fi
 import pLimit from 'p-limit';
 import { Server, useUserServers } from '../utils/useUserServers';
 import { resizeImage } from '../utils/resize';
-import { getImageSize } from '../utils/image';
-import { getBlurhashFromFile } from '../utils/blur';
+import { getBlurhashAndSizeFromFile } from '../utils/blur';
 import UploadFileSelection, { ResizeOptions, TransferStats } from '../components/UploadFileSelection';
 import UploadProgress from '../components/UploadProgress';
-
-/*
-TODO
-steps
-- select files
-- (preview/reisze/exif removal)
-  - images: size, blurimage, dimensions
-  - audio: id3 tag
-  - video: dimensions, bitrate
-- upload
-  - server slection, progress bars, upload speed
-- 
-*/
 
 function Upload() {
   const servers = useUserServers();
@@ -40,6 +26,55 @@ function Upload() {
   const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
   const [imageResize, setImageResize] = useState(0);
   const [uploadStep, setUploadStep] = useState(0);
+
+  async function getListOfFilesToUpload() {
+    const filesToUpload: File[] = [];
+    for (const f of files) {
+      let processedFile = f;
+
+      if (processedFile.type.startsWith('image/')) {
+        // Do image processing according to options
+        if (imageResize > 0) {
+          const { width, height } = ResizeOptions[imageResize];
+          processedFile = await resizeImage(processedFile, width, height);
+        }
+        if (cleanPrivateData) {
+          processedFile = await removeExifData(processedFile);
+        }
+      }
+
+      filesToUpload.push(processedFile);
+    }
+    return filesToUpload;
+  }
+
+  async function getPreUploadMetaData(filesToUpload: File[]) {
+    const fileDimensions: { [key: string]: FileEventData } = {};
+
+    for (const file of filesToUpload) {
+      let data = {
+        content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/, ''),
+        url: [] as string[],
+        originalFile: file,
+        tags: [] as string[],
+      } as FileEventData;
+      if (file.type.startsWith('image/')) {
+        const imageInfo = await getBlurhashAndSizeFromFile(file);
+        if (imageInfo) {
+          const { width, height, blurHash } = imageInfo;
+          data = {
+            ...data,
+            width,
+            height,
+            dim: `${width}x${height}`,
+            blurHash,
+          };
+        }
+      }
+      fileDimensions[file.name] = data;
+    }
+    return fileDimensions;
+  }
 
   async function uploadBlob(
     server: string,
@@ -64,53 +99,9 @@ function Upload() {
     setUploadBusy(true);
     setUploadStep(1);
 
-    const filesToUpload: File[] = [];
-    for (const f of files) {
-      let processedFile = f;
+    const filesToUpload: File[] = await getListOfFilesToUpload();
 
-      if (processedFile.type.startsWith('image/')) {
-        // Do image processing according to options
-        if (imageResize > 0) {
-          const { width, height } = ResizeOptions[imageResize];
-          processedFile = await resizeImage(processedFile, width, height);
-        }
-        if (cleanPrivateData) {
-          processedFile = await removeExifData(processedFile);
-        }
-      }
-
-      filesToUpload.push(processedFile);
-    }
-
-    const fileDimensions: { [key: string]: FileEventData } = {};
-
-    for (const file of filesToUpload) {
-      let data = {
-        content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/, ''),
-        url: [] as string[],
-        originalFile: file,
-        tags: [] as string[],
-      } as FileEventData;
-      if (file.type.startsWith('image/')) {
-        const dimensions = await getImageSize(file);
-        data = {
-          ...data,
-          width: dimensions.width,
-          height: dimensions.height,
-          dim: `${dimensions.width}x${dimensions.height}`,
-        };
-
-        // TODO maybe combine fileSize and Hash!
-        const blur = await getBlurhashFromFile(file);
-        if (blur) {
-          data = {
-            ...data,
-            blurHash: blur,
-          };
-        }
-      }
-      fileDimensions[file.name] = data;
-    }
+    const fileDimensions = await getPreUploadMetaData(filesToUpload);
 
     // TODO icon to cancel upload
     // TODO detect if the file already exists? if we have the hash??
@@ -155,7 +146,6 @@ function Upload() {
           const axiosError = e as AxiosError;
           const response = axiosError.response?.data as { message?: string };
           console.error(e);
-          console.warn();
           // Record error in transfer log
           setTransfers(ut => ({
             ...ut,

@@ -38,13 +38,15 @@ function getFileDataURL(file: File): Promise<string | ArrayBuffer | null> {
   });
 }
 
-export async function getBlurhashFromFile(file: File) {
+export async function getBlurhashAndSizeFromFile(file: File) {
   const imageUrl = await getFileDataURL(file);
   if (imageUrl) {
     const image = await loadImage(imageUrl?.toString());
     const imageData = getImageData(image);
-    if (imageData) {
-      return encode(imageData.data, imageData.width, imageData.height, 4, 3);
-    }
+    return {
+      width: image.width,
+      height: image.height,
+      blurHash: imageData && encode(imageData.data, imageData.width, imageData.height, 4, 3),
+    };
   }
 }
