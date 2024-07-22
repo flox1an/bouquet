@@ -8,6 +8,7 @@ import { transferBlob } from '../../utils/transfer';
 import { useNDK } from '../../utils/ndk';
 import TagInput from '../TagInput';
 import { allGenres } from '../../utils/genres';
+import { useServerInfo } from '../../utils/useServerInfo';
 
 export type FileEventData = {
   originalFile: File;
@@ -35,6 +36,7 @@ export type FileEventData = {
 
 const FileEventEditor = ({ data }: { data: FileEventData }) => {
   const { signEventTemplate } = useNDK();
+  const { serverInfo } = useServerInfo();
   const [fileEventData, setFileEventData] = useState(data);
   const [selectedThumbnail, setSelectedThumbnail] = useState<string | undefined>();
 
@@ -78,15 +80,15 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
     }
   }, [fileEventData]);
 
-  function extractProtocolAndDomain(url: string): string | null {
-    const regex = /^(https?:\/\/[^/]+)/;
+  function extractDomain(url: string): string | null {
+    const regex = /^(https?:\/\/)([^/]+)/;
     const match = url.match(regex);
-    return match ? match[0] : null;
+    return match ? match[2]?.toLocaleLowerCase() : null;
   }
 
   const publishSelectedThumbnailToAllOwnServers = async (): Promise<BlobDescriptor | undefined> => {
     // TODO investigate why mimetype is not set for reuploaded thumbnail (on mediaserver)
-    const servers = fileEventData.url.map(extractProtocolAndDomain);
+    const servers = fileEventData.url.map(extractDomain);
 
     // upload selected thumbnail to the same blossom servers as the video
     let uploadedThumbnails: BlobDescriptor[] = [];
@@ -94,7 +96,11 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
       uploadedThumbnails = (
         await Promise.all(
           servers.map(s => {
-            if (s && selectedThumbnail) return transferBlob(selectedThumbnail, s, signEventTemplate);
+            if (s && selectedThumbnail) {
+              console.log(s);
+              console.log(serverInfo);
+              return transferBlob(selectedThumbnail, serverInfo[s], signEventTemplate);
+            }
           })
         )
       ).filter(t => t !== undefined) as BlobDescriptor[];
@@ -211,45 +217,47 @@ const FileEventEditor = ({ data }: { data: FileEventData }) => {
             className="textarea textarea-primary"
             placeholder="Caption"
           ></textarea>
-
-          <span className="font-bold">Genre</span>
-          <div>
-            <select
-              className="select select-bordered select-primary w-full max-w-xs"
-              value={fileEventData.genre}
-              onChange={e => setFileEventData(ed => ({ ...ed, genre: e.target.value, subgenre: '' }))}
-            >
-              <option disabled>Select a genre</option>
-              {Object.keys(allGenres).map(g => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </select>
-            <select
-              className="select select-bordered select-primary w-full max-w-xs mt-2"
-              value={fileEventData.subgenre}
-              disabled={
-                fileEventData.genre == undefined ||
-                allGenres[fileEventData.genre] == undefined ||
-                allGenres[fileEventData.genre].length == 0
-              }
-              onChange={e => setFileEventData(ed => ({ ...ed, subgenre: e.target.value }))}
-            >
-              <option disabled value="">
-                Select a sub genre
-              </option>
-              {fileEventData.genre &&
-                allGenres[fileEventData.genre] &&
-                allGenres[fileEventData.genre].length > 0 &&
-                allGenres[fileEventData.genre].map(g => (
-                  <option key={g} value={g}>
-                    {g}
+          {isAudio && (
+            <>
+              <span className="font-bold">Genre</span>
+              <div>
+                <select
+                  className="select select-bordered select-primary w-full max-w-xs"
+                  value={fileEventData.genre}
+                  onChange={e => setFileEventData(ed => ({ ...ed, genre: e.target.value, subgenre: '' }))}
+                >
+                  <option disabled>Select a genre</option>
+                  {Object.keys(allGenres).map(g => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="select select-bordered select-primary w-full max-w-xs mt-2"
+                  value={fileEventData.subgenre}
+                  disabled={
+                    fileEventData.genre == undefined ||
+                    allGenres[fileEventData.genre] == undefined ||
+                    allGenres[fileEventData.genre].length == 0
+                  }
+                  onChange={e => setFileEventData(ed => ({ ...ed, subgenre: e.target.value }))}
+                >
+                  <option disabled value="">
+                    Select a sub genre
                   </option>
-                ))}
-            </select>
-          </div>
-
+                  {fileEventData.genre &&
+                    allGenres[fileEventData.genre] &&
+                    allGenres[fileEventData.genre].length > 0 &&
+                    allGenres[fileEventData.genre].map(g => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </>
+          )}
           <span className="font-bold">Tags</span>
           <TagInput
             tags={fileEventData.tags}

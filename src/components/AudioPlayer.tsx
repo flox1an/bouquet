@@ -140,7 +140,7 @@ const AudioPlayer: React.FC = () => {
               <img className="w-12 h-12" src={currentSong.id3.cover} alt={currentSong.id3.title} />
             </div>
             <div className="flex flex-col text-sm">
-              <div className="text-white">{currentSong.id3.title}</div>
+              <div className="text-accent">{currentSong.id3.title}</div>
               <div>{currentSong.id3.artist}</div>
             </div>
           </>

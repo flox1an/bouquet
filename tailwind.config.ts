@@ -5,7 +5,6 @@ export default {
     extend: {},
   },
   plugins: [require('daisyui')],
-
   daisyui: {
     themes: [
       {
@@ -13,7 +12,7 @@ export default {
           ...require('daisyui/src/theming/themes')['dark'],
           primary: '#be185d',
           secondary: '#2563eb',
-          accent: '#fb923c',
+          accent: '#ffffff',
           info: '#a5b4fc',
           success: '#6ee7b7',
           warning: '#facc15',
@@ -25,7 +24,7 @@ export default {
           ...require('daisyui/src/theming/themes')['cupcake'],
           primary: '#be185d',
           secondary: '#2563eb',
-          accent: '#fb923c',
+          accent: '#000000',
           neutral: '#e0e0e0',
           info: '#a5b4fc',
           success: '#6ee7b7',

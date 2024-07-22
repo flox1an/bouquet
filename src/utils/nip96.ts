@@ -1,6 +1,7 @@
 import { BlobDescriptor, EventTemplate, SignedEvent } from 'blossom-client-sdk';
 import { Server } from './useUserServers';
 import dayjs from 'dayjs';
+import axios, { AxiosProgressEvent } from 'axios';
 
 type MediaTransformation = 'resizing' | 'format_conversion' | 'compression' | 'metadata_stripping';
 
@@ -74,7 +75,6 @@ async function createNip98UploadAuthToken(
     ],
   };
   const signedEvent = await signEventTemplate(authEvent);
-  console.log(JSON.stringify(signedEvent));
   return btoa(JSON.stringify(signedEvent));
 }
 
@@ -82,18 +82,20 @@ const getValueByTag = (tags: string[][] | undefined, t: string) => tags && tags.
 
 export async function fetchNip96List(
   server: Server,
-  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
+  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
+  onProgress?: (progressEvent: AxiosProgressEvent) => void
 ) {
   const page = 0;
   const count = 100;
   const baseUrl = server.nip96?.api_url || server.url;
   const listUrl = `${baseUrl}?page=${page}&count=${count}`;
 
-  const response = await fetch(listUrl, {
+  const response = await axios.get(listUrl, {
     headers: { Authorization: `Nostr ${await createNip98UploadAuthToken(listUrl, 'GET', signEventTemplate)}` },
+    onDownloadProgress: onProgress,
   });
 
-  const list = (await response.json()) as Nip96ListResponse;
+  const list = response.data as Nip96ListResponse;
 
   return list.files.map(
     file =>
@@ -132,35 +134,36 @@ The server MUST link the user's pubkey string as the owner of the file so to lat
 
 no_transform can be used to replicate a file to multiple servers for redundancy, clients can use the server list to find alternative servers which might contain the same file. When uploading a file and requesting no_transform clients should check that the hash matches in the response in order to detect if the file was modified.
 */
+
 export async function uploadNip96File(
   server: Server,
   file: File,
   caption: string,
-  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
+  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
+  onProgress?: (progressEvent: AxiosProgressEvent) => void
 ): Promise<BlobDescriptor> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('caption', caption || ''); // RECOMMENDED TODO ADD
   //formData.append('expiration', server.expiration || '');
   formData.append('size', file.size.toString());
-  //formData.append('alt', server.alt || ''); // RECOMMENDED
+  formData.append('alt', caption || ''); // RECOMMENDED
   //formData.append('media_type',  // avatar / banner
   formData.append('content_type', file.type || '');
-  formData.append('no_transform', 'true');
+  formData.append('no_transform', 'true'); // we don't use any transform for blossom compatibility
 
   const baseUrl = server.nip96?.api_url || server.url;
 
-  const response = await fetch(baseUrl, {
-    method: 'POST',
+  const response = await axios.post(baseUrl, formData, {
     headers: { Authorization: `Nostr ${await createNip98UploadAuthToken(baseUrl, 'POST', signEventTemplate)}` },
-    body: formData,
+    onUploadProgress: onProgress,
   });
 
-  if (!response.ok) {
+  if (response.status >= 400) {
     throw new Error(`Failed to upload file: ${response.statusText}`);
   }
 
-  const result = (await response.json()) as Nip96UploadResult;
+  const result = response.data as Nip96UploadResult;
   console.log(result);
 
   const x = getValueByTag(result.nip94_event?.tags, 'x') || getValueByTag(result.nip94_event?.tags, 'ox');
@@ -217,19 +220,18 @@ export async function deleteNip96File(
 
   const auth = await createNip98UploadAuthToken(url, 'DELETE', signEventTemplate);
 
-  const response = await fetch(url, {
-    method: 'DELETE',
+  const response = await axios.delete(url, {
     headers: {
       ...headers,
       authorization: `Nostr ${auth}`,
     },
   });
 
-  if (!response.ok) {
+  if (response.status >= 400) {
     throw new Error(`Failed to delete file: ${response.statusText}`);
   }
 
-  const result = await response.json();
+  const result = response.data;
   if (result.status !== 'success') {
     throw new Error(`Failed to delete file: ${result.message}`);
   }

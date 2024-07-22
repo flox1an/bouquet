@@ -19,14 +19,14 @@ export const ResizeOptions: ResizeOptionType[] = [
     height: undefined,
   },
   {
-    name: 'max. 2048x2048 pixels',
-    width: 2048,
-    height: 2048,
-  },
-  {
     name: 'max. 1080x1080 pixels',
     width: 1080,
     height: 1080,
+  },
+  {
+    name: 'max. 2048x2048 pixels',
+    width: 2048,
+    height: 2048,
   },
 ];
 
@@ -170,7 +170,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
                   value={imageResize}
                 >
                   {ResizeOptions.map((ro, i) => (
-                    <option key={ro.name} disabled={i == 0}>
+                    <option key={ro.name} value={i} disabled={i == 0}>
                       {ro.name}
                     </option>
                   ))}

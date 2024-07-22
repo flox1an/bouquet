@@ -118,20 +118,22 @@ function Upload() {
 
         try {
           let newBlob: BlobDescriptor;
+          const progressHandler = (progressEvent: AxiosProgressEvent) => {
+            setTransfers(ut => ({
+              ...ut,
+              [server.name]: {
+                ...ut[server.name],
+                transferred: serverTransferred + progressEvent.loaded,
+                rate: progressEvent.rate || 0,
+              },
+            }));
+          };
           if (server.type == 'blossom') {
-            newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
-              setTransfers(ut => ({
-                ...ut,
-                [server.name]: {
-                  ...ut[server.name],
-                  transferred: serverTransferred + progressEvent.loaded,
-                  rate: progressEvent.rate || 0,
-                },
-              }));
-            });
+            newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressHandler);
           } else {
-            newBlob = await uploadNip96File(server, file, '', signEventTemplate);
+            newBlob = await uploadNip96File(server, file, '', signEventTemplate, progressHandler);
           }
+          console.log('newBlob', newBlob);
           serverTransferred += file.size;
           setTransfers(ut => ({
             ...ut,
