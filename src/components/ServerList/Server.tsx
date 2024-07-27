@@ -47,11 +47,13 @@ const Server = ({
       <div className="flex flex-col grow">
         <div className="server-name">
           {server.name}
-          <div
-            className={`badge ${selectedServer == server.name ? 'badge-primary' : 'badge-neutral'}  ml-2 align-middle`}
-          >
-            {server.type}
-          </div>
+          {!server.virtual && (
+            <div
+              className={`badge ${selectedServer == server.name ? 'badge-primary' : 'badge-neutral'}  ml-2 align-middle`}
+            >
+              {server.type}
+            </div>
+          )}
           {server.isLoading && <span className="ml-2 loading loading-spinner loading-sm"></span>}
         </div>
         {server.isError ? (

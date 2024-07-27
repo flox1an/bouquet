@@ -2,13 +2,9 @@ import { useState, useMemo } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import {
   ClipboardDocumentIcon,
-  DocumentIcon,
   ExclamationTriangleIcon,
-  FilmIcon,
   FolderIcon,
   FolderPlusIcon,
-  MusicalNoteIcon,
-  PhotoIcon,
   PlusIcon,
   TrashIcon,
   XMarkIcon,
@@ -24,6 +20,7 @@ import BlobListTypeMenu, { ListMode } from './BlobListTypeMenu';
 import useFileMetaEventsByHash from '../../utils/useFileMetaEvents';
 import './BlobList.css';
 import { useBlobSelection } from './useBlobSelection';
+import MimeTypeIcon from '../MimeTypeIcon';
 
 type BlobListProps = {
   blobs: BlobDescriptor[];
@@ -74,15 +71,6 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
       </span>
     </div>
   );
-
-  const getMimeTypeIcon = (type: string | undefined) => {
-    if (!type) return <DocumentIcon />;
-    if (type.startsWith('image/')) return <PhotoIcon />;
-    if (type.startsWith('video/')) return <FilmIcon />;
-    if (type.startsWith('audio/')) return <MusicalNoteIcon />;
-    if (type === 'application/pdf') return <DocumentIcon />;
-    return <DocumentIcon />;
-  };
 
   const Badges = ({ blob }: { blob: BlobDescriptor }) => {
     const events = fileMetaEventsByHash[blob.sha256];
@@ -208,7 +196,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                       onChange={e => handleSelectBlob(blob.sha256, e)}
                       onClick={e => e.stopPropagation()}
                     />
-                    {getMimeTypeIcon(blob.type)}
+                    <MimeTypeIcon type={blob.type} />
                   </td>
                   <td className="whitespace-nowrap">
                     <a className="link link-primary" href={blob.url} target="_blank">

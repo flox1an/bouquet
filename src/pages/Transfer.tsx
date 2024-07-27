@@ -51,7 +51,7 @@ export const Transfer = () => {
     setTransferTarget(undefined);
     setTransferLog({});
     setStarted(false);
-    navigate('/');
+    navigate('/browse');
   };
 
   const transferJobs = useMemo(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -13,6 +13,12 @@ import { getBlurhashAndSizeFromFile } from '../utils/blur';
 import UploadFileSelection, { ResizeOptions, TransferStats } from '../components/UploadFileSelection';
 import UploadProgress from '../components/UploadProgress';
 import { uploadNip96File } from '../utils/nip96';
+import { extractDomain } from '../utils/utils';
+import { transferBlob } from '../utils/transfer';
+import { usePublishing } from '../components/FileEventEditor/usePublishing';
+import { useNavigate } from 'react-router-dom';
+import BlobList from '../components/BlobList/BlobList';
+import { NostrEvent } from '@nostr-dev-kit/ndk';
 
 function Upload() {
   const servers = useUserServers();
@@ -27,6 +33,8 @@ function Upload() {
   const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
   const [imageResize, setImageResize] = useState(0);
   const [uploadStep, setUploadStep] = useState(0);
+  const { publishFileEvent, publishAudioEvent, publishVideoEvent } = usePublishing();
+  const navigate = useNavigate();
 
   async function getListOfFilesToUpload() {
     const filesToUpload: File[] = [];
@@ -58,6 +66,14 @@ function Upload() {
         url: [] as string[],
         originalFile: file,
         tags: [] as string[],
+        size: file.size,
+        m: file.type,
+        publish: {
+          file: true,
+          audio: file.type.startsWith('audio/') ? true : undefined,
+          video: file.type.startsWith('video/') ? true : undefined,
+        },
+        events: [] as NostrEvent[],
       } as FileEventData;
       if (file.type.startsWith('image/')) {
         const imageInfo = await getBlurhashAndSizeFromFile(file);
@@ -228,6 +244,97 @@ function Upload() {
     }
   }, [servers, transfersInitialized]);
 
+  const publishSelectedThumbnailToAllOwnServers = async (
+    fileEventData: FileEventData
+  ): Promise<BlobDescriptor | undefined> => {
+    // TODO investigate why mimetype is not set for reuploaded thumbnail (on mediaserver)
+    const servers = fileEventData.url.map(u => extractDomain(u));
+
+    // upload selected thumbnail to the same blossom servers as the video
+    let uploadedThumbnails: BlobDescriptor[] = [];
+    if (fileEventData.selectedThumbnail) {
+      uploadedThumbnails = (
+        await Promise.all(
+          servers.map(s => {
+            if (s && fileEventData.selectedThumbnail) {
+              console.log(s);
+              console.log(serverInfo);
+              return transferBlob(fileEventData.selectedThumbnail, serverInfo[s], signEventTemplate);
+            }
+          })
+        )
+      ).filter(t => t !== undefined) as BlobDescriptor[];
+
+      return uploadedThumbnails.length > 0 ? uploadedThumbnails[0] : undefined; // TODO do we need multiple thumbsnails?? or server URLs?
+    }
+  };
+
+  const publishAll = async () => {
+    setUploadStep(3);
+    const publishedEvents: FileEventData[] = [];
+    fileEventsToPublish.forEach(async fe => {
+      if (fe.publish.file) {
+        const publishedEvent = await publishFileEvent(fe);
+        publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+      }
+      if (fe.publish.audio) {
+        if (!fe.publishedThumbnail) {
+          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
+          if (selfHostedThumbnail) {
+            const newData: FileEventData = {
+              ...fe,
+              publishedThumbnail: selfHostedThumbnail.url,
+              thumbnails: [selfHostedThumbnail.url],
+            };
+            const publishedEvent = await publishAudioEvent(newData);
+            publishedEvents.push({ ...newData, events: [...newData.events, publishedEvent] });
+          } else {
+            // self hosting failed
+            console.log('self hosting failed');
+            const publishedEvent = await publishAudioEvent(fe);
+            publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+          }
+        } else {
+          // data thumbnail already defined
+          console.log('data thumbnail already defined');
+          const publishedEvent = await publishAudioEvent(fe);
+          publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+        }
+      }
+      if (fe.publish.video) {
+        if (!fe.publishedThumbnail) {
+          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
+          if (selfHostedThumbnail) {
+            const newData: FileEventData = {
+              ...fe,
+              publishedThumbnail: selfHostedThumbnail.url,
+              thumbnails: [selfHostedThumbnail.url],
+            };
+            publishedEvents.push(newData);
+            const publishedEvent = await publishVideoEvent(newData);
+            publishedEvents.push({ ...newData, events: [...newData.events, publishedEvent] });
+          } else {
+            // self hosting failed
+            console.log('self hosting failed');
+            const publishedEvent = await publishVideoEvent(fe);
+            publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+          }
+        } else {
+          // data thumbnail already defined
+          console.log('data thumbnail already defined');
+          const publishedEvent = await publishVideoEvent(fe);
+          publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+        }
+      }
+    });
+    setFileEventsToPublish(publishedEvents);
+  };
+
+  const publishCount = useMemo(
+    () => fileEventsToPublish.filter(fe => fe.publish.file || fe.publish.audio || fe.publish.video).length,
+    [fileEventsToPublish]
+  );
+
   return (
     <>
       <ul className="steps p-8">
@@ -258,12 +365,54 @@ function Upload() {
           {uploadStep == 1 && <UploadProgress servers={servers} transfers={transfers} />}
         </div>
       )}
-      {fileEventsToPublish.length > 0 && (
+      {uploadStep == 2 && fileEventsToPublish.length > 0 && (
         <>
           <h2 className="py-4">Publish events</h2>
-          {fileEventsToPublish.map(fe => (
-            <FileEventEditor key={fe.x} data={fe} />
-          ))}
+          <div className="flex flex-col gap-4">
+            {fileEventsToPublish.map(fe => (
+              <FileEventEditor
+                key={fe.x}
+                fileEventData={fe}
+                setFileEventData={updatedFe =>
+                  setFileEventsToPublish(prev => prev.map(f => (f.x === fe.x ? updatedFe : f)) as FileEventData[])
+                }
+              />
+            ))}
+          </div>
+          <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex mt-4 flex-row justify-center">
+            <button
+              className={`btn ${publishCount === 0 ? 'btn-primary' : 'btn-neutral'} w-40`}
+              onClick={() => {
+                navigate('/browse');
+              }}
+            >
+              Skip publishing
+            </button>
+            {publishCount > 0 && (
+              <button className="btn btn-primary w-40" onClick={() => publishAll()}>
+                Publish ({publishCount} event{publishCount > 1 ? 's' : ''})
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      {uploadStep == 3 && (
+        <>
+          <div>Published events</div>
+          <div className="flex flex-col gap-4">
+            {fileEventsToPublish.map(fe =>
+              fe.events.map(ev => <div className=" pre">{JSON.stringify(ev, null, 2)}</div>)
+            )}
+            <BlobList
+              blobs={fileEventsToPublish.map(fe => ({
+                url: fe.url[0],
+                type: fe.m,
+                sha256: fe.x,
+                size: fe.size,
+                uploaded: 0,
+              }))}
+            ></BlobList>
+          </div>
         </>
       )}
     </>

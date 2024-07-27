@@ -53,7 +53,10 @@ export const uploadBlossomBlob = async (
   return res.data;
 };
 
-export const downloadBlossomBlob = async (url: string, onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void) => {
+export const downloadBlossomBlob = async (
+  url: string,
+  onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void
+) => {
   const response = await axios.get(url, {
     responseType: 'blob',
     onDownloadProgress,

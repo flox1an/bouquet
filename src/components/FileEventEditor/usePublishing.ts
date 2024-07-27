@@ -8,7 +8,7 @@ import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL 
 export const usePublishing = () => {
   const { ndk, user } = useNDK();
 
-  const publishFileEvent = async (data: FileEventData): Promise<string> => {
+  const publishFileEvent = async (data: FileEventData): Promise<NostrEvent> => {
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: data.content,
@@ -45,11 +45,11 @@ export const usePublishing = () => {
     const ev = new NDKEvent(ndk, e);
     await ev.sign();
     console.log(ev.rawEvent());
-    // await ev.publish();
-    return JSON.stringify(ev.rawEvent(), null, 2);
+    //await ev.publish();
+    return ev.rawEvent();
   };
 
-  const publishAudioEvent = async (data: FileEventData): Promise<string> => {
+  const publishAudioEvent = async (data: FileEventData): Promise<NostrEvent> => {
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: `${data.artist} - ${data.title}`,
@@ -88,16 +88,16 @@ export const usePublishing = () => {
       }
     }
 
-    // published_at
+    e.tags.push(['published_at', `${dayjs().unix()}`]);
 
     const ev = new NDKEvent(ndk, e);
     await ev.sign();
     console.log(ev.rawEvent());
-    // await ev.publish();
-    return JSON.stringify(ev.rawEvent(), null, 2);
+    //await ev.publish();
+    return ev.rawEvent();
   };
 
-  const publishVideoEvent = async (data: FileEventData): Promise<string> => {
+  const publishVideoEvent = async (data: FileEventData): Promise<NostrEvent> => {
     const videoIsHorizontal = data.width == undefined || data.height == undefined || data.width > data.height;
 
     const e: NostrEvent = {
@@ -138,8 +138,8 @@ export const usePublishing = () => {
     const ev = new NDKEvent(ndk, e);
     await ev.sign();
     console.log(ev.rawEvent());
-    // await ev.publish();
-    return JSON.stringify(ev.rawEvent(), null, 2);
+    //await ev.publish();
+    return ev.rawEvent();
   };
 
   return {

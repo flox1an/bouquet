@@ -1,13 +1,13 @@
 .server-list {
-  @apply flex flex-col gap-4;
+  @apply flex flex-col gap-2;
 }
 
 .server {
-  @apply bg-base-200 text-neutral-content rounded-lg p-4 gap-4 w-full flex flex-row items-center;
+  @apply bg-base-200 text-neutral-content rounded-lg p-3 gap-4 w-full flex flex-row items-center;
 }
 
 .server-name {
-  @apply text-2xl mb-2 text-neutral-content;
+  @apply text-xl mb-2 text-accent;
 }
 
 .server.selected {
@@ -19,7 +19,7 @@
 }
 
 .server-stats {
-  @apply grid gap-x-8 gap-y-4 grid-cols-2 md:grid-cols-[4em_6em_8em_auto];
+  @apply grid gap-x-2 gap-y-2 md:gap-x-8 md:gap-y-4 grid-cols-2 md:grid-cols-[4em_6em_8em_auto];
 }
 
 .server-stat svg {
@@ -32,11 +32,11 @@
 
 .server-icon svg,
 .server-actions svg {
-  @apply w-10;
+  @apply w-8;
 }
 
 .server-actions {
-  @apply flex flex-row gap-4 hidden md:flex;
+  @apply flex flex-row gap-2 hidden md:flex;
 }
 
 .server-actions a {

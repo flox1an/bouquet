@@ -26,7 +26,7 @@ export const Layout = () => {
       >
         <ArrowUpOnSquareIcon /> Upload
       </button>
-      <button className={`btn ${location.pathname == '/' ? 'btn-neutral' : ''} `} onClick={() => navigate('/')}>
+      <button className={`btn ${location.pathname == '/' ? 'btn-neutral' : ''} `} onClick={() => navigate('/browse')}>
         <MagnifyingGlassIcon /> Browse
       </button>
       <button
@@ -60,7 +60,7 @@ export const Layout = () => {
             </div>
           </div>
           <button className="btn btn-ghost text-xl">
-            <a className="logo" onClick={() => navigate('/')}>
+            <a className="logo" onClick={() => navigate('/browse')}>
               <img className="w-8" src="/bouquet.png" />{' '}
             </a>
             <span>bouquet</span>

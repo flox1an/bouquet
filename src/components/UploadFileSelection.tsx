@@ -1,4 +1,4 @@
-import { ArrowUpOnSquareIcon, ServerIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowUpOnSquareIcon, ExclamationTriangleIcon, ServerIcon, TrashIcon } from '@heroicons/react/24/outline';
 import React, { ChangeEvent, DragEvent, useMemo, useRef } from 'react';
 import CheckBox from './CheckBox/CheckBox';
 import { Server } from '../utils/useUserServers';
@@ -121,7 +121,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
       </label>
 
       <div className="cursor-pointer gap-2 flex flex-row">
-        <div className="flex flex-col gap-4 w-1/2">
+        <div className="flex flex-col gap-4 w-1/2 pl-4">
           <h3 className="text-lg text-neutral-content">Servers</h3>
           <div className="grid gap-2" style={{ gridTemplateColumns: '2em auto' }}>
             {servers.map(s => (
@@ -138,6 +138,12 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
               </CheckBox>
             ))}
           </div>
+          {Object.values(transfers).filter(t => t.enabled).length <= 1 && (
+            <div className="alert alert-neutral text-sm pl-0">
+              <ExclamationTriangleIcon className="w-6 text-warning" /> It's recommended to upload to multiple servers to
+              ensure availability and censorship resistance.
+            </div>
+          )}
         </div>
         {imagesAreUploaded && (
           <div className="flex flex-col gap-4 w-1/2">
