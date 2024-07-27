@@ -19,6 +19,7 @@ import { usePublishing } from '../components/FileEventEditor/usePublishing';
 import { useNavigate } from 'react-router-dom';
 import BlobList from '../components/BlobList/BlobList';
 import { NostrEvent } from '@nostr-dev-kit/ndk';
+import UploadPublished from '../components/UploadPublished';
 
 function Upload() {
   const servers = useUserServers();
@@ -270,7 +271,6 @@ function Upload() {
   };
 
   const publishAll = async () => {
-    setUploadStep(3);
     const publishedEvents: FileEventData[] = [];
     fileEventsToPublish.forEach(async fe => {
       if (fe.publish.file) {
@@ -328,6 +328,7 @@ function Upload() {
       }
     });
     setFileEventsToPublish(publishedEvents);
+    setUploadStep(3);
   };
 
   const publishCount = useMemo(
@@ -396,25 +397,7 @@ function Upload() {
           </div>
         </>
       )}
-      {uploadStep == 3 && (
-        <>
-          <div>Published events</div>
-          <div className="flex flex-col gap-4">
-            {fileEventsToPublish.map(fe =>
-              fe.events.map(ev => <div className=" pre">{JSON.stringify(ev, null, 2)}</div>)
-            )}
-            <BlobList
-              blobs={fileEventsToPublish.map(fe => ({
-                url: fe.url[0],
-                type: fe.m,
-                sha256: fe.x,
-                size: fe.size,
-                uploaded: 0,
-              }))}
-            ></BlobList>
-          </div>
-        </>
-      )}
+      {uploadStep == 3 && <UploadPublished fileEventsToPublish={fileEventsToPublish} />}
     </>
   );
 }

@@ -99,7 +99,8 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
 
   const sizeOfFilesToUpload = useMemo(() => files.reduce((acc, file) => (acc += file.size), 0), [files]);
   const imagesAreUploaded = useMemo(() => files.some(file => file.type.startsWith('image/')), [files]);
-
+  const serversEnabledCount = useMemo(() => Object.values(transfers).filter(t => t.enabled).length, [transfers]);
+  
   return (
     <>
       <input
@@ -138,7 +139,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
               </CheckBox>
             ))}
           </div>
-          {Object.values(transfers).filter(t => t.enabled).length <= 1 && (
+          {serversEnabledCount == 1 && (
             <div className="alert alert-neutral text-sm pl-0">
               <ExclamationTriangleIcon className="w-6 text-warning" /> It's recommended to upload to multiple servers to
               ensure availability and censorship resistance.
@@ -188,13 +189,13 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
       </div>
 
       <div className="flex flex-row gap-2">
-        <button className="btn btn-primary" onClick={() => upload()} disabled={uploadBusy || files.length == 0}>
+        <button className="btn btn-primary" onClick={() => upload()} disabled={serversEnabledCount < 1 || uploadBusy || files.length == 0}>
           Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
           {formatFileSize(sizeOfFilesToUpload)}
         </button>
         <button
           className="btn  btn-secondary  "
-          disabled={uploadBusy || files.length == 0}
+          disabled={ uploadBusy || files.length == 0}
           onClick={() => {
             clearTransfers();
             setFiles([]);
