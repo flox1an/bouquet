@@ -5,6 +5,7 @@ import {
   CubeIcon,
   DocumentDuplicateIcon,
   ExclamationTriangleIcon,
+  InformationCircleIcon,
   ServerIcon,
   ShieldExclamationIcon,
   XMarkIcon,
@@ -71,15 +72,22 @@ const Server = ({
             <div className="server-stat tooltip text-left" data-tip="Date of last change">
               <ClockIcon /> {formatDate(server.lastChange)}
             </div>
+            {server.message && (
+              <div className="server-stat">
+                <InformationCircleIcon className="w-4 mr-2 text-info" />
+                {server.message}
+              </div>
+            )}
             {server.count > 0 && !server.virtual && (
               <div className="server-stat">
                 {blobsOnlyOnThisServer > 0 ? (
-                  <div>
-                    <ExclamationTriangleIcon /> {blobsOnlyOnThisServer} objects only available here
+                  <div className="flex flex-row gap-2 items-center">
+                    <ExclamationTriangleIcon className="w-4 text-warning" /> {blobsOnlyOnThisServer} objects only
+                    available here
                   </div>
                 ) : (
-                  <div>
-                    <CheckBadgeIcon /> all objects distributed.
+                  <div className="flex flex-row gap-2 items-center">
+                    <CheckBadgeIcon className="w-4 text-success" /> all objects distributed.
                   </div>
                 )}
               </div>

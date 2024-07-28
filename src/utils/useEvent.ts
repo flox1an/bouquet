@@ -23,7 +23,7 @@ export default function useEvent(filter: NDKFilter, opts?: SubscriptionOptions, 
   const query: UseQueryResult<NDKEvent, any> = useQuery({
     queryKey: ['use-event', id],
     queryFn: () => {
-      const relaySet = relays?.length ?? 0 > 0 ? NDKRelaySet.fromRelayUrls(relays as string[], ndk) : undefined;
+      const relaySet = (relays?.length ?? 0 > 0) ? NDKRelaySet.fromRelayUrls(relays as string[], ndk) : undefined;
       return ndk.fetchEvent(
         filter,
         {

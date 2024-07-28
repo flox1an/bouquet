@@ -1,6 +1,17 @@
-import * as id3 from 'id3js';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { ID3TagV2 } from 'id3js/lib/id3Tag';
+import { fromFile } from '@catamphetamine/id3js/browser';
+
+type ID3TagV2 = {
+  kind: 'v2';
+  images: ImageValue[];
+};
+
+export interface ImageValue {
+  type: null | string;
+  mime: null | string;
+  description: null | string;
+  data: null | ArrayBuffer;
+}
 
 export type AudioBlob = BlobDescriptor & { id3?: ID3Tag };
 
@@ -153,7 +164,7 @@ export const fetchId3Tag = async (
     file = arrayBufferToFile(buffer, `${blobHash}.mp3`, 'audio/mpeg');
   }
 
-  const id3Tag = await id3.fromFile(file).catch(e => console.warn(e));
+  const id3Tag = await fromFile(file).catch(e => console.warn(e));
   let imageBlobUrl: string | undefined;
 
   if (id3Tag) {
@@ -165,8 +176,8 @@ export const fetchId3Tag = async (
     };
 
     if (id3Tag.kind == 'v2') {
-      const id3v2 = id3Tag as ID3TagV2;
-      if (id3v2.images[0].data) {
+      const id3v2 = id3Tag as unknown as ID3TagV2;
+      if (id3v2.images && id3v2.images.length > 0 && id3v2.images[0].data) {
         const blob = new Blob([id3v2.images[0].data], { type: 'image/jpeg' });
         imageBlobUrl = URL.createObjectURL(blob);
         tagResult.cover = await resizeImage(imageBlobUrl, 128, 128);

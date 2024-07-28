@@ -17,9 +17,9 @@ import { extractDomain } from '../utils/utils';
 import { transferBlob } from '../utils/transfer';
 import { usePublishing } from '../components/FileEventEditor/usePublishing';
 import { useNavigate } from 'react-router-dom';
-import BlobList from '../components/BlobList/BlobList';
 import { NostrEvent } from '@nostr-dev-kit/ndk';
 import UploadPublished from '../components/UploadPublished';
+import { InformationCircleIcon } from '@heroicons/react/24/outline';
 
 function Upload() {
   const servers = useUserServers();
@@ -163,7 +163,7 @@ function Upload() {
             url: primary
               ? [newBlob.url, ...fileDimensions[file.name].url]
               : [...fileDimensions[file.name].url, newBlob.url],
-            size: newBlob.size,
+            size: newBlob.size || fileDimensions[file.name].size, // fallback for nip96 servers that don't return size
             m: newBlob.type,
           };
         } catch (e) {
@@ -271,11 +271,14 @@ function Upload() {
   };
 
   const publishAll = async () => {
-    const publishedEvents: FileEventData[] = [];
+    //const publishedEvents: FileEventData[] = [];
     fileEventsToPublish.forEach(async fe => {
       if (fe.publish.file) {
         const publishedEvent = await publishFileEvent(fe);
-        publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+        //publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+        setFileEventsToPublish(prev =>
+          prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+        );
       }
       if (fe.publish.audio) {
         if (!fe.publishedThumbnail) {
@@ -287,54 +290,83 @@ function Upload() {
               thumbnails: [selfHostedThumbnail.url],
             };
             const publishedEvent = await publishAudioEvent(newData);
-            publishedEvents.push({ ...newData, events: [...newData.events, publishedEvent] });
+            //publishedEvents.push({ ...newData, events: [...newData.events, publishedEvent] });
+            setFileEventsToPublish(prev =>
+              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+            );
           } else {
             // self hosting failed
             console.log('self hosting failed');
             const publishedEvent = await publishAudioEvent(fe);
-            publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+            //publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+            setFileEventsToPublish(prev =>
+              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+            );
           }
         } else {
           // data thumbnail already defined
           console.log('data thumbnail already defined');
           const publishedEvent = await publishAudioEvent(fe);
-          publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+          //publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+          setFileEventsToPublish(prev =>
+            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+          );
         }
       }
       if (fe.publish.video) {
         if (!fe.publishedThumbnail) {
           const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
           if (selfHostedThumbnail) {
-            const newData: FileEventData = {
-              ...fe,
+            const newData: Partial<FileEventData> = {
               publishedThumbnail: selfHostedThumbnail.url,
               thumbnails: [selfHostedThumbnail.url],
-            };
+            }; /*
             publishedEvents.push(newData);
             const publishedEvent = await publishVideoEvent(newData);
-            publishedEvents.push({ ...newData, events: [...newData.events, publishedEvent] });
+            publishedEvents.push({ ...newData, events: [...newData.events, publishedEvent] });*/
+            const publishedEvent = await publishVideoEvent({ ...fe, ...newData });
+            setFileEventsToPublish(prev =>
+              prev.map(f =>
+                f.x === fe.x
+                  ? {
+                      ...f,
+                      ...newData,
+                      events: [...f.events, publishedEvent],
+                    }
+                  : f
+              )
+            );
           } else {
             // self hosting failed
             console.log('self hosting failed');
             const publishedEvent = await publishVideoEvent(fe);
-            publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+            //publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+            setFileEventsToPublish(prev =>
+              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+            );
           }
         } else {
           // data thumbnail already defined
           console.log('data thumbnail already defined');
           const publishedEvent = await publishVideoEvent(fe);
-          publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+          //publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
+          setFileEventsToPublish(prev =>
+            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+          );
         }
       }
     });
-    setFileEventsToPublish(publishedEvents);
+    //setFileEventsToPublish(publishedEvents);
     setUploadStep(3);
   };
 
-  const publishCount = useMemo(
-    () => fileEventsToPublish.filter(fe => fe.publish.file || fe.publish.audio || fe.publish.video).length,
-    [fileEventsToPublish]
-  );
+  const audioCount = useMemo(() => fileEventsToPublish.filter(fe => fe.publish.audio).length, [fileEventsToPublish]);
+
+  const publishCount = useMemo(() => {
+    const fileCount = fileEventsToPublish.filter(fe => fe.publish.file).length;
+    const videoCount = fileEventsToPublish.filter(fe => fe.publish.video).length;
+    return fileCount + audioCount + videoCount;
+  }, [fileEventsToPublish, audioCount]);
 
   return (
     <>
@@ -367,8 +399,8 @@ function Upload() {
         </div>
       )}
       {uploadStep == 2 && fileEventsToPublish.length > 0 && (
-        <>
-          <h2 className="py-4">Publish events</h2>
+        <div className="gap-4 flex flex-col">
+          <h2 className="">Publish events</h2>
           <div className="flex flex-col gap-4">
             {fileEventsToPublish.map(fe => (
               <FileEventEditor
@@ -380,7 +412,16 @@ function Upload() {
               />
             ))}
           </div>
-          <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex mt-4 flex-row justify-center">
+          {audioCount > 0 && (
+            <div className="text-sm text-neutral-content flex flex-row gap-2 items-center pl-4">
+              <InformationCircleIcon className="w-6 h-6 text-info" />
+              Audio events are not widely supported yet. Currently they are only used by{' '}
+              <a className="link link-primary" href="https://stemstr.app/" target="_blank">
+                stemstr.app
+              </a>
+            </div>
+          )}
+          <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-row justify-center">
             <button
               className={`btn ${publishCount === 0 ? 'btn-primary' : 'btn-neutral'} w-40`}
               onClick={() => {
@@ -395,7 +436,7 @@ function Upload() {
               </button>
             )}
           </div>
-        </>
+        </div>
       )}
       {uploadStep == 3 && <UploadPublished fileEventsToPublish={fileEventsToPublish} />}
     </>

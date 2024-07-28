@@ -13,6 +13,7 @@ export type Server = {
   type: ServerType;
   name: string;
   url: string;
+  message?: string;
   nip96?: Nip96ServerConfig;
 };
 
@@ -58,6 +59,12 @@ export const useUserServers = (): Server[] => {
         url: 'https://nostrcheck.me',
         name: 'nostrcheck.me',
         type: 'nip96' as ServerType,
+      },
+      {
+        url: 'https://nostr.build',
+        name: 'nostr.build',
+        type: 'nip96' as ServerType,
+        message: 'nostr.build does currently not support listing files',
       },
     ];
   }, [nip96ServerListEvent]);

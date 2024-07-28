@@ -52,6 +52,9 @@ export const useServerInfo = () => {
     queries: servers.map(server => ({
       queryKey: ['blobs', server.name],
       queryFn: async () => {
+        if (server.name == 'nostr.build') {
+          return []; // nostr.build does not support list atm
+        }
         if (server.type === 'blossom') {
           return fetchBlossomList(server.url, pubkey!, signEventTemplate);
         } else if (server.type === 'nip96') {

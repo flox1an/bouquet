@@ -70,7 +70,7 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
   return (
     data && (
       <div className="flex flex-row gap-4 items-center">
-        <div className="w-16">
+        <div className="w-16 min-w-16">
           <img
             width={128}
             height={128}
@@ -86,16 +86,14 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
               {data.artist} {data.album ? `(${data.album})` : ''}
             </div>
           )}
-          <div className="text-xs text-neutral-content w-1/2 overflow-x-auto break-all font-mono">
-            {JSON.stringify(data, null, 2)} 
-          </div> 
+          <div className="text-xs bg-base-300 p-4 rounded-xl text-neutral-content overflow-x-auto whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
+            {JSON.stringify(event, null, 2)}
+          </div>
         </div>
         <div className="w-24">
-          
-
           <a className="link link-primary flex flex-row gap-2" target="_blank" href={`https://njump.me/${data.nevent}`}>
             <LinkIcon className="w-6 h-6 flex-grow" />
-            <div className="badge badge-primary">{data.type}</div> 
+            <div className="badge badge-primary">{data.type}</div>
           </a>
         </div>
       </div>
@@ -107,14 +105,11 @@ const UploadPublished: React.FC<{ fileEventsToPublish: FileEventData[] }> = ({ f
   const navigate = useNavigate();
 
   const allEvents = useMemo(() => fileEventsToPublish.flatMap(fe => fe.events), [fileEventsToPublish]);
-  console.log(fileEventsToPublish);
 
   return (
     <div className="flex flex-col gap-4 ">
       <h2 className="text-2xl font-bold">Published events</h2>
-      <div className='alert alert-warning'>
-        Events are not published yet. Still under development.
-      </div>
+      <div className="alert alert-warning">Events are not published yet. Still under development.</div>
       <div className="flex flex-col gap-4 w-full bg-base-200 rounded-xl p-4 ">
         {allEvents.map(event => (
           <FileEvent event={event} />
