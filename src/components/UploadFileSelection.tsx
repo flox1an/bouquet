@@ -121,8 +121,8 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
         <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
       </label>
 
-      <div className="cursor-pointer gap-2 flex flex-row">
-        <div className="flex flex-col gap-4 w-1/2 pl-4">
+      <div className="cursor-pointer gap-4 flex flex-col md:flex-row">
+        <div className="flex flex-col gap-4 w-full md:w-1/2">
           <h3 className="text-lg text-neutral-content">Servers</h3>
           <div className="grid gap-2" style={{ gridTemplateColumns: '2em auto' }}>
             {servers.map(s => (
@@ -139,15 +139,9 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
               </CheckBox>
             ))}
           </div>
-          {serversEnabledCount == 1 && (
-            <div className="alert alert-neutral text-sm pl-0">
-              <ExclamationTriangleIcon className="w-6 text-warning" /> It's recommended to upload to multiple servers to
-              ensure availability and censorship resistance.
-            </div>
-          )}
         </div>
         {imagesAreUploaded && (
-          <div className="flex flex-col gap-4 w-1/2">
+          <div className="flex flex-col gap-4 w-full md:w-1/2">
             <h3 className="text-lg text-neutral-content">Image Options</h3>
             <div className="cursor-pointer grid gap-2 items-center" style={{ gridTemplateColumns: '1.5em auto' }}>
               <CheckBox
@@ -187,8 +181,13 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
           </div>
         )}
       </div>
-
-      <div className="flex flex-row gap-2">
+      {serversEnabledCount == 1 && (
+        <div className="text-sm flex flex-row gap-2 items-center">
+          <ExclamationTriangleIcon className="w-6 min-w-6 text-warning" />
+          <span>It's recommended to upload to multiple servers to ensure availability and censorship resistance.</span>
+        </div>
+      )}
+      <div className="flex flex-row gap-2 justify-center md:justify-start">
         <button
           className="btn btn-primary"
           onClick={() => upload()}

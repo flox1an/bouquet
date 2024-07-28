@@ -2,7 +2,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useNDK } from '../../utils/ndk';
 import './Layout.css';
 import { ArrowUpOnSquareIcon, MagnifyingGlassIcon, ServerStackIcon } from '@heroicons/react/24/outline';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import ThemeSwitcher from '../ThemeSwitcher';
 import AudioPlayer from '../AudioPlayer';
 import BottomNavbar from '../BottomNavBar/BottomNavBar';
@@ -13,6 +13,7 @@ export const Layout = () => {
   const location = useLocation();
   const { loginWithExtension, user } = useNDK();
   const { state } = useGlobalContext();
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   useEffect(() => {
     if (!user) loginWithExtension();
@@ -26,7 +27,10 @@ export const Layout = () => {
       >
         <ArrowUpOnSquareIcon /> Upload
       </button>
-      <button className={`btn ${location.pathname == '/' ? 'btn-neutral' : ''} `} onClick={() => navigate('/browse')}>
+      <button
+        className={`btn ${location.pathname == '/browse' ? 'btn-neutral' : ''} `}
+        onClick={() => navigate('/browse')}
+      >
         <MagnifyingGlassIcon /> Browse
       </button>
       <button
@@ -44,7 +48,7 @@ export const Layout = () => {
         <div className="navbar-start">
           <div className="flex-none md:hidden">
             <div className="dropdown dropdown-bottom">
-              <button className="btn btn-square btn-ghost">
+              <button className="btn btn-square btn-ghost" onClick={() => setShowMobileMenu(!showMobileMenu)}>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -53,10 +57,7 @@ export const Layout = () => {
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path>
                 </svg>
-              </button>{' '}
-              <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow  bg-base-100 rounded-box w-[11em]">
-                {navItems}
-              </ul>
+              </button>
             </div>
           </div>
           <button className="btn btn-ghost text-xl">
@@ -76,7 +77,11 @@ export const Layout = () => {
           </div>
         </div>
       </div>
-
+      {showMobileMenu && (
+        <div className="navbar bg-base-300">
+          <div className="navbar-center gap-2">{navItems}</div>
+        </div>
+      )}
       <div className="content">{<Outlet />}</div>
       {state.currentSong && (
         <BottomNavbar>
@@ -84,9 +89,19 @@ export const Layout = () => {
         </BottomNavbar>
       )}
       <div className="footer">
-        <span className="whitespace-nowrap block">
-          made with 💜 by{' '}
-          <a href="https://njump.me/npub1klr0dy2ul2dx9llk58czvpx73rprcmrvd5dc7ck8esg8f8es06qs427gxc">florian</a>
+        <span className="flex flex-row gap-1 items-center">
+          made with <span>💜</span>by
+          <a
+            href="https://njump.me/npub1klr0dy2ul2dx9llk58czvpx73rprcmrvd5dc7ck8esg8f8es06qs427gxc"
+            className="flex flex-row gap-1 items-center"
+          >
+            <div className="avatar">
+              <div className="w-8 rounded-full">
+                <img src="https://image.nostr.build/0ebb55ed4d269015f2c6fb7119e8ff8686110cad690443894b31287866758a5e.jpg" />
+              </div>
+            </div>
+            Florian
+          </a>
         </span>
       </div>
     </div>

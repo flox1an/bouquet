@@ -370,10 +370,10 @@ function Upload() {
 
   return (
     <>
-      <ul className="steps p-8">
-        <li className={`step ${uploadStep >= 0 ? 'step-primary' : ''}`}>Choose files to upload</li>
-        <li className={`step ${uploadStep >= 1 ? 'step-primary' : ''}`}>Upload progress</li>
-        <li className={`step ${uploadStep >= 2 ? 'step-primary' : ''}`}>Extend Metadata</li>
+      <ul className="steps pt-8 pb-4 md:p-8">
+        <li className={`step ${uploadStep >= 0 ? 'step-primary' : ''}`}>Choose files</li>
+        <li className={`step ${uploadStep >= 1 ? 'step-primary' : ''}`}>Upload</li>
+        <li className={`step ${uploadStep >= 2 ? 'step-primary' : ''}`}>Add metadata</li>
         <li className={`step ${uploadStep >= 3 ? 'step-primary' : ''}`}>Publish to NOSTR</li>
       </ul>
       {uploadStep <= 1 && (
