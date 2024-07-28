@@ -369,7 +369,7 @@ function Upload() {
   }, [fileEventsToPublish, audioCount]);
 
   return (
-    <>
+    <div className="flex flex-col mx-auto max-w-[80em] w-full">
       <ul className="steps pt-8 pb-4 md:p-8">
         <li className={`step ${uploadStep >= 0 ? 'step-primary' : ''}`}>Choose files</li>
         <li className={`step ${uploadStep >= 1 ? 'step-primary' : ''}`}>Upload</li>
@@ -439,7 +439,7 @@ function Upload() {
         </div>
       )}
       {uploadStep == 3 && <UploadPublished fileEventsToPublish={fileEventsToPublish} />}
-    </>
+    </div>
   );
 }
 

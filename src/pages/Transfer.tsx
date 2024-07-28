@@ -163,7 +163,7 @@ export const Transfer = () => {
   const transferErrors = useMemo(() => Object.values(transferLog).filter(b => b.status == 'error'), [transferLog]);
 
   return transferSource ? (
-    <>
+    <div className="flex flex-col mx-auto max-w-[80em] w-full">
       <ServerList
         servers={Object.values(serverInfo)
           .filter(s => s.type == 'blossom')
@@ -263,9 +263,9 @@ export const Transfer = () => {
           )}
         </div>
       )}
-    </>
+    </div>
   ) : (
-    <>
+    <div className="flex flex-col mx-auto max-w-[80em] w-full">
       <ServerList
         title={
           <>
@@ -276,6 +276,6 @@ export const Transfer = () => {
         selectedServer={transferSource}
         setSelectedServer={s => setTransferSource(s)}
       ></ServerList>
-    </>
+    </div>
   );
 };

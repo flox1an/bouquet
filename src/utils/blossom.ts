@@ -4,12 +4,17 @@ import dayjs from 'dayjs';
 
 const blossomUrlRegex = /https?:\/\/(?:www\.)?[^\s/]+\/([a-fA-F0-9]{64})(?:\.[a-zA-Z0-9]+)?/g;
 
+
 export function extractHashesFromContent(text: string) {
   let match;
   const hashes = [];
   while ((match = blossomUrlRegex.exec(text)) !== null) {
     hashes.push(match[1]);
   }
+
+  // TODO ADD nip96 hash extraction, e.g. for
+  // https://nostrcheck.me/media/b7c6f6915cfa9a62fff6a1f02604de88c23c6c6c6d1b8f62c7cc10749f307e81/65991c7cf061c6aab117f8cbead91cdb4c2d5575e47cb9a787617ad066b56efd.mp4
+
   return hashes;
 }
 

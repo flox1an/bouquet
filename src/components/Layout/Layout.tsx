@@ -7,16 +7,19 @@ import ThemeSwitcher from '../ThemeSwitcher';
 import AudioPlayer from '../AudioPlayer';
 import BottomNavbar from '../BottomNavBar/BottomNavBar';
 import { useGlobalContext } from '../../GlobalState';
+import Login from './Login';
+import useLocalStorageState from '../../utils/useLocalStorageState';
 
 export const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { loginWithExtension, user } = useNDK();
+  const { user, loginWithExtension, logout } = useNDK();
   const { state } = useGlobalContext();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [autoLogin, setAutoLogin] = useLocalStorageState('autologin', { defaultValue: false });
 
   useEffect(() => {
-    if (!user) loginWithExtension();
+    if (!user && autoLogin) loginWithExtension();
   }, []);
 
   const navItems = (
@@ -70,11 +73,20 @@ export const Layout = () => {
         <div className="navbar-center hidden md:flex gap-2">{navItems}</div>
         <div className="navbar-end">
           <ThemeSwitcher />
-          <div className="avatar px-4">
-            <div className="w-12 rounded-full">
-              <img src={user?.profile?.image} />
+          {user && (
+            <div className="avatar px-4">
+              <div className="w-12 rounded-full">
+                <a className='link'
+                  onClick={() => {
+                    setAutoLogin(false);
+                    logout();
+                  }}
+                >
+                  <img src={user?.profile?.image} />
+                </a>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
       {showMobileMenu && (
@@ -82,7 +94,7 @@ export const Layout = () => {
           <div className="navbar-center gap-2">{navItems}</div>
         </div>
       )}
-      <div className="content">{<Outlet />}</div>
+      <div className="content">{user ? <Outlet /> : <Login />}</div>
       {state.currentSong && (
         <BottomNavbar>
           <AudioPlayer />

@@ -37,7 +37,7 @@ const getEventDataByKind = (event: NostrEvent): EventVisModel | undefined => {
       id: event.id,
       nevent,
       type: 'filemeta',
-      thumbnail: getValueByTag(event.tags, 'url'),
+      thumbnail: getValueByTag(event.tags, 'thumb') || getValueByTag(event.tags, 'image'),
       title: getValueByTag(event.tags, 'title'),
       content: getValueByTag(event.tags, 'summary'),
     };

@@ -100,8 +100,8 @@ export async function fetchNip96List(
   return list.files.map(
     file =>
       ({
-        created: file.created_at,
-        uploaded: file.created_at,
+        created: file.created_at * 1000,
+        uploaded: file.created_at * 1000,
         type: getValueByTag(file.tags, 'm'),
         sha256: getValueByTag(file.tags, 'x'),
         size: parseInt(getValueByTag(file.tags, 'size') || '0', 10),

@@ -59,7 +59,7 @@ function Home() {
   );
 
   return (
-    <>
+    <div className="flex flex-col mx-auto max-w-[80em] w-full">
       <ServerList
         servers={Object.values(serverInfo).sort()}
         selectedServer={selectedServer}
@@ -71,22 +71,26 @@ function Home() {
         withVirtualServers={true}
       ></ServerList>
 
-      {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && (
-        <BlobList
-          className="mt-4"
-          title={`Content on ${serverInfo[selectedServer].name}`}
-          blobs={selectedServerBlobs}
-          onDelete={async blobs => {
-            for (const blob of blobs) {
-              await deleteBlob.mutateAsync({
-                server: serverInfo[selectedServer],
-                hash: blob.sha256,
-              });
-            }
-          }}
-        ></BlobList>
-      )}
-    </>
+      {selectedServer &&
+        serverInfo[selectedServer] &&
+        selectedServerBlobs &&
+        selectedServerBlobs.length > 0 &&
+          (
+            <BlobList
+              className="mt-4"
+              title={`Content on ${serverInfo[selectedServer].name}`}
+              blobs={selectedServerBlobs}
+              onDelete={async blobs => {
+                for (const blob of blobs) {
+                  await deleteBlob.mutateAsync({
+                    server: serverInfo[selectedServer],
+                    hash: blob.sha256,
+                  });
+                }
+              }}
+            ></BlobList>
+          )}
+    </div>
   );
 }
 
