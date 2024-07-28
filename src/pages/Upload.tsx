@@ -58,6 +58,11 @@ function Upload() {
     return filesToUpload;
   }
 
+  async function createThumbnailForImage(file: File, width: number, height: number) {
+    const thumbnailFile = (width > 300 || height > 300) ? await resizeImage(file, 300, 300) : undefined
+    return thumbnailFile && URL.createObjectURL(thumbnailFile);
+  }
+
   async function getPreUploadMetaData(filesToUpload: File[]) {
     const fileDimensions: { [key: string]: FileEventData } = {};
 
@@ -80,12 +85,14 @@ function Upload() {
         const imageInfo = await getBlurhashAndSizeFromFile(file);
         if (imageInfo) {
           const { width, height, blurHash } = imageInfo;
+          const thumbnailBlobUrl = await createThumbnailForImage(file, width, height);
           data = {
             ...data,
             width,
             height,
             dim: `${width}x${height}`,
             blurHash,
+            thumbnails: thumbnailBlobUrl ? [thumbnailBlobUrl] : [],
           };
         }
       }
@@ -274,11 +281,34 @@ function Upload() {
     //const publishedEvents: FileEventData[] = [];
     fileEventsToPublish.forEach(async fe => {
       if (fe.publish.file) {
-        const publishedEvent = await publishFileEvent(fe);
-        //publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
-        setFileEventsToPublish(prev =>
-          prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-        );
+        if (!fe.publishedThumbnail) {
+          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
+          if (selfHostedThumbnail) {
+            const newData: FileEventData = {
+              ...fe,
+              publishedThumbnail: selfHostedThumbnail.url,
+              thumbnails: [selfHostedThumbnail.url],
+            };
+            const publishedEvent = await publishFileEvent(newData);
+            setFileEventsToPublish(prev =>
+              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+            );
+          } else {
+            // self hosting failed
+            console.log('self hosting failed');
+            const publishedEvent = await publishFileEvent(fe);
+            setFileEventsToPublish(prev =>
+              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+            );
+          }
+        } else {
+          // data thumbnail already defined
+          console.log('data thumbnail already defined');
+          const publishedEvent = await publishFileEvent(fe);
+          setFileEventsToPublish(prev =>
+            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+          );
+        }        
       }
       if (fe.publish.audio) {
         if (!fe.publishedThumbnail) {
@@ -290,7 +320,6 @@ function Upload() {
               thumbnails: [selfHostedThumbnail.url],
             };
             const publishedEvent = await publishAudioEvent(newData);
-            //publishedEvents.push({ ...newData, events: [...newData.events, publishedEvent] });
             setFileEventsToPublish(prev =>
               prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
             );
@@ -298,7 +327,6 @@ function Upload() {
             // self hosting failed
             console.log('self hosting failed');
             const publishedEvent = await publishAudioEvent(fe);
-            //publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
             setFileEventsToPublish(prev =>
               prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
             );
@@ -307,7 +335,6 @@ function Upload() {
           // data thumbnail already defined
           console.log('data thumbnail already defined');
           const publishedEvent = await publishAudioEvent(fe);
-          //publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
           setFileEventsToPublish(prev =>
             prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
           );
@@ -320,10 +347,7 @@ function Upload() {
             const newData: Partial<FileEventData> = {
               publishedThumbnail: selfHostedThumbnail.url,
               thumbnails: [selfHostedThumbnail.url],
-            }; /*
-            publishedEvents.push(newData);
-            const publishedEvent = await publishVideoEvent(newData);
-            publishedEvents.push({ ...newData, events: [...newData.events, publishedEvent] });*/
+            }; 
             const publishedEvent = await publishVideoEvent({ ...fe, ...newData });
             setFileEventsToPublish(prev =>
               prev.map(f =>
@@ -340,7 +364,6 @@ function Upload() {
             // self hosting failed
             console.log('self hosting failed');
             const publishedEvent = await publishVideoEvent(fe);
-            //publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
             setFileEventsToPublish(prev =>
               prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
             );
@@ -349,14 +372,12 @@ function Upload() {
           // data thumbnail already defined
           console.log('data thumbnail already defined');
           const publishedEvent = await publishVideoEvent(fe);
-          //publishedEvents.push({ ...fe, events: [...fe.events, publishedEvent] });
           setFileEventsToPublish(prev =>
             prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
           );
         }
       }
     });
-    //setFileEventsToPublish(publishedEvents);
     setUploadStep(3);
   };
 

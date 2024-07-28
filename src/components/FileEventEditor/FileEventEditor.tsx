@@ -60,6 +60,7 @@ const FileEventEditor = ({
 
   const isAudio = fileEventData.m?.startsWith('audio/');
   const isVideo = fileEventData.m?.startsWith('video/');
+  const isImage = fileEventData.m?.startsWith('image/');
 
   useEffect(() => {
     if (isVideo && fileEventData.thumbnails == undefined) {
@@ -93,6 +94,13 @@ const FileEventEditor = ({
       });
     }
   }, [fileEventData]);
+
+  const getProxyUrl = (url: string) => {
+    if (url.startsWith('blob:')) {
+      return url;
+    }
+    return `https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${url}`;
+  };
 
   useEffect(() => {
     if (fileEventData.selectedThumbnail == undefined) {
@@ -176,7 +184,7 @@ const FileEventEditor = ({
                       <img
                         width={300}
                         height={300}
-                        src={`https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${t}`}
+                        src={getProxyUrl(t)}
                         className="w-full"
                       />
                     </div>
@@ -200,14 +208,14 @@ const FileEventEditor = ({
             ))}
         </>
       )}
-      {isAudio && (fileEventData.publishedThumbnail || fileEventData.selectedThumbnail) && (
-        <div className="w-2/6">
+      {(isImage || isAudio) && (fileEventData.publishedThumbnail || fileEventData.selectedThumbnail) && (
+        <div className="p-4 bg-base-300 w-2/6">
           <img
             width={300}
             height={300}
             src={
               fileEventData.publishedThumbnail
-                ? `https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${fileEventData.publishedThumbnail}`
+                ? getProxyUrl(fileEventData.publishedThumbnail)
                 : fileEventData.selectedThumbnail
             }
             className="w-full"
@@ -215,15 +223,6 @@ const FileEventEditor = ({
         </div>
       )}
 
-      {fileEventData.m?.startsWith('image/') && (
-        <div className="p-4 bg-base-300 w-2/6">
-          <img
-            width={300}
-            height={300}
-            src={`https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${fileEventData.url[0]}`}
-          ></img>
-        </div>
-      )}
       <div className="grid gap-4 w-4/6" style={{ gridTemplateColumns: '1fr 30em' }}>
         {(isAudio || isVideo) && (
           <>
