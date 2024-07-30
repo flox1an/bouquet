@@ -4,7 +4,6 @@ import dayjs from 'dayjs';
 
 const blossomUrlRegex = /https?:\/\/(?:www\.)?[^\s/]+\/([a-fA-F0-9]{64})(?:\.[a-zA-Z0-9]+)?/g;
 
-
 export function extractHashesFromContent(text: string) {
   let match;
   const hashes = [];

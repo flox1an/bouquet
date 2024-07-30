@@ -42,7 +42,7 @@ const mergeBlobs = (
 };
 
 export const useServerInfo = () => {
-  const servers = useUserServers();
+  const { servers } = useUserServers();
   const { user, signEventTemplate } = useNDK();
   const [features, setFeatures] = useState<SupportedFeatures>({});
 

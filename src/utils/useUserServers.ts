@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { useNDK } from '../utils/ndk';
 import { nip19 } from 'nostr-tools';
-import { NDKKind } from '@nostr-dev-kit/ndk';
+import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk';
 import { USER_BLOSSOM_SERVER_LIST_KIND } from 'blossom-client-sdk';
 import useEvent from './useEvent';
 import { useQueries } from '@tanstack/react-query';
 import { Nip96ServerConfig, fetchNip96ServerConfig } from './nip96';
+import dayjs from 'dayjs';
 
 type ServerType = 'blossom' | 'nip96';
 
@@ -17,11 +18,39 @@ export type Server = {
   nip96?: Nip96ServerConfig;
 };
 
-const USER_NIP96_SERVER_LIST_KIND = 10096;
+export const USER_NIP96_SERVER_LIST_KIND = 10096;
 
-export const useUserServers = (): Server[] => {
-  const { user } = useNDK();
+export const useUserServers = (): {
+  servers: Server[];
+  storeUserServers: (newServers: Server[]) => Promise<void>;
+} => {
+  const { user, ndk } = useNDK();
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type
+
+  const storeUserServers = async (newServers: Server[]) => {
+    if (!pubkey) return;
+    const ev = new NDKEvent(ndk, {
+      kind: USER_BLOSSOM_SERVER_LIST_KIND,
+      created_at: dayjs().unix(),
+      content: '',
+      pubkey,
+      tags: newServers.filter(s => s.type == 'blossom').map(s => ['server', `${s.url}`]),
+    });
+    await ev.sign();
+    console.log(ev.rawEvent());
+    await ev.publish();
+
+    const evNip96 = new NDKEvent(ndk, {
+      kind: USER_NIP96_SERVER_LIST_KIND,
+      created_at: dayjs().unix(),
+      content: '',
+      pubkey,
+      tags: newServers.filter(s => s.type == 'nip96').map(s => ['server', `${s.url}`]),
+    });
+    await evNip96.sign();
+    console.log(evNip96.rawEvent());
+    await evNip96.publish();
+  };
 
   const blossomServerListEvent = useEvent(
     { kinds: [USER_BLOSSOM_SERVER_LIST_KIND as NDKKind], authors: [pubkey!] },
@@ -46,16 +75,17 @@ export const useUserServers = (): Server[] => {
   }, [blossomServerListEvent]);
 
   const nip96Servers = useMemo((): Server[] => {
+    if (!user) return [];
     return [
-      /*...(nip96ServerListEvent?.getMatchingTags('server').map(t => t[1]) || []).map(s => {
-      const url = s.toLocaleLowerCase().replace(/\/$/, '');
+      ...(nip96ServerListEvent?.getMatchingTags('server').map(t => t[1]) || []).map(s => {
+        const url = s.toLocaleLowerCase().replace(/\/$/, '');
 
-      return {
-        url,
-        name: url.replace(/https?:\/\//, ''),
-        type: 'nip96' as ServerType,
-      };
-    }),*/ {
+        return {
+          url,
+          name: url.replace(/https?:\/\//, ''),
+          type: 'nip96' as ServerType,
+        };
+      }) /* {
         url: 'https://nostrcheck.me',
         name: 'nostrcheck.me',
         type: 'nip96' as ServerType,
@@ -66,6 +96,7 @@ export const useUserServers = (): Server[] => {
         type: 'nip96' as ServerType,
         message: 'nostr.build does currently not support listing files',
       },
+      */,
     ];
   }, [nip96ServerListEvent]);
 
@@ -83,5 +114,5 @@ export const useUserServers = (): Server[] => {
     ];
   }, [blossomServers, nip96Servers, nip96InfoQueries]);
 
-  return servers;
+  return { servers, storeUserServers };
 };

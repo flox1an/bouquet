@@ -1,14 +1,10 @@
 import { ArrowPathRoundedSquareIcon, Cog8ToothIcon } from '@heroicons/react/24/outline';
 import { ServerInfo, useServerInfo } from '../../utils/useServerInfo';
-import { Server as ServerType } from '../../utils/useUserServers';
+import { Server as ServerType, useUserServers } from '../../utils/useUserServers';
 import Server from './Server';
 import './ServerList.css';
 import ServerListPopup from '../ServerListPopup';
 import { useMemo, useState } from 'react';
-import { useNDK } from '../../utils/ndk';
-import { NDKEvent } from '@nostr-dev-kit/ndk';
-import dayjs from 'dayjs';
-import { USER_BLOSSOM_SERVER_LIST_KIND } from 'blossom-client-sdk';
 import { useQueryClient } from '@tanstack/react-query';
 
 type ServerListProps = {
@@ -33,7 +29,7 @@ export const ServerList = ({
   manageServers = false,
   withVirtualServers = false,
 }: ServerListProps) => {
-  const { ndk, user } = useNDK();
+  const { storeUserServers } = useUserServers();
   const { distribution } = useServerInfo();
   const queryClient = useQueryClient();
   const blobsWithOnlyOneOccurance = Object.values(distribution)
@@ -51,16 +47,7 @@ export const ServerList = ({
   };
 
   const handleSaveServers = async (newServers: ServerType[]) => {
-    const ev = new NDKEvent(ndk, {
-      kind: USER_BLOSSOM_SERVER_LIST_KIND,
-      created_at: dayjs().unix(),
-      content: '',
-      pubkey: user?.pubkey || '',
-      tags: newServers.filter(s => s.type == 'blossom').map(s => ['server', `${s.url}`]),
-    });
-    await ev.sign();
-    console.log(ev.rawEvent());
-    await ev.publish();
+    await storeUserServers(newServers);
   };
 
   const serversToList = useMemo(

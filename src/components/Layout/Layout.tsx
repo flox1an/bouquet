@@ -76,7 +76,8 @@ export const Layout = () => {
           {user && (
             <div className="avatar px-4">
               <div className="w-12 rounded-full">
-                <a className='link'
+                <a
+                  className="link"
                   onClick={() => {
                     setAutoLogin(false);
                     logout();

@@ -181,12 +181,7 @@ const FileEventEditor = ({
                 <div className="carousel w-full">
                   {fileEventData.thumbnails.map((t, i) => (
                     <div id={`item${i + 1}`} key={`item${i + 1}`} className="carousel-item w-full">
-                      <img
-                        width={300}
-                        height={300}
-                        src={getProxyUrl(t)}
-                        className="w-full"
-                      />
+                      <img width={300} height={300} src={getProxyUrl(t)} className="w-full" />
                     </div>
                   ))}
                 </div>

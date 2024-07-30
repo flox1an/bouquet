@@ -20,9 +20,10 @@ import { useNavigate } from 'react-router-dom';
 import { NostrEvent } from '@nostr-dev-kit/ndk';
 import UploadPublished from '../components/UploadPublished';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
+import UploadOnboarding from '../components/UploadOboarding';
 
 function Upload() {
-  const servers = useUserServers();
+  const { servers } = useUserServers();
   const { signEventTemplate } = useNDK();
   const { serverInfo } = useServerInfo();
   const queryClient = useQueryClient();
@@ -59,7 +60,7 @@ function Upload() {
   }
 
   async function createThumbnailForImage(file: File, width: number, height: number) {
-    const thumbnailFile = (width > 300 || height > 300) ? await resizeImage(file, 300, 300) : undefined
+    const thumbnailFile = width > 300 || height > 300 ? await resizeImage(file, 300, 300) : undefined;
     return thumbnailFile && URL.createObjectURL(thumbnailFile);
   }
 
@@ -308,7 +309,7 @@ function Upload() {
           setFileEventsToPublish(prev =>
             prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
           );
-        }        
+        }
       }
       if (fe.publish.audio) {
         if (!fe.publishedThumbnail) {
@@ -347,7 +348,7 @@ function Upload() {
             const newData: Partial<FileEventData> = {
               publishedThumbnail: selfHostedThumbnail.url,
               thumbnails: [selfHostedThumbnail.url],
-            }; 
+            };
             const publishedEvent = await publishVideoEvent({ ...fe, ...newData });
             setFileEventsToPublish(prev =>
               prev.map(f =>
@@ -391,75 +392,81 @@ function Upload() {
 
   return (
     <div className="flex flex-col mx-auto max-w-[80em] w-full">
-      <ul className="steps pt-8 pb-4 md:p-8">
-        <li className={`step ${uploadStep >= 0 ? 'step-primary' : ''}`}>Choose files</li>
-        <li className={`step ${uploadStep >= 1 ? 'step-primary' : ''}`}>Upload</li>
-        <li className={`step ${uploadStep >= 2 ? 'step-primary' : ''}`}>Add metadata</li>
-        <li className={`step ${uploadStep >= 3 ? 'step-primary' : ''}`}>Publish to NOSTR</li>
-      </ul>
-      {uploadStep <= 1 && (
-        <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
-          {uploadStep == 0 && (
-            <UploadFileSelection
-              servers={servers}
-              transfers={transfers}
-              setTransfers={setTransfers}
-              cleanPrivateData={cleanPrivateData}
-              setCleanPrivateData={setCleanPrivateData}
-              imageResize={imageResize}
-              setImageResize={setImageResize}
-              files={files}
-              setFiles={setFiles}
-              clearTransfers={clearTransfers}
-              uploadBusy={uploadBusy}
-              upload={upload}
-            />
-          )}
+      {!servers || servers.length == 0 ? (
+        <UploadOnboarding />
+      ) : (
+        <>
+          <ul className="steps pt-8 pb-4 md:p-8">
+            <li className={`step ${uploadStep >= 0 ? 'step-primary' : ''}`}>Choose files</li>
+            <li className={`step ${uploadStep >= 1 ? 'step-primary' : ''}`}>Upload</li>
+            <li className={`step ${uploadStep >= 2 ? 'step-primary' : ''}`}>Add metadata</li>
+            <li className={`step ${uploadStep >= 3 ? 'step-primary' : ''}`}>Publish to NOSTR</li>
+          </ul>
+          {uploadStep <= 1 && (
+            <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
+              {uploadStep == 0 && (
+                <UploadFileSelection
+                  servers={servers}
+                  transfers={transfers}
+                  setTransfers={setTransfers}
+                  cleanPrivateData={cleanPrivateData}
+                  setCleanPrivateData={setCleanPrivateData}
+                  imageResize={imageResize}
+                  setImageResize={setImageResize}
+                  files={files}
+                  setFiles={setFiles}
+                  clearTransfers={clearTransfers}
+                  uploadBusy={uploadBusy}
+                  upload={upload}
+                />
+              )}
 
-          {uploadStep == 1 && <UploadProgress servers={servers} transfers={transfers} />}
-        </div>
-      )}
-      {uploadStep == 2 && fileEventsToPublish.length > 0 && (
-        <div className="gap-4 flex flex-col">
-          <h2 className="">Publish events</h2>
-          <div className="flex flex-col gap-4">
-            {fileEventsToPublish.map(fe => (
-              <FileEventEditor
-                key={fe.x}
-                fileEventData={fe}
-                setFileEventData={updatedFe =>
-                  setFileEventsToPublish(prev => prev.map(f => (f.x === fe.x ? updatedFe : f)) as FileEventData[])
-                }
-              />
-            ))}
-          </div>
-          {audioCount > 0 && (
-            <div className="text-sm text-neutral-content flex flex-row gap-2 items-center pl-4">
-              <InformationCircleIcon className="w-6 h-6 text-info" />
-              Audio events are not widely supported yet. Currently they are only used by{' '}
-              <a className="link link-primary" href="https://stemstr.app/" target="_blank">
-                stemstr.app
-              </a>
+              {uploadStep == 1 && <UploadProgress servers={servers} transfers={transfers} />}
             </div>
           )}
-          <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-row justify-center">
-            <button
-              className={`btn ${publishCount === 0 ? 'btn-primary' : 'btn-neutral'} w-40`}
-              onClick={() => {
-                navigate('/browse');
-              }}
-            >
-              Skip publishing
-            </button>
-            {publishCount > 0 && (
-              <button className="btn btn-primary w-40" onClick={() => publishAll()}>
-                Publish ({publishCount} event{publishCount > 1 ? 's' : ''})
-              </button>
-            )}
-          </div>
-        </div>
+          {uploadStep == 2 && fileEventsToPublish.length > 0 && (
+            <div className="gap-4 flex flex-col">
+              <h2 className="">Publish events</h2>
+              <div className="flex flex-col gap-4">
+                {fileEventsToPublish.map(fe => (
+                  <FileEventEditor
+                    key={fe.x}
+                    fileEventData={fe}
+                    setFileEventData={updatedFe =>
+                      setFileEventsToPublish(prev => prev.map(f => (f.x === fe.x ? updatedFe : f)) as FileEventData[])
+                    }
+                  />
+                ))}
+              </div>
+              {audioCount > 0 && (
+                <div className="text-sm text-neutral-content flex flex-row gap-2 items-center pl-4">
+                  <InformationCircleIcon className="w-6 h-6 text-info" />
+                  Audio events are not widely supported yet. Currently they are only used by{' '}
+                  <a className="link link-primary" href="https://stemstr.app/" target="_blank">
+                    stemstr.app
+                  </a>
+                </div>
+              )}
+              <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-row justify-center">
+                <button
+                  className={`btn ${publishCount === 0 ? 'btn-primary' : 'btn-neutral'} w-40`}
+                  onClick={() => {
+                    navigate('/browse');
+                  }}
+                >
+                  Skip publishing
+                </button>
+                {publishCount > 0 && (
+                  <button className="btn btn-primary w-40" onClick={() => publishAll()}>
+                    Publish ({publishCount} event{publishCount > 1 ? 's' : ''})
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {uploadStep == 3 && <UploadPublished fileEventsToPublish={fileEventsToPublish} />}
+        </>
       )}
-      {uploadStep == 3 && <UploadPublished fileEventsToPublish={fileEventsToPublish} />}
     </div>
   );
 }

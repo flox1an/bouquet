@@ -71,25 +71,21 @@ function Home() {
         withVirtualServers={true}
       ></ServerList>
 
-      {selectedServer &&
-        serverInfo[selectedServer] &&
-        selectedServerBlobs &&
-        selectedServerBlobs.length > 0 &&
-          (
-            <BlobList
-              className="mt-4"
-              title={`Content on ${serverInfo[selectedServer].name}`}
-              blobs={selectedServerBlobs}
-              onDelete={async blobs => {
-                for (const blob of blobs) {
-                  await deleteBlob.mutateAsync({
-                    server: serverInfo[selectedServer],
-                    hash: blob.sha256,
-                  });
-                }
-              }}
-            ></BlobList>
-          )}
+      {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && selectedServerBlobs.length > 0 && (
+        <BlobList
+          className="mt-4"
+          title={`Content on ${serverInfo[selectedServer].name}`}
+          blobs={selectedServerBlobs}
+          onDelete={async blobs => {
+            for (const blob of blobs) {
+              await deleteBlob.mutateAsync({
+                server: serverInfo[selectedServer],
+                hash: blob.sha256,
+              });
+            }
+          }}
+        ></BlobList>
+      )}
     </div>
   );
 }
