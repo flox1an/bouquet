@@ -13,14 +13,20 @@ const defaultServers: (Server & { description: string; buyUrl?: string })[] = [
   {
     name: 'nostrcheck.me',
     url: 'https://nostrcheck.me',
-    description: 'A server for checking Nostr keys and addresses.',
+    description: 'Free server',
     type: 'nip96',
   },
   {
     name: 'satellite.earth',
     url: 'https://cdn.satellite.earth',
-    description: 'A payed server with cheap prices 0.05 USD per GB.',
+    description: 'A payed blossom server with cheap prices 0.05 USD per GB/month.',
     buyUrl: 'https://cdn.satellite.earth/',
+    type: 'blossom',
+  },
+  {
+    name: 'files.v0l.io',
+    url: 'https://files.v0l.io',
+    description: 'A free blossom server.',
     type: 'blossom',
   },
 ];

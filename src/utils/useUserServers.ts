@@ -79,24 +79,14 @@ export const useUserServers = (): {
     return [
       ...(nip96ServerListEvent?.getMatchingTags('server').map(t => t[1]) || []).map(s => {
         const url = s.toLocaleLowerCase().replace(/\/$/, '');
-
+        const name = url.replace(/https?:\/\//, '');
         return {
           url,
-          name: url.replace(/https?:\/\//, ''),
+          name,
           type: 'nip96' as ServerType,
+          message: name == 'nostr.build' ? 'nostr.build does currently not support listing files' : undefined,
         };
-      }) /* {
-        url: 'https://nostrcheck.me',
-        name: 'nostrcheck.me',
-        type: 'nip96' as ServerType,
-      },
-      {
-        url: 'https://nostr.build',
-        name: 'nostr.build',
-        type: 'nip96' as ServerType,
-        message: 'nostr.build does currently not support listing files',
-      },
-      */,
+      }),
     ];
   }, [nip96ServerListEvent]);
 
