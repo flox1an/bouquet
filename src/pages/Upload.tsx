@@ -32,6 +32,7 @@ function Upload() {
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
   const [uploadBusy, setUploadBusy] = useState(false);
   const limit = pLimit(3);
+  const [preparing, setPreparing] = useState(false);
   const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
   const [imageResize, setImageResize] = useState(0);
   const [uploadStep, setUploadStep] = useState(0);
@@ -123,11 +124,13 @@ function Upload() {
 
   const upload = async () => {
     setUploadBusy(true);
+    setPreparing(true);
+
     setUploadStep(1);
-
+    // TODO this blocks the UI
     const filesToUpload: File[] = await getListOfFilesToUpload();
-
     const fileDimensions = await getPreUploadMetaData(filesToUpload);
+    setPreparing(false);
 
     // TODO icon to cancel upload
     // TODO detect if the file already exists? if we have the hash??
@@ -421,7 +424,7 @@ function Upload() {
                 />
               )}
 
-              {uploadStep == 1 && <UploadProgress servers={servers} transfers={transfers} />}
+              {uploadStep == 1 && <UploadProgress servers={servers} transfers={transfers} preparing={preparing} />}
             </div>
           )}
           {uploadStep == 2 && fileEventsToPublish.length > 0 && (

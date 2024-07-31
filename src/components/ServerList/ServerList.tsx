@@ -48,6 +48,7 @@ export const ServerList = ({
 
   const handleSaveServers = async (newServers: ServerType[]) => {
     await storeUserServers(newServers);
+    queryClient.invalidateQueries({ queryKey: ['use-event'] });
   };
 
   const serversToList = useMemo(
@@ -56,8 +57,8 @@ export const ServerList = ({
   );
 
   const handleRefresh = () => {
-    queryClient.refetchQueries({ queryKey: ['blobs'] });
-    queryClient.refetchQueries({ queryKey: ['use-event'] });
+    queryClient.invalidateQueries({ queryKey: ['blobs'] });
+    queryClient.invalidateQueries({ queryKey: ['use-event'] });
   };
 
   return (

@@ -29,7 +29,8 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
 
   const handleAddServer = () => {
     if (newServer.trim()) {
-      setServers([...servers, { name: newServer.trim(), url: newServer.trim(), type: newServerType }]);
+      const url = newServer.trim().startsWith('http') ? newServer.trim() : `https://${newServer.trim()}`;
+      setServers([...servers, { name: newServer.trim(), url, type: newServerType }]);
       setNewServer('');
     }
   };

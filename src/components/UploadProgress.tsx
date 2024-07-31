@@ -1,19 +1,22 @@
 import React from 'react';
 import { Server } from '../utils/useUserServers';
 import { TransferStats } from './UploadFileSelection';
-import { ServerIcon } from '@heroicons/react/24/outline';
+import { Cog6ToothIcon, ServerIcon } from '@heroicons/react/24/outline';
 import ProgressBar from './ProgressBar/ProgressBar';
 import { formatFileSize } from '../utils/utils';
 
 interface UploadProgressProps {
   servers: Server[];
   transfers: Record<string, TransferStats>;
+  preparing: boolean;
 }
 
-const UploadProgress: React.FC<UploadProgressProps> = ({ servers, transfers }) => {
+const UploadProgress: React.FC<UploadProgressProps> = ({ servers, transfers, preparing }) => {
   return (
     <>
       <h3 className="text-lg">Servers</h3>
+      {preparing && <div className="py-2"><Cog6ToothIcon className="w-6 h-6 inline" /> Preparing files... <div className="loading loading-spinner loading-sm" /></div>}
+
       <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
         {servers.map(
           s =>
