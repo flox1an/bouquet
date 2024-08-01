@@ -114,7 +114,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
       />
       <label
         htmlFor="browse"
-        className="p-8 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
+        className="p-12 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
         onDrop={handleDrop}
         onDragOver={event => event.preventDefault()}
       >

@@ -209,8 +209,8 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                       {distribution[blob.sha256].servers.length == 1 && <ExclamationTriangleIcon />}
                     </span>
                   </td>
-                  <td>{formatFileSize(blob.size)}</td>
-                  <td>{formatDate(blob.uploaded)}</td>
+                  <td className="text-xs md:text-sm">{formatFileSize(blob.size)}</td>
+                  <td className="text-xs md:text-sm">{formatDate(blob.uploaded)}</td>
                   <td className="whitespace-nowrap">
                     <Actions blob={blob}></Actions>
                   </td>

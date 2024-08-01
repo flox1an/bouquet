@@ -22,6 +22,7 @@ export const USER_NIP96_SERVER_LIST_KIND = 10096;
 
 export const useUserServers = (): {
   servers: Server[];
+  serversLoading: boolean;
   storeUserServers: (newServers: Server[]) => Promise<void>;
 } => {
   const { user, ndk } = useNDK();
@@ -62,8 +63,9 @@ export const useUserServers = (): {
     { disable: !pubkey }
   );
 
-  const blossomServers = useMemo((): Server[] => {
-    return (blossomServerListEvent?.getMatchingTags('server').map(t => t[1]) || []).map(s => {
+  const blossomServers = useMemo((): Server[] | undefined => {
+    if (!blossomServerListEvent || !blossomServerListEvent.isSuccess) return undefined;
+    return (blossomServerListEvent?.data?.getMatchingTags('server').map(t => t[1]) || []).map(s => {
       const url = s.toLocaleLowerCase().replace(/\/$/, '');
 
       return {
@@ -74,10 +76,10 @@ export const useUserServers = (): {
     });
   }, [blossomServerListEvent]);
 
-  const nip96Servers = useMemo((): Server[] => {
-    if (!user) return [];
+  const nip96Servers = useMemo((): Server[] | undefined => {
+    if (!user || !blossomServerListEvent || !blossomServerListEvent.isSuccess) return undefined;
     return [
-      ...(nip96ServerListEvent?.getMatchingTags('server').map(t => t[1]) || []).map(s => {
+      ...(nip96ServerListEvent?.data?.getMatchingTags('server').map(t => t[1]) || []).map(s => {
         const url = s.toLocaleLowerCase().replace(/\/$/, '');
         const name = url.replace(/https?:\/\//, '');
         return {
@@ -91,7 +93,7 @@ export const useUserServers = (): {
   }, [nip96ServerListEvent]);
 
   const nip96InfoQueries = useQueries({
-    queries: nip96Servers.map(server => ({
+    queries: (nip96Servers || []).map(server => ({
       queryKey: ['nip96info', server.url],
       queryFn: async () => await fetchNip96ServerConfig(server.url),
     })),
@@ -99,10 +101,14 @@ export const useUserServers = (): {
 
   const servers = useMemo((): Server[] => {
     return [
-      ...blossomServers,
-      ...nip96Servers.map((server, index) => ({ ...server, nip96: nip96InfoQueries[index].data })),
+      ...(blossomServers || []),
+      ...(nip96Servers || []).map((server, index) => ({ ...server, nip96: nip96InfoQueries[index].data })),
     ];
   }, [blossomServers, nip96Servers, nip96InfoQueries]);
 
-  return { servers, storeUserServers };
+  return {
+    servers,
+    serversLoading: blossomServerListEvent?.isLoading || nip96ServerListEvent?.isLoading,
+    storeUserServers,
+  };
 };

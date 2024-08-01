@@ -23,7 +23,7 @@ import { InformationCircleIcon } from '@heroicons/react/24/outline';
 import UploadOnboarding from '../components/UploadOboarding';
 
 function Upload() {
-  const { servers } = useUserServers();
+  const { servers, serversLoading } = useUserServers();
   const { signEventTemplate } = useNDK();
   const { serverInfo } = useServerInfo();
   const queryClient = useQueryClient();
@@ -395,7 +395,7 @@ function Upload() {
 
   return (
     <div className="flex flex-col mx-auto max-w-[80em] w-full">
-      {!servers || servers.length == 0 ? (
+      {!serversLoading && (!servers || servers.length == 0) ? (
         <UploadOnboarding />
       ) : (
         <>

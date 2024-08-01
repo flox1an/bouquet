@@ -64,7 +64,6 @@ function Home() {
         servers={Object.values(serverInfo).sort()}
         selectedServer={selectedServer}
         setSelectedServer={setSelectedServer}
-        onTransfer={() => navigate('/transfer/' + selectedServer)}
         onCheck={() => navigate('/check/' + selectedServer)}
         title={<>Servers</>}
         manageServers={true}

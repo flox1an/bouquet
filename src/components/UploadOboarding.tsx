@@ -12,9 +12,9 @@ const defaultServers: (Server & { description: string; buyUrl?: string })[] = [
   },
   {
     name: 'nostrcheck.me',
-    url: 'https://nostrcheck.me',
-    description: 'Free server',
-    type: 'nip96',
+    url: 'https://cdn.nostrcheck.me',
+    description: 'Free server from nostrcheck.me',
+    type: 'blossom',
   },
   {
     name: 'satellite.earth',
@@ -27,6 +27,12 @@ const defaultServers: (Server & { description: string; buyUrl?: string })[] = [
     name: 'files.v0l.io',
     url: 'https://files.v0l.io',
     description: 'A free blossom server.',
+    type: 'blossom',
+  },
+  {
+    name: 'blossom.primal.net',
+    url: 'https://blossom.primal.net',
+    description: 'Blossom server from Primal.',
     type: 'blossom',
   },
 ];

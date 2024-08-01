@@ -11,7 +11,6 @@ type ServerListProps = {
   servers: ServerInfo[];
   selectedServer?: string | undefined;
   setSelectedServer?: React.Dispatch<React.SetStateAction<string | undefined>>;
-  onTransfer?: (server: string) => void;
   onCancel?: () => void;
   onCheck?: (server: string) => void;
   title?: React.ReactElement;
@@ -23,7 +22,6 @@ export const ServerList = ({
   servers,
   selectedServer,
   setSelectedServer,
-  onTransfer,
   onCancel,
   title,
   manageServers = false,
@@ -92,7 +90,6 @@ export const ServerList = ({
             server={server}
             selectedServer={selectedServer}
             setSelectedServer={setSelectedServer}
-            onTransfer={onTransfer}
             onCancel={onCancel}
             /* onCheck={onCheck} */
             blobsOnlyOnThisServer={blobsWithOnlyOneOccurance.filter(b => b.server == server.name).length}

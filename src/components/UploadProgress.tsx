@@ -15,7 +15,12 @@ const UploadProgress: React.FC<UploadProgressProps> = ({ servers, transfers, pre
   return (
     <>
       <h3 className="text-lg">Servers</h3>
-      {preparing && <div className="py-2"><Cog6ToothIcon className="w-6 h-6 inline" /> Preparing files... <div className="loading loading-spinner loading-sm" /></div>}
+      {preparing && (
+        <div className="py-2">
+          <Cog6ToothIcon className="w-6 h-6 inline" /> Preparing files...{' '}
+          <div className="loading loading-spinner loading-sm" />
+        </div>
+      )}
 
       <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
         {servers.map(

@@ -38,5 +38,5 @@ export default function useEvent(filter: NDKFilter, opts?: SubscriptionOptions, 
     refetchOnWindowFocus: false,
   });
 
-  return query.data;
+  return { data: query.data, isLoading: query.isLoading, isSuccess: query.isSuccess };
 }

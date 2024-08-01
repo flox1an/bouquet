@@ -7,6 +7,7 @@ const blossomUrlRegex = /https?:\/\/(?:www\.)?[^\s/]+\/([a-fA-F0-9]{64})(?:\.[a-
 export function extractHashesFromContent(text: string) {
   let match;
   const hashes = [];
+  blossomUrlRegex.lastIndex = 0;
   while ((match = blossomUrlRegex.exec(text)) !== null) {
     hashes.push(match[1]);
   }
@@ -18,8 +19,9 @@ export function extractHashesFromContent(text: string) {
 }
 
 export function extractHashFromUrl(url: string) {
-  let match;
-  if ((match = blossomUrlRegex.exec(url)) !== null) {
+  blossomUrlRegex.lastIndex = 0;
+  const match = blossomUrlRegex.exec(url);
+  if (match) {
     return match[1];
   }
 }
@@ -74,8 +76,8 @@ export const mirrordBlossomBlob = async (
   sourceUrl: string,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
 ) => {
-  console.log({ sourceUrl });
   const hash = extractHashFromUrl(sourceUrl);
+  console.log({ sourceUrl, hash });
   if (!hash) throw 'The soureUrl does not contain a blossom hash.';
 
   const blossomClient = new BlossomClient(targetServer, signEventTemplate);

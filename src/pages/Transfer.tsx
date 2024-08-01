@@ -16,7 +16,7 @@ import BlobList from '../components/BlobList/BlobList';
 import './Transfer.css';
 import { useNavigate, useParams } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
-import { downloadBlossomBlob, uploadBlossomBlob } from '../utils/blossom';
+import { transferBlob } from '../utils/transfer';
 
 type TransferStatus = {
   [key: string]: {
@@ -82,59 +82,51 @@ export const Transfer = () => {
           },
         }));
 
-        const result = await downloadBlossomBlob(`${serverInfo[sourceServer].url}/${b.sha256}`, progressEvent => {
-          setTransferLog(ts => ({
-            ...ts,
-            [b.sha256]: {
-              ...ts[b.sha256],
-              downloaded: progressEvent.loaded,
-            },
-          }));
-        }).catch(e => {
-          if (e.response?.status === 404) {
+        await transferBlob(
+          `${serverInfo[sourceServer].url}/${b.sha256}`,
+          serverInfo[targetServer],
+          signEventTemplate,
+          progressEvent => {
             setTransferLog(ts => ({
               ...ts,
               [b.sha256]: {
-                sha256: b.sha256,
-                status: 'error',
-                message: 'Blob not found (404)',
-                size: b.size,
-                downloaded: 0,
+                ...ts[b.sha256],
+                uploaded: progressEvent.loaded,
+                downloaded: progressEvent.loaded,
+                rate: progressEvent.rate || 0,
               },
             }));
-            return null;
           }
-          throw e;
-        });
+        );
 
-        if (!result) continue;
-
-        const file = new File([result.data], b.sha256, { type: b.type, lastModified: b.created });
-
-        await uploadBlossomBlob(serverInfo[targetServer].url, file, signEventTemplate, progressEvent => {
+        setTransferLog(ts => ({
+          ...ts,
+          [b.sha256]: {
+            ...ts[b.sha256],
+            rate: 0,
+            uploaded: ts[b.sha256].size,
+            downloaded: ts[b.sha256].size,
+            status: 'done',
+          },
+        }));
+      } catch (e: any) {
+        if (e.response?.status === 404) {
           setTransferLog(ts => ({
             ...ts,
             [b.sha256]: {
-              ...ts[b.sha256],
-              uploaded: progressEvent.loaded,
-              rate: progressEvent.rate || 0,
+              sha256: b.sha256,
+              status: 'error',
+              message: 'Blob not found (404)',
+              size: b.size,
+              downloaded: 0,
+              uploaded: 0,
             },
           }));
-        });
-
-        setTransferLog(ts => ({
-          ...ts,
-          [b.sha256]: { ...ts[b.sha256], status: 'done' },
-        }));
-      } catch (e) {
-        setTransferLog(ts => ({
-          ...ts,
-          [b.sha256]: { ...ts[b.sha256], status: 'error', message: (e as Error).message },
-        }));
-        console.warn(e);
+          return null;
+        }
+        throw e;
       }
     }
-
     // if (Object.values(transferLog).filter(b => b.status == 'error').length == 0) {
     //   closeTransferMode();
     // }
@@ -162,16 +154,27 @@ export const Transfer = () => {
 
   const transferErrors = useMemo(() => Object.values(transferLog).filter(b => b.status == 'error'), [transferLog]);
 
+  const currentTransferStep = 0;
+  const transferSteps = (
+    <ul className="steps pt-8 pb-4 md:p-8">
+      <li className={`step ${currentTransferStep >= 0 ? 'step-primary' : ''}`}>Choose source</li>
+      <li className={`step ${currentTransferStep >= 1 ? 'step-primary' : ''}`}>Choose target</li>
+      <li className={`step ${currentTransferStep >= 2 ? 'step-primary' : ''}`}>Sync blobs</li>
+    </ul>
+  );
+
   return transferSource ? (
     <div className="flex flex-col mx-auto max-w-[80em] w-full">
+      {transferSteps}
       <ServerList
+        selectedServer={transferSource}
         servers={Object.values(serverInfo)
           .filter(s => s.type == 'blossom')
           .filter(s => s.name == transferSource)}
         onCancel={() => closeTransferMode()}
         title={
           <>
-            <ArrowUpOnSquareIcon /> Transfer Source
+            <ArrowUpOnSquareIcon /> Sync Source
           </>
         }
       ></ServerList>
@@ -266,10 +269,11 @@ export const Transfer = () => {
     </div>
   ) : (
     <div className="flex flex-col mx-auto max-w-[80em] w-full">
+      {transferSteps}
       <ServerList
         title={
           <>
-            <ArrowUpOnSquareIcon /> Transfer Source
+            <ArrowUpOnSquareIcon /> Sync Source
           </>
         }
         servers={Object.values(serverInfo).sort()}

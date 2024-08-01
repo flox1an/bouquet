@@ -1,5 +1,4 @@
 import {
-  ArrowUpOnSquareStackIcon,
   CheckBadgeIcon,
   ClockIcon,
   CubeIcon,
@@ -17,7 +16,6 @@ type ServerProps = {
   server: ServerInfo;
   selectedServer?: string | undefined;
   setSelectedServer?: React.Dispatch<React.SetStateAction<string | undefined>>;
-  onTransfer?: (server: string) => void;
   onCancel?: () => void;
   onCheck?: (server: string) => void;
   blobsOnlyOnThisServer: number;
@@ -27,7 +25,6 @@ const Server = ({
   server,
   selectedServer,
   setSelectedServer,
-  onTransfer,
   onCancel,
   onCheck,
   blobsOnlyOnThisServer,
@@ -42,8 +39,8 @@ const Server = ({
       key={server.name}
       onClick={() => readyToUse && setSelectedServer && setSelectedServer(server.name)}
     >
-      <div className="server-icon">
-        <ServerIcon />
+      <div className=" self-start	pt-1">
+        <ServerIcon className="w-6 h-6" />
       </div>
       <div className="flex flex-col grow">
         <div className="server-name">
@@ -95,18 +92,13 @@ const Server = ({
           </div>
         )}
       </div>
-      {((selectedServer == server.name && !server.virtual && onTransfer) || onCancel) && (
+      {((selectedServer == server.name && !server.virtual) || onCancel) && (
         <div className="server-actions ">
           {selectedServer == server.name && (
             <>
               {onCheck && (
                 <a onClick={() => onCheck(server.name)}>
                   <ShieldExclamationIcon /> Check
-                </a>
-              )}
-              {onTransfer && (
-                <a onClick={() => onTransfer(server.name)}>
-                  <ArrowUpOnSquareStackIcon /> Transfer
                 </a>
               )}
             </>

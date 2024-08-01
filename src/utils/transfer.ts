@@ -30,6 +30,12 @@ export const transferBlob = async (
   } else {
     if (targetServer.type == 'blossom') {
       const blob = await mirrordBlossomBlob(targetServer.url, sourceUrl, signEventTemplate);
+      onProgress &&
+        onProgress({
+          loaded: blob.size,
+          bytes: blob.size,
+          lengthComputable: true,
+        });
       if (blob) return blob;
       console.log('Mirror failed. Using download + upload instead.');
     }

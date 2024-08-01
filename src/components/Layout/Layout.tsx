@@ -36,10 +36,7 @@ export const Layout = () => {
       >
         <MagnifyingGlassIcon /> Browse
       </button>
-      <button
-        className={`btn ${location.pathname == '/transfer' ? 'btn-neutral' : ''} `}
-        onClick={() => navigate('/transfer')}
-      >
+      <button className={`btn ${location.pathname == '/sync' ? 'btn-neutral' : ''} `} onClick={() => navigate('/sync')}>
         <ServerStackIcon /> Sync
       </button>
     </>
@@ -91,7 +88,7 @@ export const Layout = () => {
         </div>
       </div>
       {showMobileMenu && (
-        <div className="navbar bg-base-300">
+        <div className="navbar bg-base-300 md:hidden">
           <div className="navbar-center gap-2">{navItems}</div>
         </div>
       )}
