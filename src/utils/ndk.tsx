@@ -20,7 +20,6 @@ type NDKContextType = {
 const cacheAdapter = new NDKCacheAdapterDexie({ dbName: 'ndk-cache-2' });
 
 const ndk = new NDK({
-  explicitRelayUrls: ['wss://nostrue.com/', 'wss://relay.damus.io/', 'wss://nos.lol/'],
   cacheAdapter,
 });
 

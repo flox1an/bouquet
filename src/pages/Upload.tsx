@@ -231,10 +231,10 @@ function Upload() {
   const clearTransfers = () => {
     setTransfers(tfs =>
       servers.reduce(
-        (acc, s) => ({
+        (acc, s, i) => ({
           ...acc,
           [s.name]: {
-            enabled: !serverInfo[s.name].isError && (tfs[s.name] !== undefined ? tfs[s.name].enabled : true),
+            enabled: !serverInfo[s.name].isError && (tfs[s.name] !== undefined ? tfs[s.name].enabled : i < 2), // select first two servers by default.
             size: 0,
             transferred: 0,
           },
