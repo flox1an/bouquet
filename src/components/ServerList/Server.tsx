@@ -60,13 +60,13 @@ const Server = ({
           </div>
         ) : (
           <div className="server-stats">
-            <div className="server-stat tooltip text-left" data-tip="Number of blobs">
+            <div className="server-stat tooltip text-left text-nowrap" data-tip="Number of blobs">
               <DocumentDuplicateIcon /> {server.count}
             </div>
-            <div className="server-stat tooltip text-left" data-tip="Total size of blobs">
+            <div className="server-stat tooltip text-left text-nowrap" data-tip="Total size of blobs">
               <CubeIcon /> {formatFileSize(server.size)}
             </div>
-            <div className="server-stat tooltip text-left" data-tip="Date of last change">
+            <div className="server-stat tooltip text-left text-nowrap" data-tip="Date of last change">
               <ClockIcon /> {formatDate(server.lastChange)}
             </div>
             {server.message && (
