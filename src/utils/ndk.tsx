@@ -17,10 +17,24 @@ type NDKContextType = {
   publishSignedEvent: (signedEvent: SignedEvent) => Promise<void>;
 };
 
-const cacheAdapter = new NDKCacheAdapterDexie({ dbName: 'ndk-cache-2' });
+export const defaultRelays = [
+  // 'ws://localhost:4869',
+  'wss://relay.damus.io',
+  'wss://relay.nostr.band',
+  'wss://relay.snort.social',
+  'wss://nos.lol',
+  'wss://nostr.wine',
+  'wss://relay.primal.net',
+  'wss://purplepag.es/', // needed for user profiles
+];
+
+const cacheAdapter = new NDKCacheAdapterDexie({ dbName: 'ndk-cache-3' });
 
 const ndk = new NDK({
   cacheAdapter,
+  autoConnectUserRelays: true,
+  enableOutboxModel: true,
+  explicitRelayUrls: defaultRelays
 });
 
 export const NDKContext = createContext<NDKContextType>({
