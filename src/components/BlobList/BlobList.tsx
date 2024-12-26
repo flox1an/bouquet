@@ -185,16 +185,16 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
             <tbody>
               {blobs.map(blob => (
                 <tr
-                  className={`hover ${selectedBlobs[blob.sha256? blob.sha256: blob.url] ? 'selected' : ''}`}
+                  className={`hover ${selectedBlobs[blob.sha256 ? blob.sha256 : blob.url] ? 'selected' : ''}`}
                   key={blob.sha256}
-                  onClick={e => handleSelectBlob(blob.sha256? blob.sha256 : blob.url, e)}
+                  onClick={e => handleSelectBlob(blob.sha256 ? blob.sha256 : blob.url, e)}
                 >
                   <td className="whitespace-nowrap w-12">
                     <input
                       type="checkbox"
                       className="checkbox checkbox-primary checkbox-sm mr-2"
-                      checked={!!selectedBlobs[blob.sha256? blob.sha256 : blob.url]}
-                      onChange={e => handleSelectBlob(blob.sha256? blob.sha256 : blob.url, e)}
+                      checked={!!selectedBlobs[blob.sha256 ? blob.sha256 : blob.url]}
+                      onChange={e => handleSelectBlob(blob.sha256 ? blob.sha256 : blob.url, e)}
                       onClick={e => e.stopPropagation()}
                     />
                     <MimeTypeIcon type={blob.type} />

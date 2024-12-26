@@ -31,11 +31,11 @@ export async function fetchBlossomList(
   pubkey: string,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
 ): Promise<BlobDescriptor[]> {
-  const listAuthEvent = await BlossomClient.getListAuth(signEventTemplate, 'List Blobs');
-  const blobs = await BlossomClient.listBlobs(serverUrl, pubkey!, undefined, listAuthEvent);
+  const listAuthEvent = await BlossomClient.createListAuth(signEventTemplate, 'List Blobs');
+  const blobs = await BlossomClient.listBlobs(serverUrl, pubkey!, { auth: listAuthEvent });
 
   // fallback to deprecated created attibute for servers that are not using 'uploaded' yet
-  return blobs.map(b => ({ ...b, uploaded: b.uploaded || b.created || dayjs().unix() }));
+  return blobs.map(b => ({ ...b, uploaded: b.uploaded || dayjs().unix() }));
 }
 
 export const uploadBlossomBlob = async (
@@ -44,7 +44,7 @@ export const uploadBlossomBlob = async (
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
   onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
 ) => {
-  const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
+  const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file, 'Upload Blob');
 
   const headers = {
     Accept: 'application/json',
@@ -81,7 +81,7 @@ export const mirrordBlossomBlob = async (
   if (!hash) throw 'The soureUrl does not contain a blossom hash.';
 
   const blossomClient = new BlossomClient(targetServer, signEventTemplate);
-  const mirrorAuth = await blossomClient.getMirrorAuth(hash, 'Upload Blob');
+  const mirrorAuth = await blossomClient.createMirrorAuth(hash, 'Upload Blob');
 
   const headers = {
     Accept: 'application/json',

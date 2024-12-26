@@ -1,9 +1,18 @@
 import type { EventTemplate, SignedEvent } from 'blossom-client-sdk';
-import NDK, { NDKEvent, NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser } from '@nostr-dev-kit/ndk';
+import NDK, {
+  NDKCacheAdapter,
+  NDKEvent,
+  NDKNip07Signer,
+  NDKNip46Signer,
+  NDKPrivateKeySigner,
+  NDKUser,
+} from '@nostr-dev-kit/ndk';
 import { generateSecretKey, nip19 } from 'nostr-tools';
 import { decrypt } from 'nostr-tools/nip49';
 import { bytesToHex } from '@noble/hashes/utils';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+
+// @ts-expect-error ndk-cache-dexie has no type definitions
 import NDKCacheAdapterDexie from '@nostr-dev-kit/ndk-cache-dexie';
 
 type NDKContextType = {
@@ -17,7 +26,7 @@ type NDKContextType = {
   publishSignedEvent: (signedEvent: SignedEvent) => Promise<void>;
 };
 
-export const defaultRelays = [
+const defaultRelays = [
   // 'ws://localhost:4869',
   'wss://relay.damus.io',
   'wss://relay.nostr.band',
@@ -28,13 +37,13 @@ export const defaultRelays = [
   'wss://purplepag.es/', // needed for user profiles
 ];
 
-const cacheAdapter = new NDKCacheAdapterDexie({ dbName: 'ndk-cache-3' });
+const dexieAdapter = new NDKCacheAdapterDexie({ dbName: 'ndk-cache-3' });
 
 const ndk = new NDK({
-  cacheAdapter,
+  cacheAdapter: dexieAdapter as NDKCacheAdapter,
   autoConnectUserRelays: true,
   enableOutboxModel: true,
-  explicitRelayUrls: defaultRelays
+  explicitRelayUrls: defaultRelays,
 });
 
 export const NDKContext = createContext<NDKContextType>({
@@ -83,9 +92,6 @@ export const NDKContextProvider = ({ children }: { children: React.ReactElement 
       console.log('Found user', user);
 
       signer = new NDKNip46Signer(ndk, connectionString, localSigner);
-
-      signer.remoteUser = user;
-      signer.remotePubkey = user.pubkey;
     } else if (connectionString.startsWith('bunker://')) {
       const uri = new URL(connectionString);
 

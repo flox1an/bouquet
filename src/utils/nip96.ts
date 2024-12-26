@@ -173,7 +173,6 @@ export async function uploadNip96File(
   }
 
   return {
-    created: dayjs().unix(), // todo fix
     uploaded: dayjs().unix(), // todo fix
     type: getValueByTag(result.nip94_event?.tags, 'm'),
     sha256: x,

@@ -127,6 +127,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
           <div className="grid gap-2" style={{ gridTemplateColumns: '2em auto' }}>
             {servers.map(s => (
               <CheckBox
+                key={s.name}
                 name={s.name}
                 disabled={uploadBusy}
                 checked={transfers[s.name]?.enabled || false}

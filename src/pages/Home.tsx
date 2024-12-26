@@ -34,8 +34,8 @@ function Home() {
   const deleteBlob = useMutation({
     mutationFn: async ({ server, hash }: { server: Server; hash: string }) => {
       if (server.type === 'blossom') {
-        const deleteAuth = await BlossomClient.getDeleteAuth(hash, signEventTemplate, 'Delete Blob');
-        return BlossomClient.deleteBlob(server.url, hash, deleteAuth);
+        const deleteAuth = await BlossomClient.createDeleteAuth(signEventTemplate, hash, 'Delete Blob');
+        return BlossomClient.deleteBlob(server.url, hash, { auth: deleteAuth });
       } else {
         return await deleteNip96File(server, hash, signEventTemplate);
       }

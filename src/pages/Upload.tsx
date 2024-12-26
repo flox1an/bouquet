@@ -141,7 +141,7 @@ function Upload() {
       for (const file of filesToUpload) {
         const authStartTime = Date.now();
         // TODO do this only once for each file. Currently this is called for every server
-        const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
+        const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file, 'Upload Blob');
         console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
 
         try {
@@ -221,9 +221,13 @@ function Upload() {
 
     //console.log(transfers);
     // TODO transfer can not be accessed yet, errors are not visible here. TODO pout errors somewhere else
+    // setter for error transfers has not executed when we reach here.
     const errorsTransfers = Object.keys(transfers).filter(ts => transfers[ts].enabled && !!transfers[ts].error);
+    console.log('errorCheck', errorsTransfers);
     if (errorsTransfers.length == 0) {
       // Only go to the next step if no errors have occured
+      // TODO why dont we detect errors here?????? INVESTIGATE
+      // Should show button to "skip" despite of errors
       setUploadStep(2);
     }
   };
