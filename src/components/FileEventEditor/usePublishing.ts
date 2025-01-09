@@ -8,7 +8,7 @@ import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL 
 export const usePublishing = () => {
   const { ndk, user } = useNDK();
 
-  const publishFileEvent = async (data: FileEventData): Promise<string> => {
+  const publishFileEvent = async (data: FileEventData): Promise<NostrEvent> => {
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: data.content,
@@ -37,27 +37,26 @@ export const usePublishing = () => {
     if (data.blurHash) {
       e.tags.push(['blurhash', data.blurHash]);
     }
-    if (data.thumbnail) {
-      e.tags.push(['thumb', data.thumbnail]);
-      e.tags.push(['image', data.thumbnail]);
+    if (data.publishedThumbnail) {
+      e.tags.push(['thumb', data.publishedThumbnail]);
+      e.tags.push(['image', data.publishedThumbnail]);
     }
 
     const ev = new NDKEvent(ndk, e);
     await ev.sign();
     console.log(ev.rawEvent());
-    // await ev.publish();
-    return JSON.stringify(ev.rawEvent(), null, 2);
+    //await ev.publish();
+    return ev.rawEvent();
   };
 
-  const publishAudioEvent = async (data: FileEventData): Promise<string> => {
+  const publishAudioEvent = async (data: FileEventData): Promise<NostrEvent> => {
     const e: NostrEvent = {
       created_at: dayjs().unix(),
       content: `${data.artist} - ${data.title}`,
       tags: [
         ['d', data.x],
         ...uniq(data.url).map(du => ['media', du]),
-        ['x', data.x],
-        ...uniq(data.url).map(du => ['imeta', `url ${du}`, `m ${data.m}`]),
+        ...uniq(data.url).map(du => ['imeta', `url ${du}`, `m ${data.m}`, `x ${data.x}`]),
         ...data.tags.map(t => ['t', t]),
       ],
       kind: KIND_AUDIO,
@@ -70,22 +69,35 @@ export const usePublishing = () => {
     }
 
     if (data.artist) {
-      e.tags.push(['creator', `${data.artist}`]);
-      e.tags.push(['creator', `${data.artist}`, 'Artist']);
+      e.tags.push(['c', `${data.artist}`, 'artist']);
     }
 
     if (data.album) {
-      e.tags.push(['album', `${data.album}`]);
+      e.tags.push(['c', `${data.album}`, 'album']);
     }
+
+    if (data.publishedThumbnail) {
+      e.tags.push(['cover', `${data.publishedThumbnail}`]);
+    }
+
+    if (data.genre) {
+      e.tags.push(['c', `${data.genre}`, 'genre']);
+
+      if (data.subgenre) {
+        e.tags.push(['c', `${data.subgenre}`, 'subgenre']);
+      }
+    }
+
+    e.tags.push(['published_at', `${dayjs().unix()}`]);
 
     const ev = new NDKEvent(ndk, e);
     await ev.sign();
     console.log(ev.rawEvent());
-    // await ev.publish();
-    return JSON.stringify(ev.rawEvent(), null, 2);
+    //await ev.publish();
+    return ev.rawEvent();
   };
 
-  const publishVideoEvent = async (data: FileEventData): Promise<string> => {
+  const publishVideoEvent = async (data: FileEventData): Promise<NostrEvent> => {
     const videoIsHorizontal = data.width == undefined || data.height == undefined || data.width > data.height;
 
     const e: NostrEvent = {
@@ -118,16 +130,16 @@ export const usePublishing = () => {
     if (data.m) {
       e.tags.push(['m', data.m]);
     }
-    if (data.thumbnail) {
-      e.tags.push(['thumb', data.thumbnail]);
-      e.tags.push(['image', data.thumbnail]);
+    if (data.publishedThumbnail) {
+      e.tags.push(['thumb', data.publishedThumbnail]);
+      e.tags.push(['image', data.publishedThumbnail]);
     }
 
     const ev = new NDKEvent(ndk, e);
     await ev.sign();
     console.log(ev.rawEvent());
-    // await ev.publish();
-    return JSON.stringify(ev.rawEvent(), null, 2);
+    //await ev.publish();
+    return ev.rawEvent();
   };
 
   return {

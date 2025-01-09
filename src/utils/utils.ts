@@ -44,3 +44,9 @@ export const formatDate = (unixTimeStamp: number): string => {
   if (ts == 0) return 'never';
   return dayjs(ts * 1000).format('YYYY-MM-DD');
 };
+
+export function extractDomain(url: string): string | null {
+  const regex = /^(https?:\/\/)([^/]+)/;
+  const match = url.match(regex);
+  return match ? match[2]?.toLocaleLowerCase() : null;
+}

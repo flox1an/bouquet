@@ -71,7 +71,7 @@ const AudioBlobList = ({ audioFiles, handleSelectBlob, selectedBlobs }: AudioBlo
                 </div>
                 {blob.data.id3 && (
                   <div className="flex flex-col pb-1 md:pb-4 flex-grow">
-                    {blob.data.id3.title && <span className="font-bold">{blob.data.id3.title}</span>}
+                    {blob.data.id3.title && <span className=" text-accent">{blob.data.id3.title}</span>}
                     {blob.data.id3.artist && <span className=" text-sm"> {blob.data.id3.artist}</span>}
                     {blob.data.id3.album && (
                       <span className="text-sm">

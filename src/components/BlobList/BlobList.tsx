@@ -2,13 +2,9 @@ import { useState, useMemo } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import {
   ClipboardDocumentIcon,
-  DocumentIcon,
   ExclamationTriangleIcon,
-  FilmIcon,
   FolderIcon,
   FolderPlusIcon,
-  MusicalNoteIcon,
-  PhotoIcon,
   PlusIcon,
   TrashIcon,
   XMarkIcon,
@@ -24,6 +20,7 @@ import BlobListTypeMenu, { ListMode } from './BlobListTypeMenu';
 import useFileMetaEventsByHash from '../../utils/useFileMetaEvents';
 import './BlobList.css';
 import { useBlobSelection } from './useBlobSelection';
+import MimeTypeIcon from '../MimeTypeIcon';
 
 type BlobListProps = {
   blobs: BlobDescriptor[];
@@ -37,6 +34,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   const { distribution } = useServerInfo();
   const fileMetaEventsByHash = useFileMetaEventsByHash();
   const { handleSelectBlob, selectedBlobs, setSelectedBlobs } = useBlobSelection(blobs);
+
   const images = useMemo(
     () => blobs.filter(b => b.type?.startsWith('image/')).sort((a, b) => (a.uploaded > b.uploaded ? -1 : 1)), // descending
     [blobs]
@@ -75,15 +73,6 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
     </div>
   );
 
-  const getMimeTypeIcon = (type: string | undefined) => {
-    if (!type) return <DocumentIcon />;
-    if (type.startsWith('image/')) return <PhotoIcon />;
-    if (type.startsWith('video/')) return <FilmIcon />;
-    if (type.startsWith('audio/')) return <MusicalNoteIcon />;
-    if (type === 'application/pdf') return <DocumentIcon />;
-    return <DocumentIcon />;
-  };
-
   const Badges = ({ blob }: { blob: BlobDescriptor }) => {
     const events = fileMetaEventsByHash[blob.sha256];
     if (!events) return null;
@@ -99,8 +88,8 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   };
 
   const createNewCollection = () => {
-    // TODO Show new collction dialog
-    console.log('Show new collction dialog');
+    // TODO Show new collection dialog
+    console.log('Show new collection dialog');
   };
 
   return (
@@ -118,7 +107,8 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                 className="btn btn-icon btn-primary btn-sm tooltip flex whitespace-nowrap"
                 data-tip="Add selected blobs to collection"
               >
-                <PlusIcon /><FolderIcon />
+                <PlusIcon />
+                <FolderIcon />
               </div>
               <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-[1] w-[30em] p-2 shadow">
                 <li>
@@ -131,7 +121,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                     <FolderIcon /> Collection 2 (NOT IMPLEMENTED YET)
                   </a>
                 </li>
-                <li className=" border-t-2 border-base-300">
+                <li className="border-t-2 border-base-300">
                   <a onClick={() => createNewCollection()}>
                     <FolderPlusIcon /> new collection (NOT IMPLEMENTED YET)
                   </a>
@@ -165,21 +155,21 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
         />
       </div>
 
-      {mode == 'gallery' && (
+      {mode === 'gallery' && (
         <ImageBlobList images={images} selectedBlobs={selectedBlobs} handleSelectBlob={handleSelectBlob} />
       )}
 
-      {mode == 'video' && (
+      {mode === 'video' && (
         <VideoBlobList videos={videos} selectedBlobs={selectedBlobs} handleSelectBlob={handleSelectBlob} />
       )}
 
-      {mode == 'audio' && (
+      {mode === 'audio' && (
         <AudioBlobList audioFiles={audioFiles} selectedBlobs={selectedBlobs} handleSelectBlob={handleSelectBlob} />
       )}
 
-      {mode == 'docs' && <DocumentBlobList docs={docs} />}
+      {mode === 'docs' && <DocumentBlobList docs={docs} />}
 
-      {mode == 'list' && (
+      {mode === 'list' && (
         <div className="blob-list">
           <table className="table hover">
             <thead>
@@ -193,35 +183,37 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
               </tr>
             </thead>
             <tbody>
-              {blobs.map((blob: BlobDescriptor) => (
+              {blobs.map(blob => (
                 <tr
-                  className={`hover ${selectedBlobs[blob.sha256] ? 'selected' : ''}`}
+                  className={`hover ${selectedBlobs[blob.sha256 ? blob.sha256 : blob.url] ? 'selected' : ''}`}
                   key={blob.sha256}
-                  onClick={e => handleSelectBlob(blob.sha256, e)}
+                  onClick={e => handleSelectBlob(blob.sha256 ? blob.sha256 : blob.url, e)}
                 >
                   <td className="whitespace-nowrap w-12">
                     <input
                       type="checkbox"
                       className="checkbox checkbox-primary checkbox-sm mr-2"
-                      checked={!!selectedBlobs[blob.sha256]}
-                      onChange={e => handleSelectBlob(blob.sha256, e)}
+                      checked={!!selectedBlobs[blob.sha256 ? blob.sha256 : blob.url]}
+                      onChange={e => handleSelectBlob(blob.sha256 ? blob.sha256 : blob.url, e)}
                       onClick={e => e.stopPropagation()}
                     />
-                    {getMimeTypeIcon(blob.type)}
+                    <MimeTypeIcon type={blob.type} />
                   </td>
                   <td className="whitespace-nowrap">
                     <a className="link link-primary" href={blob.url} target="_blank">
-                      {blob.sha256.slice(0, 15)}
+                      {blob.sha256 ? blob.sha256.slice(0, 15) : blob.url.slice(blob.url.length - 15)}
                     </a>
                   </td>
                   <td>
                     <Badges blob={blob} />
-                    <span className="text-warning tooltip" data-tip="Not distributed to any other server">
-                      {distribution[blob.sha256].servers.length == 1 && <ExclamationTriangleIcon />}
-                    </span>
+                    {distribution[blob.sha256]?.servers.length === 1 && (
+                      <span className="text-warning tooltip" data-tip="Not distributed to any other server">
+                        <ExclamationTriangleIcon />
+                      </span>
+                    )}
                   </td>
-                  <td>{formatFileSize(blob.size)}</td>
-                  <td>{formatDate(blob.uploaded)}</td>
+                  <td className="text-xs md:text-sm">{formatFileSize(blob.size)}</td>
+                  <td className="text-xs md:text-sm">{formatDate(blob.uploaded)}</td>
                   <td className="whitespace-nowrap">
                     <Actions blob={blob}></Actions>
                   </td>

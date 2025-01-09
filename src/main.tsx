@@ -4,7 +4,7 @@ import './index.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { NDKContextProvider } from './utils/ndk.tsx';
-import { Route, RouterProvider, createBrowserRouter, createRoutesFromElements } from 'react-router-dom';
+import { Navigate, Route, RouterProvider, createBrowserRouter, createRoutesFromElements } from 'react-router-dom';
 import { Layout } from './components/Layout/Layout.tsx';
 import Home from './pages/Home.tsx';
 import { Transfer } from './pages/Transfer.tsx';
@@ -40,9 +40,10 @@ export function createIDBPersister(idbValidKey: IDBValidKey = 'reactQuery') {
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route element={<Layout />}>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={<Navigate to="/upload" replace />} />
+      <Route path="/browse" element={<Home />} />
       <Route path="/transfer/:source" element={<Transfer />} />
-      <Route path="/transfer" element={<Transfer />} />
+      <Route path="/sync" element={<Transfer />} />
       <Route path="/upload" element={<Upload />} />
       <Route path="/check/:source" element={<Check />} />
     </Route>

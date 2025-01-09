@@ -46,7 +46,7 @@ const ensureDecrypted = async (dvm: NDKUser, event: NDKEvent): Promise<NDKEvent 
   return event;
 };
 
-const useVideoThumbnailDvm = (setFileEventData: React.Dispatch<React.SetStateAction<FileEventData>>) => {
+const useVideoThumbnailDvm = (fileEventData: FileEventData, setFileEventData: (data: FileEventData) => void) => {
   const [thumbnailRequestEventId, setThumbnailRequestEventId] = useState<string | undefined>();
   const { ndk, user } = useNDK();
   const dvm = ndk.getUser({ npub: NPUB_DVM_THUMBNAIL_CREATION });
@@ -68,7 +68,7 @@ const useVideoThumbnailDvm = (setFileEventData: React.Dispatch<React.SetStateAct
         const urls = firstEvent.tags.filter(t => t[0] === 'thumb').map(t => t[1]);
         const dim = firstEvent.tags.find(t => t[0] === 'dim')?.[1];
         const duration = firstEvent.tags.find(t => t[0] === 'duration')?.[1];
-        setFileEventData(ed => ({ ...ed, thumbnails: urls, dim, duration }));
+        setFileEventData({ ...fileEventData, thumbnails: urls, dim, duration });
       }
     };
     doASync();

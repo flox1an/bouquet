@@ -12,6 +12,7 @@ interface ServerListPopupProps {
 const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSave, initialServers }) => {
   const [servers, setServers] = useState<Server[]>([]);
   const [newServer, setNewServer] = useState('');
+  const [newServerType, setNewServerType] = useState<'blossom' | 'nip96'>('blossom');
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -28,7 +29,8 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
 
   const handleAddServer = () => {
     if (newServer.trim()) {
-      setServers([...servers, { name: newServer.trim(), url: newServer.trim(), type: 'blossom' }]);
+      const url = newServer.trim().startsWith('http') ? newServer.trim() : `https://${newServer.trim()}`;
+      setServers([...servers, { name: newServer.trim(), url, type: newServerType }]);
       setNewServer('');
     }
   };
@@ -68,7 +70,9 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
           <ul className="mt-4">
             {servers.map((server, index) => (
               <li key={server.url} className="flex items-center justify-between mt-2">
-                <span>{server.url} <div className='badge badge-neutral'>{server.type}</div></span>
+                <span>
+                  {server.url} <div className="badge badge-neutral">{server.type}</div>
+                </span>
                 <div className="flex items-center space-x-2">
                   <button className="btn btn-ghost btn-sm" onClick={() => handleMoveUp(index)}>
                     <ArrowUpIcon className="h-5 w-5" />
@@ -84,7 +88,7 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
             ))}
           </ul>
 
-          <div className="mt-4 flex flex-row gap-2">
+          <div className="mt-4 flex flex-col gap-2">
             <input
               type="text"
               className="input input-bordered w-full"
@@ -92,6 +96,30 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
               value={newServer}
               onChange={e => setNewServer(e.target.value)}
             />
+            <div className="flex items-center space-x-2 my-2">
+              <label className="flex items-center space-x-1">
+                <input
+                  type="radio"
+                  name="serverType"
+                  value="blossom"
+                  checked={newServerType === 'blossom'}
+                  onChange={() => setNewServerType('blossom')}
+                  className="radio radio-primary"
+                />
+                <span>Blossom</span>
+              </label>
+              <label className="flex items-center space-x-1">
+                <input
+                  type="radio"
+                  name="serverType"
+                  value="nip96"
+                  checked={newServerType === 'nip96'}
+                  onChange={() => setNewServerType('nip96')}
+                  className="radio radio-primary"
+                />
+                <span>NIP-96</span>
+              </label>
+            </div>
             <button className="btn btn-primary" onClick={handleAddServer}>
               Add Server
             </button>

@@ -1,21 +1,16 @@
 import { ArrowPathRoundedSquareIcon, Cog8ToothIcon } from '@heroicons/react/24/outline';
 import { ServerInfo, useServerInfo } from '../../utils/useServerInfo';
-import { Server as ServerType } from '../../utils/useUserServers';
+import { Server as ServerType, useUserServers } from '../../utils/useUserServers';
 import Server from './Server';
 import './ServerList.css';
 import ServerListPopup from '../ServerListPopup';
 import { useMemo, useState } from 'react';
-import { useNDK } from '../../utils/ndk';
-import { NDKEvent } from '@nostr-dev-kit/ndk';
-import dayjs from 'dayjs';
-import { USER_BLOSSOM_SERVER_LIST_KIND } from 'blossom-client-sdk';
 import { useQueryClient } from '@tanstack/react-query';
 
 type ServerListProps = {
   servers: ServerInfo[];
   selectedServer?: string | undefined;
   setSelectedServer?: React.Dispatch<React.SetStateAction<string | undefined>>;
-  onTransfer?: (server: string) => void;
   onCancel?: () => void;
   onCheck?: (server: string) => void;
   title?: React.ReactElement;
@@ -27,13 +22,12 @@ export const ServerList = ({
   servers,
   selectedServer,
   setSelectedServer,
-  onTransfer,
   onCancel,
   title,
   manageServers = false,
   withVirtualServers = false,
 }: ServerListProps) => {
-  const { ndk, user } = useNDK();
+  const { storeUserServers } = useUserServers();
   const { distribution } = useServerInfo();
   const queryClient = useQueryClient();
   const blobsWithOnlyOneOccurance = Object.values(distribution)
@@ -51,16 +45,8 @@ export const ServerList = ({
   };
 
   const handleSaveServers = async (newServers: ServerType[]) => {
-    const ev = new NDKEvent(ndk, {
-      kind: USER_BLOSSOM_SERVER_LIST_KIND,
-      created_at: dayjs().unix(),
-      content: '',
-      pubkey: user?.pubkey || '',
-      tags: newServers.map(s => ['server', `${s.url}`]),
-    });
-    await ev.sign();
-    console.log(ev.rawEvent());
-    await ev.publish();
+    await storeUserServers(newServers);
+    queryClient.invalidateQueries({ queryKey: ['use-event'] });
   };
 
   const serversToList = useMemo(
@@ -69,8 +55,8 @@ export const ServerList = ({
   );
 
   const handleRefresh = () => {
-    queryClient.refetchQueries({ queryKey: ['blobs'] });
-    queryClient.refetchQueries({ queryKey: ['use-event'] });
+    queryClient.invalidateQueries({ queryKey: ['blobs'] });
+    queryClient.invalidateQueries({ queryKey: ['use-event'] });
   };
 
   return (
@@ -104,7 +90,6 @@ export const ServerList = ({
             server={server}
             selectedServer={selectedServer}
             setSelectedServer={setSelectedServer}
-            onTransfer={onTransfer}
             onCancel={onCancel}
             /* onCheck={onCheck} */
             blobsOnlyOnThisServer={blobsWithOnlyOneOccurance.filter(b => b.server == server.name).length}

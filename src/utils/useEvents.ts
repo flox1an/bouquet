@@ -19,7 +19,7 @@ export default function useEvents(filter: NDKFilter | NDKFilter[], opts?: Subscr
 
   useEffect(() => {
     if (filter && !opts?.disable) {
-      const relaySet = relays?.length ?? 0 > 0 ? NDKRelaySet.fromRelayUrls(relays as string[], ndk) : undefined;
+      const relaySet = (relays?.length ?? 0 > 0) ? NDKRelaySet.fromRelayUrls(relays as string[], ndk) : undefined;
       const sub = ndk.subscribe(filter, opts, relaySet);
       sub.on('event', (ev: NDKEvent) => {
         setEvents(evs => {

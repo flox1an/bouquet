@@ -1,0 +1,35 @@
+{
+  "api_url": "https://nostrcheck.me/api/v2/media",
+  "download_url": "https://nostrcheck.me/media",
+  "supported_nips": [1, 4, 5, 78, 94, 96, 98],
+  "tos_url": "https://nostrcheck.me/api/v2/tos/",
+  "content_types": [
+    "image/png",
+    "image/jpg",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "video/mp4",
+    "video/quicktime",
+    "video/mpeg",
+    "video/webm",
+    "audio/mpeg",
+    "audio/mpg",
+    "audio/mpeg3",
+    "audio/mp3"
+  ],
+  "plans": {
+    "free": {
+      "name": "Free Tier",
+      "is_nip98_required": true,
+      "url": "",
+      "max_byte_size": 104857600,
+      "file_expiration": [0, 0],
+      "media_transformations": {
+        "image": ["resizing", "format_conversion", "compression", "metadata_stripping"],
+        "video": ["resizing", "format_conversion", "compression", "metadata_stripping"]
+      }
+    }
+  }
+}
+

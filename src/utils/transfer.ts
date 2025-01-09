@@ -1,83 +1,55 @@
-import axios, { AxiosProgressEvent } from 'axios';
-import { BlobDescriptor, BlossomClient, EventTemplate, SignedEvent } from 'blossom-client-sdk';
-import { extractHashFromUrl } from './blossom';
+import { AxiosProgressEvent } from 'axios';
+import { BlobDescriptor, EventTemplate, SignedEvent } from 'blossom-client-sdk';
+import { downloadBlossomBlob, mirrordBlossomBlob, uploadBlossomBlob } from './blossom';
+import { Server } from './useUserServers';
+import { uploadNip96File } from './nip96';
 
-export const uploadBlob = async (
-  server: string,
-  file: File,
-  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
-  onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
-) => {
-  const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
+async function blobUrlToFile(blobUrl: string, fileName: string): Promise<File> {
+  const response = await fetch(blobUrl);
+  const blob = await response.blob();
+  const fileOptions = { type: blob.type, lastModified: Date.now() };
+  return new File([blob], fileName, fileOptions);
+}
 
-  const headers = {
-    Accept: 'application/json',
-    'Content-Type': file.type,
-  };
-
-  const res = await axios.put<BlobDescriptor>(`${server}/upload`, file, {
-    headers: uploadAuth ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(uploadAuth) } : headers,
-    onUploadProgress,
-  });
-
-  return res.data;
-};
-
-export const downloadBlob = async (url: string, onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void) => {
-  const response = await axios.get(url, {
-    responseType: 'blob',
-    onDownloadProgress,
-  });
-
-  return { data: response.data, type: response.headers['Content-Type']?.toString() };
-};
-
-export const mirrordBlob = async (
-  targetServer: string,
-  sourceUrl: string,
-  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
-) => {
-  console.log({ sourceUrl });
-  const hash = extractHashFromUrl(sourceUrl);
-  if (!hash) throw 'The soureUrl does not contain a blossom hash.';
-
-  const blossomClient = new BlossomClient(targetServer, signEventTemplate);
-  const mirrorAuth = await blossomClient.getMirrorAuth(hash, 'Upload Blob');
-
-  const headers = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
-
-  const res = await axios.put<BlobDescriptor>(
-    `${targetServer}/mirror`,
-    { url: sourceUrl },
-    {
-      headers: mirrorAuth
-        ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(mirrorAuth) }
-        : headers,
-    }
-  );
-  return res.data;
-};
-
+// TODO support nip96
 export const transferBlob = async (
   sourceUrl: string,
-  targetServer: string,
+  targetServer: Server,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
-  onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+  onProgress?: (progressEvent: AxiosProgressEvent) => void
 ): Promise<BlobDescriptor> => {
   console.log({ sourceUrl, targetServer });
 
-  const blob = await mirrordBlob(targetServer, sourceUrl, signEventTemplate);
-  if (blob) return blob;
-  console.log('Mirror failed. Using download + upload instead.');
+  if (sourceUrl.startsWith('blob:')) {
+    const file = await blobUrlToFile(sourceUrl, 'cover.jpg');
+    if (targetServer.type == 'blossom') {
+      return await uploadBlossomBlob(targetServer.url, file, signEventTemplate, onProgress);
+    } else {
+      return await uploadNip96File(targetServer, file, 'cover.jpg', signEventTemplate, onProgress);
+    }
+  } else {
+    if (targetServer.type == 'blossom') {
+      const blob = await mirrordBlossomBlob(targetServer.url, sourceUrl, signEventTemplate);
+      onProgress &&
+        onProgress({
+          loaded: blob.size,
+          bytes: blob.size,
+          lengthComputable: true,
+        });
+      if (blob) return blob;
+      console.log('Mirror failed. Using download + upload instead.');
+    }
 
-  const result = await downloadBlob(sourceUrl, onUploadProgress);
+    const result = await downloadBlossomBlob(sourceUrl, onProgress);
 
-  const fileName = sourceUrl.replace(/.*\//, '');
+    const fileName = sourceUrl.replace(/.*\//, '');
 
-  const file = new File([result.data], fileName, { type: result.type, lastModified: new Date().getTime() });
+    const file = new File([result.data], fileName, { type: result.type, lastModified: new Date().getTime() });
 
-  return await uploadBlob(targetServer, file, signEventTemplate, onUploadProgress);
+    if (targetServer.type == 'blossom') {
+      return await uploadBlossomBlob(targetServer.url, file, signEventTemplate, onProgress);
+    } else {
+      return await uploadNip96File(targetServer, file, fileName, signEventTemplate, onProgress); // TODO add caption
+    }
+  }
 };

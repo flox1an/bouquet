@@ -1,80 +1,107 @@
-import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNDK } from '../utils/ndk';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
 import { removeExifData } from '../utils/exif';
-import axios, { AxiosProgressEvent } from 'axios';
-import { ArrowUpOnSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
-import CheckBox from '../components/CheckBox/CheckBox';
-import ProgressBar from '../components/ProgressBar/ProgressBar';
-import { formatFileSize } from '../utils/utils';
+import axios, { AxiosError, AxiosProgressEvent } from 'axios';
 import FileEventEditor, { FileEventData } from '../components/FileEventEditor/FileEventEditor';
 import pLimit from 'p-limit';
 import { Server, useUserServers } from '../utils/useUserServers';
 import { resizeImage } from '../utils/resize';
-import { getImageSize } from '../utils/image';
-import { getBlurhashFromFile } from '../utils/blur';
-
-type TransferStats = {
-  enabled: boolean;
-  size: number;
-  transferred: number;
-  rate: number;
-};
-
-/*
-TODO
-steps
-- select files
-- (preview/reisze/exif removal)
-  - images: size, blurimage, dimensions
-  - audio: id3 tag
-  - video: dimensions, bitrate
-- upload
-  - server slection, progress bars, upload speed
-- 
-*/
-
-type ResizeOptionType = {
-  name: string;
-  format?: string;
-  width?: number;
-  height?: number;
-};
-
-const ResizeOptions: ResizeOptionType[] = [
-  {
-    name: 'Orignal Image',
-    width: undefined,
-    height: undefined,
-  },
-  {
-    name: 'max. 2048x2048 pixels',
-    width: 2048,
-    height: 2048,
-  },
-  {
-    name: 'max. 1080x1080 pixels',
-    width: 1080,
-    height: 1080,
-  },
-];
+import { getBlurhashAndSizeFromFile } from '../utils/blur';
+import UploadFileSelection, { ResizeOptions, TransferStats } from '../components/UploadFileSelection';
+import UploadProgress from '../components/UploadProgress';
+import { uploadNip96File } from '../utils/nip96';
+import { extractDomain } from '../utils/utils';
+import { transferBlob } from '../utils/transfer';
+import { usePublishing } from '../components/FileEventEditor/usePublishing';
+import { useNavigate } from 'react-router-dom';
+import { NostrEvent } from '@nostr-dev-kit/ndk';
+import UploadPublished from '../components/UploadPublished';
+import { InformationCircleIcon } from '@heroicons/react/24/outline';
+import UploadOnboarding from '../components/UploadOboarding';
 
 function Upload() {
-  const servers = useUserServers();
+  const { servers, serversLoading } = useUserServers();
   const { signEventTemplate } = useNDK();
   const { serverInfo } = useServerInfo();
   const queryClient = useQueryClient();
   const [transfers, setTransfers] = useState<{ [key: string]: TransferStats }>({});
   const [files, setFiles] = useState<File[]>([]);
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
-  const limit = pLimit(3);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const limit = pLimit(3);
+  const [preparing, setPreparing] = useState(false);
+  const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
   const [imageResize, setImageResize] = useState(0);
   const [uploadStep, setUploadStep] = useState(0);
+  const { publishFileEvent, publishAudioEvent, publishVideoEvent } = usePublishing();
+  const navigate = useNavigate();
+
+  async function getListOfFilesToUpload() {
+    const filesToUpload: File[] = [];
+    for (const f of files) {
+      let processedFile = f;
+
+      if (processedFile.type.startsWith('image/')) {
+        // Do image processing according to options
+        if (imageResize > 0) {
+          const { width, height } = ResizeOptions[imageResize];
+          processedFile = await resizeImage(processedFile, width, height);
+        }
+        if (cleanPrivateData) {
+          processedFile = await removeExifData(processedFile);
+        }
+      }
+
+      filesToUpload.push(processedFile);
+    }
+    return filesToUpload;
+  }
+
+  async function createThumbnailForImage(file: File, width: number, height: number) {
+    const thumbnailFile = width > 300 || height > 300 ? await resizeImage(file, 300, 300) : undefined;
+    return thumbnailFile && URL.createObjectURL(thumbnailFile);
+  }
+
+  async function getPreUploadMetaData(filesToUpload: File[]) {
+    const fileDimensions: { [key: string]: FileEventData } = {};
+
+    for (const file of filesToUpload) {
+      let data = {
+        content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/, ''),
+        url: [] as string[],
+        originalFile: file,
+        tags: [] as string[],
+        size: file.size,
+        m: file.type,
+        publish: {
+          file: true,
+          audio: file.type.startsWith('audio/') ? true : undefined,
+          video: file.type.startsWith('video/') ? true : undefined,
+        },
+        events: [] as NostrEvent[],
+      } as FileEventData;
+      if (file.type.startsWith('image/')) {
+        const imageInfo = await getBlurhashAndSizeFromFile(file);
+        if (imageInfo) {
+          const { width, height, blurHash } = imageInfo;
+          const thumbnailBlobUrl = await createThumbnailForImage(file, width, height);
+          data = {
+            ...data,
+            width,
+            height,
+            dim: `${width}x${height}`,
+            blurHash,
+            thumbnails: thumbnailBlobUrl ? [thumbnailBlobUrl] : [],
+          };
+        }
+      }
+      fileDimensions[file.name] = data;
+    }
+    return fileDimensions;
+  }
 
   async function uploadBlob(
     server: string,
@@ -97,54 +124,13 @@ function Upload() {
 
   const upload = async () => {
     setUploadBusy(true);
+    setPreparing(true);
+
     setUploadStep(1);
-
-    const filesToUpload: File[] = [];
-    for (const f of files) {
-      let processedFile = f;
-
-      if (processedFile.type.startsWith('image/')) {
-        // Do image processing according to options
-        if (imageResize > 0) {
-          const { width, height } = ResizeOptions[imageResize];
-          processedFile = await resizeImage(processedFile, width, height);
-        }
-        if (cleanPrivateData) {
-          processedFile = await removeExifData(processedFile);
-        }
-      }
-
-      filesToUpload.push(processedFile);
-    }
-
-    const fileDimensions: { [key: string]: FileEventData } = {};
-    for (const file of filesToUpload) {
-      let data = {
-        content: file.name.replace(/\.[a-zA-Z0-9]{3,4}$/, ''),
-        url: [] as string[],
-        originalFile: file,
-        tags: [] as string[],
-      } as FileEventData;
-      if (file.type.startsWith('image/')) {
-        const dimensions = await getImageSize(file);
-        data = {
-          ...data,
-          width: dimensions.width,
-          height: dimensions.height,
-          dim: `${dimensions.width}x${dimensions.height}`,
-        };
-
-        // TODO maybe combine fileSize and Hash!
-        const blur = await getBlurhashFromFile(file);
-        if (blur) {
-          data = {
-            ...data,
-            blurHash: blur,
-          };
-        }
-      }
-      fileDimensions[file.name] = data;
-    }
+    // TODO this blocks the UI
+    const filesToUpload: File[] = await getListOfFilesToUpload();
+    const fileDimensions = await getPreUploadMetaData(filesToUpload);
+    setPreparing(false);
 
     // TODO icon to cancel upload
     // TODO detect if the file already exists? if we have the hash??
@@ -155,35 +141,52 @@ function Upload() {
       for (const file of filesToUpload) {
         const authStartTime = Date.now();
         // TODO do this only once for each file. Currently this is called for every server
-        const uploadAuth = await BlossomClient.getUploadAuth(file, signEventTemplate, 'Upload Blob');
+        const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file, 'Upload Blob');
         console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
 
-        const newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressEvent => {
+        try {
+          let newBlob: BlobDescriptor;
+          const progressHandler = (progressEvent: AxiosProgressEvent) => {
+            setTransfers(ut => ({
+              ...ut,
+              [server.name]: {
+                ...ut[server.name],
+                transferred: serverTransferred + progressEvent.loaded,
+                rate: progressEvent.rate || 0,
+              },
+            }));
+          };
+          if (server.type == 'blossom') {
+            newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressHandler);
+          } else {
+            newBlob = await uploadNip96File(server, file, '', signEventTemplate, progressHandler);
+          }
+          console.log('newBlob', newBlob);
+          serverTransferred += file.size;
           setTransfers(ut => ({
             ...ut,
-            [server.name]: {
-              ...ut[server.name],
-              transferred: serverTransferred + progressEvent.loaded,
-              rate: progressEvent.rate || 0,
-            },
+            [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
           }));
-        });
 
-        serverTransferred += file.size;
-        setTransfers(ut => ({
-          ...ut,
-          [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
-        }));
-
-        fileDimensions[file.name] = {
-          ...fileDimensions[file.name],
-          x: newBlob.sha256,
-          url: primary
-            ? [newBlob.url, ...fileDimensions[file.name].url]
-            : [...fileDimensions[file.name].url, newBlob.url],
-          size: newBlob.size,
-          m: newBlob.type,
-        };
+          fileDimensions[file.name] = {
+            ...fileDimensions[file.name],
+            x: newBlob.sha256,
+            url: primary
+              ? [newBlob.url, ...fileDimensions[file.name].url]
+              : [...fileDimensions[file.name].url, newBlob.url],
+            size: newBlob.size || fileDimensions[file.name].size, // fallback for nip96 servers that don't return size
+            m: newBlob.type,
+          };
+        } catch (e) {
+          const axiosError = e as AxiosError;
+          const response = axiosError.response?.data as { message?: string };
+          console.error(e);
+          // Record error in transfer log
+          setTransfers(ut => ({
+            ...ut,
+            [server.name]: { ...ut[server.name], error: `${axiosError.message} / ${response?.message}` },
+          }));
+        }
       }
       queryClient.invalidateQueries({ queryKey: ['blobs', server.name] });
     };
@@ -198,6 +201,7 @@ function Upload() {
         for (const server of servers) {
           if (newTransfers[server.name].enabled) {
             newTransfers[server.name].size = totalSize;
+            newTransfers[server.name].error = undefined;
           }
         }
         return newTransfers;
@@ -214,16 +218,27 @@ function Upload() {
     }
 
     setUploadBusy(false);
-    setUploadStep(2);
+
+    //console.log(transfers);
+    // TODO transfer can not be accessed yet, errors are not visible here. TODO pout errors somewhere else
+    // setter for error transfers has not executed when we reach here.
+    const errorsTransfers = Object.keys(transfers).filter(ts => transfers[ts].enabled && !!transfers[ts].error);
+    console.log('errorCheck', errorsTransfers);
+    if (errorsTransfers.length == 0) {
+      // Only go to the next step if no errors have occured
+      // TODO why dont we detect errors here?????? INVESTIGATE
+      // Should show button to "skip" despite of errors
+      setUploadStep(2);
+    }
   };
 
   const clearTransfers = () => {
     setTransfers(tfs =>
       servers.reduce(
-        (acc, s) => ({
+        (acc, s, i) => ({
           ...acc,
           [s.name]: {
-            enabled: !serverInfo[s.name].isError && (tfs[s.name] !== undefined ? tfs[s.name].enabled : true),
+            enabled: !serverInfo[s.name].isError && (tfs[s.name] !== undefined ? tfs[s.name].enabled : i < 2), // select first two servers by default.
             size: 0,
             transferred: 0,
           },
@@ -231,156 +246,235 @@ function Upload() {
         {}
       )
     );
+
     setFileEventsToPublish([]);
     setUploadStep(0);
   };
 
+  const [transfersInitialized, setTransfersInitialized] = useState(false);
+
   useEffect(() => {
-    clearTransfers();
-    setUploadStep(0);
-  }, [servers]);
-
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    if (uploadBusy) return;
-
-    const selectedFiles = event.target.files;
-    if (selectedFiles && selectedFiles.length > 0) {
-      const newFiles = Array.from(selectedFiles);
-      setFiles(prevFiles => [...prevFiles, ...newFiles]);
+    if (servers.length > 0 && !transfersInitialized) {
       clearTransfers();
+      setTransfersInitialized(true);
+    }
+  }, [servers, transfersInitialized]);
+
+  const publishSelectedThumbnailToAllOwnServers = async (
+    fileEventData: FileEventData
+  ): Promise<BlobDescriptor | undefined> => {
+    // TODO investigate why mimetype is not set for reuploaded thumbnail (on mediaserver)
+    const servers = fileEventData.url.map(u => extractDomain(u));
+
+    // upload selected thumbnail to the same blossom servers as the video
+    let uploadedThumbnails: BlobDescriptor[] = [];
+    if (fileEventData.selectedThumbnail) {
+      uploadedThumbnails = (
+        await Promise.all(
+          servers.map(s => {
+            if (s && fileEventData.selectedThumbnail) {
+              console.log(s);
+              console.log(serverInfo);
+              return transferBlob(fileEventData.selectedThumbnail, serverInfo[s], signEventTemplate);
+            }
+          })
+        )
+      ).filter(t => t !== undefined) as BlobDescriptor[];
+
+      return uploadedThumbnails.length > 0 ? uploadedThumbnails[0] : undefined; // TODO do we need multiple thumbsnails?? or server URLs?
     }
   };
 
-  const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
-    if (uploadBusy) return;
-    event.preventDefault();
-
-    const droppedFiles = event.dataTransfer?.files;
-    if (droppedFiles && droppedFiles.length > 0) {
-      const newFiles = Array.from(droppedFiles);
-      setFiles(prevFiles => [...prevFiles, ...newFiles]);
-      clearTransfers();
-    }
+  const publishAll = async () => {
+    //const publishedEvents: FileEventData[] = [];
+    fileEventsToPublish.forEach(async fe => {
+      if (fe.publish.file) {
+        if (!fe.publishedThumbnail) {
+          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
+          if (selfHostedThumbnail) {
+            const newData: FileEventData = {
+              ...fe,
+              publishedThumbnail: selfHostedThumbnail.url,
+              thumbnails: [selfHostedThumbnail.url],
+            };
+            const publishedEvent = await publishFileEvent(newData);
+            setFileEventsToPublish(prev =>
+              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+            );
+          } else {
+            // self hosting failed
+            console.log('self hosting failed');
+            const publishedEvent = await publishFileEvent(fe);
+            setFileEventsToPublish(prev =>
+              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+            );
+          }
+        } else {
+          // data thumbnail already defined
+          console.log('data thumbnail already defined');
+          const publishedEvent = await publishFileEvent(fe);
+          setFileEventsToPublish(prev =>
+            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+          );
+        }
+      }
+      if (fe.publish.audio) {
+        if (!fe.publishedThumbnail) {
+          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
+          if (selfHostedThumbnail) {
+            const newData: FileEventData = {
+              ...fe,
+              publishedThumbnail: selfHostedThumbnail.url,
+              thumbnails: [selfHostedThumbnail.url],
+            };
+            const publishedEvent = await publishAudioEvent(newData);
+            setFileEventsToPublish(prev =>
+              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+            );
+          } else {
+            // self hosting failed
+            console.log('self hosting failed');
+            const publishedEvent = await publishAudioEvent(fe);
+            setFileEventsToPublish(prev =>
+              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+            );
+          }
+        } else {
+          // data thumbnail already defined
+          console.log('data thumbnail already defined');
+          const publishedEvent = await publishAudioEvent(fe);
+          setFileEventsToPublish(prev =>
+            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+          );
+        }
+      }
+      if (fe.publish.video) {
+        if (!fe.publishedThumbnail) {
+          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
+          if (selfHostedThumbnail) {
+            const newData: Partial<FileEventData> = {
+              publishedThumbnail: selfHostedThumbnail.url,
+              thumbnails: [selfHostedThumbnail.url],
+            };
+            const publishedEvent = await publishVideoEvent({ ...fe, ...newData });
+            setFileEventsToPublish(prev =>
+              prev.map(f =>
+                f.x === fe.x
+                  ? {
+                      ...f,
+                      ...newData,
+                      events: [...f.events, publishedEvent],
+                    }
+                  : f
+              )
+            );
+          } else {
+            // self hosting failed
+            console.log('self hosting failed');
+            const publishedEvent = await publishVideoEvent(fe);
+            setFileEventsToPublish(prev =>
+              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+            );
+          }
+        } else {
+          // data thumbnail already defined
+          console.log('data thumbnail already defined');
+          const publishedEvent = await publishVideoEvent(fe);
+          setFileEventsToPublish(prev =>
+            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
+          );
+        }
+      }
+    });
+    setUploadStep(3);
   };
 
-  const sizeOfFilesToUpload = useMemo(() => files.reduce((acc, file) => (acc += file.size), 0), [files]);
+  const audioCount = useMemo(() => fileEventsToPublish.filter(fe => fe.publish.audio).length, [fileEventsToPublish]);
+
+  const publishCount = useMemo(() => {
+    const fileCount = fileEventsToPublish.filter(fe => fe.publish.file).length;
+    const videoCount = fileEventsToPublish.filter(fe => fe.publish.video).length;
+    return fileCount + audioCount + videoCount;
+  }, [fileEventsToPublish, audioCount]);
+
   return (
-    <>
-      <ul className="steps p-8">
-        <li className={`step ${uploadStep >= 0 ? 'step-primary' : ''}`}>Choose files to upload</li>
-        <li className={`step ${uploadStep >= 1 ? 'step-primary' : ''}`}>Upload progress</li>
-        <li className={`step ${uploadStep >= 2 ? 'step-primary' : ''}`}>Extend Metadata</li>
-        <li className={`step ${uploadStep >= 3 ? 'step-primary' : ''}`}>Publish to NOSTR</li>
-      </ul>
-      {uploadStep <= 1 && (
-        <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
-          <input
-            id="browse"
-            type="file"
-            ref={fileInputRef}
-            disabled={uploadBusy}
-            hidden
-            multiple
-            onChange={handleFileChange}
-          />
-          <label
-            htmlFor="browse"
-            className="p-8 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
-            onDrop={handleDrop}
-            onDragOver={event => event.preventDefault()}
-          >
-            <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
-          </label>
-          <h3 className="text-lg">Servers</h3>
-          <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
-            {servers.map(s => (
-              <>
-                <CheckBox
-                  name={s.name}
-                  disabled={uploadBusy}
-                  checked={transfers[s.name]?.enabled || false}
-                  setChecked={c =>
-                    setTransfers(ut => ({ ...ut, [s.name]: { enabled: c, transferred: 0, size: 0, rate: 0 } }))
-                  }
-                  label={s.name}
-                ></CheckBox>
-                {transfers[s.name]?.enabled ? (
-                  <ProgressBar
-                    value={transfers[s.name].transferred}
-                    max={transfers[s.name].size}
-                    description={transfers[s.name].rate > 0 ? '' + formatFileSize(transfers[s.name].rate) + '/s' : ''}
-                  />
-                ) : (
-                  <div></div>
-                )}
-              </>
-            ))}
-          </div>
-          <h3 className="text-lg text-neutral-content">Image Options</h3>
-          <div className="cursor-pointer grid gap-2 items-center" style={{ gridTemplateColumns: '1.5em auto' }}>
-            <CheckBox
-              name="cleanData"
-              disabled={uploadBusy}
-              checked={cleanPrivateData}
-              setChecked={c => setCleanPrivateData(c)}
-              label="Clean private data in images (EXIF)"
-            ></CheckBox>
-            <input
-              className="checkbox checkbox-primary "
-              id="resizeOption"
-              disabled={uploadBusy}
-              type="checkbox"
-              checked={imageResize > 0}
-              onChange={() => setImageResize(irs => (irs > 0 ? 0 : 1))}
-            />
-            <div>
-              <label htmlFor="resizeOption" className="cursor-pointer select-none">
-                Resize Image
-              </label>
-              <select
-                disabled={uploadBusy || imageResize == 0}
-                className="select select-bordered select-sm ml-4 w-full max-w-xs"
-                onChange={e => setImageResize(e.target.selectedIndex)}
-                value={imageResize}
-              >
-                {ResizeOptions.map((ro, i) => (
-                  <option key={ro.name} disabled={i == 0}>
-                    {ro.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-row gap-2">
-            <button className="btn btn-primary" onClick={() => upload()} disabled={uploadBusy || files.length == 0}>
-              Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
-              {formatFileSize(sizeOfFilesToUpload)}
-            </button>
-            <button
-              className="btn  btn-secondary  "
-              disabled={uploadBusy || files.length == 0}
-              onClick={() => {
-                clearTransfers();
-                setFiles([]);
-                if (fileInputRef.current) {
-                  fileInputRef.current.value = '';
-                }
-              }}
-            >
-              <TrashIcon className="w-6" />
-            </button>
-          </div>
-        </div>
-      )}
-      {fileEventsToPublish.length > 0 && (
+    <div className="flex flex-col mx-auto max-w-[80em] w-full">
+      {!serversLoading && (!servers || servers.length == 0) ? (
+        <UploadOnboarding />
+      ) : (
         <>
-          <h2 className="py-4">Publish events</h2>
-          {fileEventsToPublish.map(fe => (
-            <FileEventEditor key={fe.x} data={fe} />
-          ))}
+          <ul className="steps pt-8 pb-4 md:p-8">
+            <li className={`step ${uploadStep >= 0 ? 'step-primary' : ''}`}>Choose files</li>
+            <li className={`step ${uploadStep >= 1 ? 'step-primary' : ''}`}>Upload</li>
+            <li className={`step ${uploadStep >= 2 ? 'step-primary' : ''}`}>Add metadata</li>
+            <li className={`step ${uploadStep >= 3 ? 'step-primary' : ''}`}>Publish to NOSTR</li>
+          </ul>
+          {uploadStep <= 1 && (
+            <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
+              {uploadStep == 0 && (
+                <UploadFileSelection
+                  servers={servers}
+                  transfers={transfers}
+                  setTransfers={setTransfers}
+                  cleanPrivateData={cleanPrivateData}
+                  setCleanPrivateData={setCleanPrivateData}
+                  imageResize={imageResize}
+                  setImageResize={setImageResize}
+                  files={files}
+                  setFiles={setFiles}
+                  clearTransfers={clearTransfers}
+                  uploadBusy={uploadBusy}
+                  upload={upload}
+                />
+              )}
+
+              {uploadStep == 1 && <UploadProgress servers={servers} transfers={transfers} preparing={preparing} />}
+            </div>
+          )}
+          {uploadStep == 2 && fileEventsToPublish.length > 0 && (
+            <div className="gap-4 flex flex-col">
+              <h2 className="">Publish events</h2>
+              <div className="flex flex-col gap-4">
+                {fileEventsToPublish.map(fe => (
+                  <FileEventEditor
+                    key={fe.x}
+                    fileEventData={fe}
+                    setFileEventData={updatedFe =>
+                      setFileEventsToPublish(prev => prev.map(f => (f.x === fe.x ? updatedFe : f)) as FileEventData[])
+                    }
+                  />
+                ))}
+              </div>
+              {audioCount > 0 && (
+                <div className="text-sm text-neutral-content flex flex-row gap-2 items-center pl-4">
+                  <InformationCircleIcon className="w-6 h-6 text-info" />
+                  Audio events are not widely supported yet. Currently they are only used by{' '}
+                  <a className="link link-primary" href="https://stemstr.app/" target="_blank">
+                    stemstr.app
+                  </a>
+                </div>
+              )}
+              <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-row justify-center">
+                <button
+                  className={`btn ${publishCount === 0 ? 'btn-primary' : 'btn-neutral'} w-40`}
+                  onClick={() => {
+                    navigate('/browse');
+                  }}
+                >
+                  Skip publishing
+                </button>
+                {publishCount > 0 && (
+                  <button className="btn btn-primary w-40" onClick={() => publishAll()}>
+                    Publish ({publishCount} event{publishCount > 1 ? 's' : ''})
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {uploadStep == 3 && <UploadPublished fileEventsToPublish={fileEventsToPublish} />}
         </>
       )}
-    </>
+    </div>
   );
 }
 
