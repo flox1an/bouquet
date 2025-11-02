@@ -85,19 +85,39 @@ export async function fetchNip96List(
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
   onProgress?: (progressEvent: AxiosProgressEvent) => void
 ) {
-  const page = 0;
-  const count = 100;
+  const count = 100; // Page size
   const baseUrl = server.nip96?.api_url || server.url;
-  const listUrl = `${baseUrl}?page=${page}&count=${count}`;
+  let allFiles: Nip96BlobDescriptor[] = [];
+  let page = 0;
+  let hasMore = true;
 
-  const response = await axios.get(listUrl, {
-    headers: { Authorization: `Nostr ${await createNip98UploadAuthToken(listUrl, 'GET', signEventTemplate)}` },
-    onDownloadProgress: onProgress,
-  });
+  // Fetch all pages
+  while (hasMore) {
+    const listUrl = `${baseUrl}?page=${page}&count=${count}`;
 
-  const list = response.data as Nip96ListResponse;
+    const response = await axios.get(listUrl, {
+      headers: { Authorization: `Nostr ${await createNip98UploadAuthToken(listUrl, 'GET', signEventTemplate)}` },
+      onDownloadProgress: onProgress,
+    });
 
-  return list.files.map(
+    const list = response.data as Nip96ListResponse;
+    
+    if (list.files.length === 0) {
+      hasMore = false;
+      break;
+    }
+    
+    allFiles = [...allFiles, ...list.files];
+    
+    // Check if we've fetched all files
+    if (allFiles.length >= list.total) {
+      hasMore = false;
+    } else {
+      page++;
+    }
+  }
+
+  return allFiles.map(
     file =>
       ({
         created: file.created_at * 1000,

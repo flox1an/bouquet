@@ -32,10 +32,66 @@ export async function fetchBlossomList(
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
 ): Promise<BlobDescriptor[]> {
   const listAuthEvent = await BlossomClient.createListAuth(signEventTemplate);
-  const blobs = await BlossomClient.listBlobs(serverUrl, pubkey!, { auth: listAuthEvent });
+  
+  // Fetch all pages by iterating through results
+  // Most servers paginate by returning the most recent blobs first
+  // We'll fetch pages until we get an empty response or see duplicate blobs
+  let allBlobs: BlobDescriptor[] = [];
+  let until: number | undefined = undefined;
+  let hasMore = true;
+  const seenHashes = new Set<string>();
+  let previousBatchSize = 0;
+  
+  while (hasMore) {
+    const options: any = { auth: listAuthEvent };
+    if (until !== undefined) {
+      options.until = until;
+    }
+    
+    const blobs = await BlossomClient.listBlobs(serverUrl, pubkey!, options);
+    
+    // Stop if we got no results
+    if (blobs.length === 0) {
+      hasMore = false;
+      break;
+    }
+    
+    // Filter out any duplicates (shouldn't happen but be safe)
+    const newBlobs = blobs.filter(b => !seenHashes.has(b.sha256));
+    
+    // Stop if all blobs in this batch were duplicates
+    if (newBlobs.length === 0) {
+      hasMore = false;
+      break;
+    }
+    
+    // Add new blobs to our collection
+    newBlobs.forEach(b => seenHashes.add(b.sha256));
+    allBlobs = [...allBlobs, ...newBlobs];
+    
+    // If this batch is smaller than the previous one, we're likely at the end
+    // Also stop if we got very few results (likely the last page)
+    if (newBlobs.length < 10 || (previousBatchSize > 0 && newBlobs.length < previousBatchSize * 0.5)) {
+      hasMore = false;
+      break;
+    }
+    
+    previousBatchSize = newBlobs.length;
+    
+    // Find the oldest blob in this batch to use as 'until' for next page
+    const oldestUpload = Math.min(...newBlobs.map(b => b.uploaded || 0));
+    
+    // Stop if we got invalid timestamps
+    if (oldestUpload === 0 || (until !== undefined && oldestUpload >= until)) {
+      hasMore = false;
+    } else {
+      // Set 'until' to just before the oldest timestamp to get the next page
+      until = oldestUpload;
+    }
+  }
 
   // fallback to deprecated created attibute for servers that are not using 'uploaded' yet
-  return blobs.map(b => ({ ...b, uploaded: b.uploaded || dayjs().unix() }));
+  return allBlobs.map(b => ({ ...b, uploaded: b.uploaded || dayjs().unix() }));
 }
 
 export const uploadBlossomBlob = async (
