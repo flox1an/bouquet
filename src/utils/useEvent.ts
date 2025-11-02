@@ -1,5 +1,4 @@
 import {
-  NDKEvent,
   NDKFilter,
   NDKRelaySet,
   NDKSubscriptionCacheUsage,
@@ -7,7 +6,7 @@ import {
 } from '@nostr-dev-kit/ndk';
 import { useNDK } from './ndk';
 import { useMemo } from 'react';
-import { UseQueryResult, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { hashSha256 } from './utils';
 
 export interface SubscriptionOptions extends NDKSubscriptionOptions {
@@ -20,7 +19,7 @@ export default function useEvent(filter: NDKFilter, opts?: SubscriptionOptions, 
     return hashSha256(filter);
   }, [filter]);
 
-  const query: UseQueryResult<NDKEvent, any> = useQuery({
+  const query = useQuery({
     queryKey: ['use-event', id],
     queryFn: () => {
       const relaySet = (relays?.length ?? 0 > 0) ? NDKRelaySet.fromRelayUrls(relays as string[], ndk) : undefined;

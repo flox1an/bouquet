@@ -16,17 +16,19 @@ import BlobList from '../components/BlobList/BlobList';
 import './Transfer.css';
 import { useNavigate, useParams } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
-import { transferBlob } from '../utils/transfer';
+import { transferBlob, TransferPhase } from '../utils/transfer';
 
 type TransferStatus = {
   [key: string]: {
     sha256: string;
     status: 'pending' | 'done' | 'error';
+    phase?: TransferPhase;
     message?: string;
     size: number;
     uploaded?: number;
     rate?: number;
-    downloaded?: number; // Bytes downloaded
+    downloaded?: number;
+    retries?: number;
   };
 };
 
@@ -42,7 +44,7 @@ export const Transfer = () => {
   const { signEventTemplate } = useNDK();
   const queryClient = useQueryClient();
   const [started, setStarted] = useState(false);
-  const [transferCancelled, setTransferCancelled] = useState(false);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   const [transferLog, setTransferLog] = useState<TransferStatus>({});
 
@@ -65,20 +67,25 @@ export const Transfer = () => {
 
   const performTransfer = async (sourceServer: string, targetServer: string, blobs: BlobDescriptor[]) => {
     setTransferLog({});
-    setTransferCancelled(false);
+    const controller = new AbortController();
+    setAbortController(controller);
     setStarted(true);
+
     for (const b of blobs) {
-      if (transferCancelled) break;
+      if (controller.signal.aborted) break;
+
       try {
         setTransferLog(ts => ({
           ...ts,
           [b.sha256]: {
             sha256: b.sha256,
             status: 'pending',
+            phase: 'mirroring',
             size: b.size,
             uploaded: 0,
             rate: 0,
             downloaded: 0,
+            retries: 0,
           },
         }));
 
@@ -86,16 +93,30 @@ export const Transfer = () => {
           `${serverInfo[sourceServer].url}/${b.sha256}`,
           serverInfo[targetServer],
           signEventTemplate,
-          progressEvent => {
-            setTransferLog(ts => ({
-              ...ts,
-              [b.sha256]: {
-                ...ts[b.sha256],
-                uploaded: progressEvent.loaded,
-                downloaded: progressEvent.loaded,
-                rate: progressEvent.rate || 0,
-              },
-            }));
+          {
+            signal: controller.signal,
+            timeout: 120000,
+            maxRetries: 2,
+            onPhaseChange: (phase) => {
+              setTransferLog(ts => ({
+                ...ts,
+                [b.sha256]: {
+                  ...ts[b.sha256],
+                  phase,
+                },
+              }));
+            },
+            onProgress: (progressEvent) => {
+              setTransferLog(ts => ({
+                ...ts,
+                [b.sha256]: {
+                  ...ts[b.sha256],
+                  uploaded: progressEvent.loaded,
+                  downloaded: progressEvent.loaded,
+                  rate: progressEvent.rate || 0,
+                },
+              }));
+            },
           }
         );
 
@@ -103,6 +124,7 @@ export const Transfer = () => {
           ...ts,
           [b.sha256]: {
             ...ts[b.sha256],
+            phase: 'completed',
             rate: 0,
             uploaded: ts[b.sha256].size,
             downloaded: ts[b.sha256].size,
@@ -110,26 +132,45 @@ export const Transfer = () => {
           },
         }));
       } catch (e: any) {
-        if (e.response?.status === 404) {
-          setTransferLog(ts => ({
-            ...ts,
-            [b.sha256]: {
-              sha256: b.sha256,
-              status: 'error',
-              message: 'Blob not found (404)',
-              size: b.size,
-              downloaded: 0,
-              uploaded: 0,
-            },
-          }));
-          return null;
+        console.error(`Transfer failed for ${b.sha256}:`, e);
+        
+        let errorMessage = 'Unknown error';
+        if (e.message?.includes('cancelled')) {
+          errorMessage = 'Transfer cancelled';
+        } else if (e.message?.includes('timeout')) {
+          errorMessage = 'Operation timed out';
+        } else if (e.response?.status === 404) {
+          errorMessage = 'Blob not found (404)';
+        } else if (e.response?.status === 401 || e.response?.status === 403) {
+          errorMessage = 'Authentication failed';
+        } else if (e.response?.status >= 500) {
+          errorMessage = `Server error (${e.response.status})`;
+        } else if (e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT') {
+          errorMessage = 'Network error';
+        } else if (e.message) {
+          errorMessage = e.message;
         }
-        throw e;
+
+        setTransferLog(ts => ({
+          ...ts,
+          [b.sha256]: {
+            ...ts[b.sha256],
+            status: 'error',
+            phase: 'error',
+            message: errorMessage,
+          },
+        }));
       }
     }
-    // if (Object.values(transferLog).filter(b => b.status == 'error').length == 0) {
-    //   closeTransferMode();
-    // }
+
+    setAbortController(null);
+  };
+
+  const cancelTransfer = () => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+    }
   };
 
   const transferStatus = useMemo(() => {
@@ -229,7 +270,17 @@ export const Transfer = () => {
                 }
               />
 
-              {<div className="message"></div>}
+              {started && (
+                <div className="message mt-4">
+                  <strong>Status:</strong> {transferStatus.done} completed, {transferStatus.pending} pending, {transferStatus.error} failed
+                  {Object.values(transferLog).find(t => t.status === 'pending') && (
+                    <div className="mt-2">
+                      <strong>Current:</strong> {Object.values(transferLog).find(t => t.status === 'pending')?.sha256.substring(0, 16)}... 
+                      {' - '}{Object.values(transferLog).find(t => t.status === 'pending')?.phase || 'starting'}
+                    </div>
+                  )}
+                </div>
+              )}
               {transferErrors.length > 0 && (
                 <>
                   <h2>Errors</h2>
@@ -249,7 +300,7 @@ export const Transfer = () => {
                 </>
               )}
             </div>
-            <button className="btn btn-primary" onClick={() => setTransferCancelled(true)}>
+            <button className="btn btn-primary" onClick={cancelTransfer} disabled={!abortController}>
               Cancel transfer
             </button>
           </div>

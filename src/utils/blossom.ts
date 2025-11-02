@@ -31,7 +31,7 @@ export async function fetchBlossomList(
   pubkey: string,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
 ): Promise<BlobDescriptor[]> {
-  const listAuthEvent = await BlossomClient.createListAuth(signEventTemplate, 'List Blobs');
+  const listAuthEvent = await BlossomClient.createListAuth(signEventTemplate);
   const blobs = await BlossomClient.listBlobs(serverUrl, pubkey!, { auth: listAuthEvent });
 
   // fallback to deprecated created attibute for servers that are not using 'uploaded' yet
@@ -42,9 +42,10 @@ export const uploadBlossomBlob = async (
   server: string,
   file: File,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
-  onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+  onUploadProgress?: (progressEvent: AxiosProgressEvent) => void,
+  signal?: AbortSignal
 ) => {
-  const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file, 'Upload Blob');
+  const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file);
 
   const headers = {
     Accept: 'application/json',
@@ -54,6 +55,7 @@ export const uploadBlossomBlob = async (
   const res = await axios.put<BlobDescriptor>(`${server}/upload`, file, {
     headers: uploadAuth ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(uploadAuth) } : headers,
     onUploadProgress,
+    signal,
   });
 
   return res.data;
@@ -61,11 +63,13 @@ export const uploadBlossomBlob = async (
 
 export const downloadBlossomBlob = async (
   url: string,
-  onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void
+  onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void,
+  signal?: AbortSignal
 ) => {
   const response = await axios.get(url, {
     responseType: 'blob',
     onDownloadProgress,
+    signal,
   });
 
   return { data: response.data, type: response.headers['Content-Type']?.toString() };
@@ -74,14 +78,15 @@ export const downloadBlossomBlob = async (
 export const mirrordBlossomBlob = async (
   targetServer: string,
   sourceUrl: string,
-  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
+  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
+  signal?: AbortSignal
 ) => {
   const hash = extractHashFromUrl(sourceUrl);
   console.log({ sourceUrl, hash });
   if (!hash) throw 'The soureUrl does not contain a blossom hash.';
 
   const blossomClient = new BlossomClient(targetServer, signEventTemplate);
-  const mirrorAuth = await blossomClient.createMirrorAuth(hash, 'Upload Blob');
+  const mirrorAuth = await blossomClient.createMirrorAuth(hash);
 
   const headers = {
     Accept: 'application/json',
@@ -95,6 +100,7 @@ export const mirrordBlossomBlob = async (
       headers: mirrorAuth
         ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(mirrorAuth) }
         : headers,
+      signal,
     }
   );
   return res.data;

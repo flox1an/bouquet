@@ -140,7 +140,8 @@ export async function uploadNip96File(
   file: File,
   caption: string,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
-  onProgress?: (progressEvent: AxiosProgressEvent) => void
+  onProgress?: (progressEvent: AxiosProgressEvent) => void,
+  signal?: AbortSignal
 ): Promise<BlobDescriptor> {
   const formData = new FormData();
   formData.append('file', file);
@@ -157,6 +158,7 @@ export async function uploadNip96File(
   const response = await axios.post(baseUrl, formData, {
     headers: { Authorization: `Nostr ${await createNip98UploadAuthToken(baseUrl, 'POST', signEventTemplate)}` },
     onUploadProgress: onProgress,
+    signal,
   });
 
   if (response.status >= 400) {

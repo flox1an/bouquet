@@ -107,7 +107,8 @@ function Upload() {
     server: string,
     file: File,
     auth?: SignedEvent,
-    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void,
+    signal?: AbortSignal
   ) {
     const headers = {
       Accept: 'application/json',
@@ -117,6 +118,7 @@ function Upload() {
     const res = await axios.put<BlobDescriptor>(`${server}/upload`, file, {
       headers: auth ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(auth) } : headers,
       onUploadProgress,
+      signal,
     });
 
     return res.data;
@@ -141,7 +143,7 @@ function Upload() {
       for (const file of filesToUpload) {
         const authStartTime = Date.now();
         // TODO do this only once for each file. Currently this is called for every server
-        const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file, 'Upload Blob');
+        const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file);
         console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
 
         try {

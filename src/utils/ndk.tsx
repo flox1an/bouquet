@@ -12,7 +12,6 @@ import { decrypt } from 'nostr-tools/nip49';
 import { bytesToHex } from '@noble/hashes/utils';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-// @ts-expect-error ndk-cache-dexie has no type definitions
 import NDKCacheAdapterDexie from '@nostr-dev-kit/ndk-cache-dexie';
 
 type NDKContextType = {
