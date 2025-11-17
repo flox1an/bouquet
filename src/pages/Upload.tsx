@@ -122,11 +122,121 @@ function Upload() {
     return res.data;
   }
 
+  const createProgressHandler = (serverName: string, serverTransferred: number) => {
+    return (progressEvent: AxiosProgressEvent) => {
+      setTransfers(ut => ({
+        ...ut,
+        [serverName]: {
+          ...ut[serverName],
+          transferred: serverTransferred + progressEvent.loaded,
+          rate: progressEvent.rate || 0,
+        },
+      }));
+    };
+  };
+
+  const uploadFileToServer = async (
+    file: File,
+    server: Server,
+    serverUrl: string,
+    serverTransferred: number
+  ): Promise<BlobDescriptor> => {
+    const authStartTime = Date.now();
+    // TODO do this only once for each file. Currently this is called for every server
+    const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file, 'Upload Blob');
+    console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
+
+    const progressHandler = createProgressHandler(server.name, serverTransferred);
+
+    if (server.type == 'blossom') {
+      return await uploadBlob(serverUrl, file, uploadAuth, progressHandler);
+    } else {
+      return await uploadNip96File(server, file, '', signEventTemplate, progressHandler);
+    }
+  };
+
+  const updateFileDimensionsWithBlob = (
+    fileDimensions: { [key: string]: FileEventData },
+    fileName: string,
+    newBlob: BlobDescriptor,
+    primary: boolean
+  ) => {
+    fileDimensions[fileName] = {
+      ...fileDimensions[fileName],
+      x: newBlob.sha256,
+      url: primary
+        ? [newBlob.url, ...fileDimensions[fileName].url]
+        : [...fileDimensions[fileName].url, newBlob.url],
+      size: newBlob.size || fileDimensions[fileName].size, // fallback for nip96 servers that don't return size
+      m: newBlob.type,
+    };
+  };
+
+  const handleUploadError = (error: unknown, serverName: string) => {
+    const axiosError = error as AxiosError;
+    const response = axiosError.response?.data as { message?: string };
+    console.error(error);
+    setTransfers(ut => ({
+      ...ut,
+      [serverName]: { ...ut[serverName], error: `${axiosError.message} / ${response?.message}` },
+    }));
+  };
+
+  const startTransfer = async (
+    server: Server,
+    primary: boolean,
+    filesToUpload: File[],
+    fileDimensions: { [key: string]: FileEventData }
+  ) => {
+    const serverUrl = serverInfo[server.name].url;
+    let serverTransferred = 0;
+
+    for (const file of filesToUpload) {
+      try {
+        const newBlob = await uploadFileToServer(file, server, serverUrl, serverTransferred);
+        console.log('newBlob', newBlob);
+
+        serverTransferred += file.size;
+        setTransfers(ut => ({
+          ...ut,
+          [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
+        }));
+
+        updateFileDimensionsWithBlob(fileDimensions, file.name, newBlob, primary);
+      } catch (e) {
+        handleUploadError(e, server.name);
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['blobs', server.name] });
+  };
+
+  const initializeTransferStates = (filesToUpload: File[]) => {
+    const totalSize = filesToUpload.reduce((acc, f) => acc + f.size, 0);
+
+    setTransfers(ut => {
+      const newTransfers = { ...ut };
+      for (const server of servers) {
+        if (newTransfers[server.name].enabled) {
+          newTransfers[server.name].size = totalSize;
+          newTransfers[server.name].error = undefined;
+        }
+      }
+      return newTransfers;
+    });
+  };
+
+  const shouldProceedToNextStep = () => {
+    const errorsTransfers = Object.keys(transfers).filter(ts => transfers[ts].enabled && !!transfers[ts].error);
+    console.log('errorCheck', errorsTransfers);
+    return errorsTransfers.length == 0;
+  };
+
   const upload = async () => {
     setUploadBusy(true);
     setPreparing(true);
-
     setUploadStep(1);
+
     // TODO this blocks the UI
     const filesToUpload: File[] = await getListOfFilesToUpload();
     const fileDimensions = await getPreUploadMetaData(filesToUpload);
@@ -135,82 +245,15 @@ function Upload() {
     // TODO icon to cancel upload
     // TODO detect if the file already exists? if we have the hash??
 
-    const startTransfer = async (server: Server, primary: boolean) => {
-      const serverUrl = serverInfo[server.name].url;
-      let serverTransferred = 0;
-      for (const file of filesToUpload) {
-        const authStartTime = Date.now();
-        // TODO do this only once for each file. Currently this is called for every server
-        const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file, 'Upload Blob');
-        console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
-
-        try {
-          let newBlob: BlobDescriptor;
-          const progressHandler = (progressEvent: AxiosProgressEvent) => {
-            setTransfers(ut => ({
-              ...ut,
-              [server.name]: {
-                ...ut[server.name],
-                transferred: serverTransferred + progressEvent.loaded,
-                rate: progressEvent.rate || 0,
-              },
-            }));
-          };
-          if (server.type == 'blossom') {
-            newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressHandler);
-          } else {
-            newBlob = await uploadNip96File(server, file, '', signEventTemplate, progressHandler);
-          }
-          console.log('newBlob', newBlob);
-          serverTransferred += file.size;
-          setTransfers(ut => ({
-            ...ut,
-            [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
-          }));
-
-          fileDimensions[file.name] = {
-            ...fileDimensions[file.name],
-            x: newBlob.sha256,
-            url: primary
-              ? [newBlob.url, ...fileDimensions[file.name].url]
-              : [...fileDimensions[file.name].url, newBlob.url],
-            size: newBlob.size || fileDimensions[file.name].size, // fallback for nip96 servers that don't return size
-            m: newBlob.type,
-          };
-        } catch (e) {
-          const axiosError = e as AxiosError;
-          const response = axiosError.response?.data as { message?: string };
-          console.error(e);
-          // Record error in transfer log
-          setTransfers(ut => ({
-            ...ut,
-            [server.name]: { ...ut[server.name], error: `${axiosError.message} / ${response?.message}` },
-          }));
-        }
-      }
-      queryClient.invalidateQueries({ queryKey: ['blobs', server.name] });
-    };
-
     if (filesToUpload && filesToUpload.length) {
-      // sum files sizes
-      const totalSize = filesToUpload.reduce((acc, f) => acc + f.size, 0);
-
-      // set all entries size to totalSize
-      setTransfers(ut => {
-        const newTransfers = { ...ut };
-        for (const server of servers) {
-          if (newTransfers[server.name].enabled) {
-            newTransfers[server.name].size = totalSize;
-            newTransfers[server.name].error = undefined;
-          }
-        }
-        return newTransfers;
-      });
+      initializeTransferStates(filesToUpload);
 
       const enabledServers = servers.filter(s => transfers[s.name]?.enabled);
       const primaryServerName = servers[0].name;
 
-      await Promise.all(enabledServers.map(s => limit(() => startTransfer(s, s.name == primaryServerName))));
+      await Promise.all(
+        enabledServers.map(s => limit(() => startTransfer(s, s.name == primaryServerName, filesToUpload, fileDimensions)))
+      );
 
       setFiles([]);
       // TODO reset input control value??
@@ -222,9 +265,7 @@ function Upload() {
     //console.log(transfers);
     // TODO transfer can not be accessed yet, errors are not visible here. TODO pout errors somewhere else
     // setter for error transfers has not executed when we reach here.
-    const errorsTransfers = Object.keys(transfers).filter(ts => transfers[ts].enabled && !!transfers[ts].error);
-    console.log('errorCheck', errorsTransfers);
-    if (errorsTransfers.length == 0) {
+    if (shouldProceedToNextStep()) {
       // Only go to the next step if no errors have occured
       // TODO why dont we detect errors here?????? INVESTIGATE
       // Should show button to "skip" despite of errors
@@ -285,107 +326,56 @@ function Upload() {
     }
   };
 
+  const publishEventWithThumbnail = async (
+    fe: FileEventData,
+    publishFn: (data: FileEventData) => Promise<NostrEvent>
+  ) => {
+    let dataToPublish = fe;
+
+    if (!fe.publishedThumbnail) {
+      const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
+      if (selfHostedThumbnail) {
+        dataToPublish = {
+          ...fe,
+          publishedThumbnail: selfHostedThumbnail.url,
+          thumbnails: [selfHostedThumbnail.url],
+        };
+      } else {
+        console.log('self hosting failed');
+      }
+    } else {
+      console.log('data thumbnail already defined');
+    }
+
+    const publishedEvent = await publishFn(dataToPublish);
+    setFileEventsToPublish(prev =>
+      prev.map(f =>
+        f.x === fe.x
+          ? {
+              ...f,
+              ...(dataToPublish.publishedThumbnail && {
+                publishedThumbnail: dataToPublish.publishedThumbnail,
+                thumbnails: dataToPublish.thumbnails,
+              }),
+              events: [...f.events, publishedEvent],
+            }
+          : f
+      )
+    );
+  };
+
   const publishAll = async () => {
-    //const publishedEvents: FileEventData[] = [];
-    fileEventsToPublish.forEach(async fe => {
+    for (const fe of fileEventsToPublish) {
       if (fe.publish.file) {
-        if (!fe.publishedThumbnail) {
-          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
-          if (selfHostedThumbnail) {
-            const newData: FileEventData = {
-              ...fe,
-              publishedThumbnail: selfHostedThumbnail.url,
-              thumbnails: [selfHostedThumbnail.url],
-            };
-            const publishedEvent = await publishFileEvent(newData);
-            setFileEventsToPublish(prev =>
-              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-            );
-          } else {
-            // self hosting failed
-            console.log('self hosting failed');
-            const publishedEvent = await publishFileEvent(fe);
-            setFileEventsToPublish(prev =>
-              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-            );
-          }
-        } else {
-          // data thumbnail already defined
-          console.log('data thumbnail already defined');
-          const publishedEvent = await publishFileEvent(fe);
-          setFileEventsToPublish(prev =>
-            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-          );
-        }
+        await publishEventWithThumbnail(fe, publishFileEvent);
       }
       if (fe.publish.audio) {
-        if (!fe.publishedThumbnail) {
-          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
-          if (selfHostedThumbnail) {
-            const newData: FileEventData = {
-              ...fe,
-              publishedThumbnail: selfHostedThumbnail.url,
-              thumbnails: [selfHostedThumbnail.url],
-            };
-            const publishedEvent = await publishAudioEvent(newData);
-            setFileEventsToPublish(prev =>
-              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-            );
-          } else {
-            // self hosting failed
-            console.log('self hosting failed');
-            const publishedEvent = await publishAudioEvent(fe);
-            setFileEventsToPublish(prev =>
-              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-            );
-          }
-        } else {
-          // data thumbnail already defined
-          console.log('data thumbnail already defined');
-          const publishedEvent = await publishAudioEvent(fe);
-          setFileEventsToPublish(prev =>
-            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-          );
-        }
+        await publishEventWithThumbnail(fe, publishAudioEvent);
       }
       if (fe.publish.video) {
-        if (!fe.publishedThumbnail) {
-          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
-          if (selfHostedThumbnail) {
-            const newData: Partial<FileEventData> = {
-              publishedThumbnail: selfHostedThumbnail.url,
-              thumbnails: [selfHostedThumbnail.url],
-            };
-            const publishedEvent = await publishVideoEvent({ ...fe, ...newData });
-            setFileEventsToPublish(prev =>
-              prev.map(f =>
-                f.x === fe.x
-                  ? {
-                      ...f,
-                      ...newData,
-                      events: [...f.events, publishedEvent],
-                    }
-                  : f
-              )
-            );
-          } else {
-            // self hosting failed
-            console.log('self hosting failed');
-            const publishedEvent = await publishVideoEvent(fe);
-            setFileEventsToPublish(prev =>
-              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-            );
-          }
-        } else {
-          // data thumbnail already defined
-          console.log('data thumbnail already defined');
-          const publishedEvent = await publishVideoEvent(fe);
-          setFileEventsToPublish(prev =>
-            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-          );
-        }
+        await publishEventWithThumbnail(fe, publishVideoEvent);
       }
-    });
+    }
     setUploadStep(3);
   };
 

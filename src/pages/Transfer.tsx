@@ -63,69 +63,97 @@ export const Transfer = () => {
     return [];
   }, [serverInfo, transferSource, transferTarget]);
 
+  const initializeBlobTransfer = (blob: BlobDescriptor) => {
+    setTransferLog(ts => ({
+      ...ts,
+      [blob.sha256]: {
+        sha256: blob.sha256,
+        status: 'pending',
+        size: blob.size,
+        uploaded: 0,
+        rate: 0,
+        downloaded: 0,
+      },
+    }));
+  };
+
+  const createTransferProgressHandler = (sha256: string) => {
+    return (progressEvent: any) => {
+      setTransferLog(ts => ({
+        ...ts,
+        [sha256]: {
+          ...ts[sha256],
+          uploaded: progressEvent.loaded,
+          downloaded: progressEvent.loaded,
+          rate: progressEvent.rate || 0,
+        },
+      }));
+    };
+  };
+
+  const markBlobTransferComplete = (sha256: string) => {
+    setTransferLog(ts => ({
+      ...ts,
+      [sha256]: {
+        ...ts[sha256],
+        rate: 0,
+        uploaded: ts[sha256].size,
+        downloaded: ts[sha256].size,
+        status: 'done',
+      },
+    }));
+  };
+
+  const handleBlobTransferError = (blob: BlobDescriptor, error: any) => {
+    if (error.response?.status === 404) {
+      setTransferLog(ts => ({
+        ...ts,
+        [blob.sha256]: {
+          sha256: blob.sha256,
+          status: 'error',
+          message: 'Blob not found (404)',
+          size: blob.size,
+          downloaded: 0,
+          uploaded: 0,
+        },
+      }));
+      return true; // Error handled
+    }
+    return false; // Error not handled, should be re-thrown
+  };
+
+  const transferSingleBlob = async (
+    blob: BlobDescriptor,
+    sourceServer: string,
+    targetServer: string
+  ) => {
+    initializeBlobTransfer(blob);
+
+    try {
+      await transferBlob(
+        `${serverInfo[sourceServer].url}/${blob.sha256}`,
+        serverInfo[targetServer],
+        signEventTemplate,
+        createTransferProgressHandler(blob.sha256)
+      );
+
+      markBlobTransferComplete(blob.sha256);
+    } catch (e: any) {
+      const handled = handleBlobTransferError(blob, e);
+      if (!handled) {
+        throw e;
+      }
+    }
+  };
+
   const performTransfer = async (sourceServer: string, targetServer: string, blobs: BlobDescriptor[]) => {
     setTransferLog({});
     setTransferCancelled(false);
     setStarted(true);
-    for (const b of blobs) {
+
+    for (const blob of blobs) {
       if (transferCancelled) break;
-      try {
-        setTransferLog(ts => ({
-          ...ts,
-          [b.sha256]: {
-            sha256: b.sha256,
-            status: 'pending',
-            size: b.size,
-            uploaded: 0,
-            rate: 0,
-            downloaded: 0,
-          },
-        }));
-
-        await transferBlob(
-          `${serverInfo[sourceServer].url}/${b.sha256}`,
-          serverInfo[targetServer],
-          signEventTemplate,
-          progressEvent => {
-            setTransferLog(ts => ({
-              ...ts,
-              [b.sha256]: {
-                ...ts[b.sha256],
-                uploaded: progressEvent.loaded,
-                downloaded: progressEvent.loaded,
-                rate: progressEvent.rate || 0,
-              },
-            }));
-          }
-        );
-
-        setTransferLog(ts => ({
-          ...ts,
-          [b.sha256]: {
-            ...ts[b.sha256],
-            rate: 0,
-            uploaded: ts[b.sha256].size,
-            downloaded: ts[b.sha256].size,
-            status: 'done',
-          },
-        }));
-      } catch (e: any) {
-        if (e.response?.status === 404) {
-          setTransferLog(ts => ({
-            ...ts,
-            [b.sha256]: {
-              sha256: b.sha256,
-              status: 'error',
-              message: 'Blob not found (404)',
-              size: b.size,
-              downloaded: 0,
-              uploaded: 0,
-            },
-          }));
-          return null;
-        }
-        throw e;
-      }
+      await transferSingleBlob(blob, sourceServer, targetServer);
     }
     // if (Object.values(transferLog).filter(b => b.status == 'error').length == 0) {
     //   closeTransferMode();

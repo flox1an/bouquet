@@ -128,6 +128,50 @@ function resizeImage(imageBlobUrl: string, maxWidth: number, maxHeight: number):
   });
 }
 
+// Helper function to convert ArrayBuffer to File
+function arrayBufferToFile(arrayBuffer: ArrayBuffer, fileName: string, mimeType: string): File {
+  const fileBlob = new Blob([arrayBuffer], { type: mimeType });
+  return new File([fileBlob], fileName, { type: mimeType });
+}
+
+// Downloads audio file from URL and converts to File
+async function downloadAudioFile(blobUrl: string, blobHash: string): Promise<File> {
+  const response = await fetch(blobUrl);
+  const buffer = await response.arrayBuffer();
+  return arrayBufferToFile(buffer, `${blobHash}.mp3`, 'audio/mpeg');
+}
+
+// Extracts cover image from ID3v2 tag and returns both full and resized versions
+async function extractCoverImageFromTag(id3Tag: any): Promise<{ coverFull?: string; coverThumb?: string }> {
+  if (id3Tag.kind !== 'v2') {
+    return {};
+  }
+
+  const id3v2 = id3Tag as unknown as ID3TagV2;
+  if (!id3v2.images || id3v2.images.length === 0 || !id3v2.images[0].data) {
+    return {};
+  }
+
+  const blob = new Blob([id3v2.images[0].data], { type: 'image/jpeg' });
+  const imageBlobUrl = URL.createObjectURL(blob);
+  const resizedCover = await resizeImage(imageBlobUrl, 128, 128);
+
+  return {
+    coverFull: imageBlobUrl,
+    coverThumb: resizedCover,
+  };
+}
+
+// Creates ID3Tag result object from raw ID3 tag data
+function createID3TagResult(id3Tag: any): ID3Tag {
+  return {
+    title: id3Tag.title || undefined,
+    artist: id3Tag.artist || undefined,
+    album: id3Tag.album || undefined,
+    year: id3Tag.year || undefined,
+  };
+}
+
 export const fetchId3Tag = async (
   blobHash: string,
   blobUrl?: string,
@@ -141,12 +185,6 @@ export const fetchId3Tag = async (
     return { id3: cachedID3Tag };
   }
 
-  function arrayBufferToFile(arrayBuffer: ArrayBuffer, fileName: string, mimeType: string) {
-    const fileBlob = new Blob([arrayBuffer], { type: mimeType });
-    const file = new File([fileBlob], fileName, { type: mimeType });
-    return file;
-  }
-
   // Getting from URL would be the best but it requires working Range requests
   // an the servers. Currently non of the blossom servers are working.
   // HEAD -> content-length would also be required and is missing in some
@@ -157,37 +195,24 @@ export const fetchId3Tag = async (
   let file = localFile;
   if (!file) {
     if (!blobUrl) return undefined;
-
-    // if we don't have a local file, download from blob url
-    const response = await fetch(blobUrl);
-    const buffer = await response.arrayBuffer();
-    file = arrayBufferToFile(buffer, `${blobHash}.mp3`, 'audio/mpeg');
+    file = await downloadAudioFile(blobUrl, blobHash);
   }
 
   const id3Tag = await fromFile(file).catch(e => console.warn(e));
-  let imageBlobUrl: string | undefined;
 
   if (id3Tag) {
-    const tagResult: ID3Tag = {
-      title: id3Tag.title || undefined,
-      artist: id3Tag.artist || undefined,
-      album: id3Tag.album || undefined,
-      year: id3Tag.year || undefined,
-    };
+    const tagResult = createID3TagResult(id3Tag);
+    const { coverFull, coverThumb } = await extractCoverImageFromTag(id3Tag);
 
-    if (id3Tag.kind == 'v2') {
-      const id3v2 = id3Tag as unknown as ID3TagV2;
-      if (id3v2.images && id3v2.images.length > 0 && id3v2.images[0].data) {
-        const blob = new Blob([id3v2.images[0].data], { type: 'image/jpeg' });
-        imageBlobUrl = URL.createObjectURL(blob);
-        tagResult.cover = await resizeImage(imageBlobUrl, 128, 128);
-      }
+    if (coverThumb) {
+      tagResult.cover = coverThumb;
     }
 
     console.log(blobHash, blobUrl, tagResult);
 
     await saveID3TagToDB(db, blobHash, tagResult);
-    return { id3: tagResult, coverFull: imageBlobUrl };
+    return { id3: tagResult, coverFull };
   }
+
   console.log('No ID3 tag found for ' + blobHash);
 };
