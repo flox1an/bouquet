@@ -4,14 +4,14 @@ ARG NODE_VERSION=22.3.0
 
 ################################################################################
 # Use node image for base image for all stages.
-FROM node:${NODE_VERSION} as base
+FROM node:${NODE_VERSION} AS base
 
 # Set working directory for all build stages.
 WORKDIR /usr/src/app
 
 ################################################################################
 # Create a stage for installing production dependencies.
-FROM base as deps
+FROM base AS deps
 
 # Download dependencies as a separate step to take advantage of Docker's caching.
 # Leverage a cache mount to /root/.npm to speed up subsequent builds.
@@ -24,7 +24,7 @@ RUN --mount=type=bind,source=package.json,target=package.json \
 
 ################################################################################
 # Create a stage for building the application.
-FROM deps as build
+FROM deps AS build
 
 # Download additional development dependencies before building, as some projects require
 # "devDependencies" to be installed to build. If you don't need this, remove this step.
@@ -40,10 +40,10 @@ RUN npm run build
 
 ################################################################################
 # Create a new stage to serve the application with minimal runtime dependencies.
-FROM node:${NODE_VERSION}-slim as final
+FROM node:${NODE_VERSION}-slim AS final
 
 # Use production node environment by default.
-ENV NODE_ENV production
+ENV NODE_ENV=production
 
 # Set working directory.
 WORKDIR /usr/src/app
