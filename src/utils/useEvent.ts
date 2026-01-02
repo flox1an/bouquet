@@ -1,41 +1,64 @@
-import {
-  NDKFilter,
-  NDKRelaySet,
-  NDKSubscriptionCacheUsage,
-  NDKSubscriptionOptions,
-} from '@nostr-dev-kit/ndk';
-import { useNDK } from './ndk';
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef } from 'react';
+import { useObservableState } from 'observable-hooks';
+import { createTimelineLoader } from 'applesauce-loaders/loaders';
+import type { Filter, NostrEvent } from 'nostr-tools';
+import { map } from 'rxjs/operators';
+import { eventStore, relayPool, cacheRequest, DEFAULT_RELAYS } from '../nostr/core';
 import { hashSha256 } from './utils';
+import { SubscriptionOptions } from './useEvents';
 
-export interface SubscriptionOptions extends NDKSubscriptionOptions {
-  disable?: boolean;
-}
+export default function useEvent(
+  filter: Filter,
+  opts?: SubscriptionOptions,
+  relays?: string[]
+): { data: NostrEvent | undefined; isLoading: boolean; isSuccess: boolean } {
+  const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
 
-export default function useEvent(filter: NDKFilter, opts?: SubscriptionOptions, relays?: string[]) {
-  const { ndk } = useNDK();
-  const id = useMemo(() => {
-    return hashSha256(filter);
-  }, [filter]);
+  const effectiveRelays = relays?.length ? relays : DEFAULT_RELAYS;
 
-  const query = useQuery({
-    queryKey: ['use-event', id],
-    queryFn: () => {
-      const relaySet = (relays?.length ?? 0 > 0) ? NDKRelaySet.fromRelayUrls(relays as string[], ndk) : undefined;
-      return ndk.fetchEvent(
-        filter,
-        {
-          groupable: true,
-          cacheUsage: NDKSubscriptionCacheUsage.ONLY_RELAY,
-          ...(opts ? opts : {}),
-        },
-        relaySet
-      );
-    },
-    enabled: !opts?.disable,
-    refetchOnWindowFocus: false,
-  });
+  const id = useMemo(() => hashSha256(filter), [filter]);
 
-  return { data: query.data, isLoading: query.isLoading, isSuccess: query.isSuccess };
+  // Create and manage loader subscription
+  useEffect(() => {
+    if (opts?.disable || !filter) {
+      return;
+    }
+
+    // Clean up previous subscription
+    subscriptionRef.current?.unsubscribe();
+
+    const loader = createTimelineLoader(relayPool, effectiveRelays, filter, {
+      eventStore,
+      cache: cacheRequest,
+      limit: 1,
+    });
+
+    const sub = loader().subscribe({
+      error: err => console.error('Event loader error:', err),
+    });
+
+    subscriptionRef.current = sub;
+
+    return () => {
+      sub.unsubscribe();
+      subscriptionRef.current = null;
+    };
+  }, [id, opts?.disable]);
+
+  // Create observable for timeline from event store and return first event
+  const event$ = useMemo(
+    () =>
+      eventStore.timeline(filter).pipe(
+        map((events: NostrEvent[]) => (events.length > 0 ? events[0] : undefined))
+      ),
+    [filter]
+  );
+
+  const event = useObservableState(event$, undefined);
+
+  return {
+    data: event,
+    isLoading: !opts?.disable && event === undefined,
+    isSuccess: event !== undefined,
+  };
 }

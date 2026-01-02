@@ -1,5 +1,4 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useNDK } from '../../utils/ndk';
 import './Layout.css';
 import { ArrowUpOnSquareIcon, MagnifyingGlassIcon, ServerStackIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
@@ -9,17 +8,29 @@ import BottomNavbar from '../BottomNavBar/BottomNavBar';
 import { useGlobalContext } from '../../GlobalState';
 import Login from './Login';
 import useLocalStorageState from '../../utils/useLocalStorageState';
+import { useCurrentUser, ExtensionMissingError } from '../../hooks/useCurrentUser';
+import { useProfile } from '../../hooks/useProfile';
 
 export const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loginWithExtension, logout } = useNDK();
+  const { user, loginWithExtension, logout } = useCurrentUser();
+  const profile = useProfile(user?.pubkey);
   const { state } = useGlobalContext();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [autoLogin, setAutoLogin] = useLocalStorageState('autologin', { defaultValue: false });
 
   useEffect(() => {
-    if (!user && autoLogin) loginWithExtension();
+    if (!user && autoLogin) {
+      loginWithExtension().catch(error => {
+        // Silently ignore extension missing errors during auto-login
+        if (!(error instanceof ExtensionMissingError)) {
+          console.error('Auto-login failed:', error);
+        }
+        // Disable auto-login if extension is not available
+        setAutoLogin(false);
+      });
+    }
   }, []);
 
   const navItems = (
@@ -80,7 +91,7 @@ export const Layout = () => {
                     logout();
                   }}
                 >
-                  <img src={user?.profile?.image} />
+                  <img src={profile?.picture || `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.pubkey}`} />
                 </a>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { FileEventData } from './FileEventEditor/FileEventEditor';
-import { NostrEvent } from '@nostr-dev-kit/ndk';
+import type { NostrEvent } from 'nostr-tools';
 import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../utils/useFileMetaEvents';
 import { nip19 } from 'nostr-tools';
 import { LinkIcon } from '@heroicons/react/24/outline';

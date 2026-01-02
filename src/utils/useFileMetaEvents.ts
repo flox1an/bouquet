@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import useEvents from '../utils/useEvents';
 import groupBy from 'lodash/groupBy';
-import { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk';
+import type { Filter, NostrEvent } from 'nostr-tools';
 import { useNDK } from '../utils/ndk';
 import { mapValues } from 'lodash';
 import { extractHashesFromContent } from './blossom';
@@ -13,7 +13,7 @@ export const KIND_VIDEO_HORIZONTAL = 34235;
 export const KIND_VIDEO_VERTICAL = 34236;
 export const KIND_AUDIO = 31337;
 
-const extractFromEvent = (ev: NDKEvent) => {
+const extractFromEvent = (ev: NostrEvent) => {
   const tags = ev.tags.filter(t => t[0] == 'x').map(t => t[1]);
   const hashesFromUrls = ev.tags
     .filter(t => t[0] == 'url' || t[0] == 'thumb' || t[0] == 'image')
@@ -39,7 +39,7 @@ const useFileMetaEventsByHash = () => {
         ],
         authors: [user?.pubkey],
         limit: 100,
-      }) as NDKFilter,
+      }) as Filter,
     [user?.pubkey]
   );
   const fileMetaSub = useEvents(fileMetaFilter);

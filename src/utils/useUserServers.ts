@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
-import { useNDK } from '../utils/ndk';
+import { useNDK, accountManager } from '../utils/ndk';
 import { nip19 } from 'nostr-tools';
-import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk';
+import type { Filter, NostrEvent } from 'nostr-tools';
 import { USER_BLOSSOM_SERVER_LIST_KIND } from 'blossom-client-sdk';
 import useEvent from './useEvent';
 import { useQueries } from '@tanstack/react-query';
 import { Nip96ServerConfig, fetchNip96ServerConfig } from './nip96';
 import dayjs from 'dayjs';
+import { relayPool, DEFAULT_RELAYS } from '../nostr/core';
+import { ReadonlyAccount } from 'applesauce-accounts/accounts';
 
 type ServerType = 'blossom' | 'nip96';
 
@@ -20,52 +22,71 @@ export type Server = {
 
 export const USER_NIP96_SERVER_LIST_KIND = 10096;
 
+// Helper to get tag values from an event
+const getMatchingTags = (event: NostrEvent | undefined, tagName: string): string[][] => {
+  if (!event) return [];
+  return event.tags.filter(t => t[0] === tagName);
+};
+
 export const useUserServers = (): {
   servers: Server[];
   serversLoading: boolean;
   storeUserServers: (newServers: Server[]) => Promise<void>;
 } => {
-  const { user, ndk } = useNDK();
-  const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type
+  const { user } = useNDK();
+  const pubkey = user?.npub && (nip19.decode(user?.npub).data as string);
 
   const storeUserServers = async (newServers: Server[]) => {
     if (!pubkey) return;
-    const ev = new NDKEvent(ndk, {
+
+    const activeAccount = accountManager.active;
+    if (!activeAccount || activeAccount instanceof ReadonlyAccount) {
+      console.error('No signer available or read-only account');
+      return;
+    }
+
+    const blossomEvent: NostrEvent = {
       kind: USER_BLOSSOM_SERVER_LIST_KIND,
       created_at: dayjs().unix(),
       content: '',
       pubkey,
       tags: newServers.filter(s => s.type == 'blossom').map(s => ['server', `${s.url}`]),
-    });
-    await ev.sign();
-    console.log(ev.rawEvent());
-    await ev.publish();
+      id: '',
+      sig: '',
+    };
 
-    const evNip96 = new NDKEvent(ndk, {
+    const signedBlossom = await activeAccount.signer.signEvent(blossomEvent);
+    console.log(signedBlossom);
+    await relayPool.publish(DEFAULT_RELAYS, signedBlossom);
+
+    const nip96Event: NostrEvent = {
       kind: USER_NIP96_SERVER_LIST_KIND,
       created_at: dayjs().unix(),
       content: '',
       pubkey,
       tags: newServers.filter(s => s.type == 'nip96').map(s => ['server', `${s.url}`]),
-    });
-    await evNip96.sign();
-    console.log(evNip96.rawEvent());
-    await evNip96.publish();
+      id: '',
+      sig: '',
+    };
+
+    const signedNip96 = await activeAccount.signer.signEvent(nip96Event);
+    console.log(signedNip96);
+    await relayPool.publish(DEFAULT_RELAYS, signedNip96);
   };
 
   const blossomServerListEvent = useEvent(
-    { kinds: [USER_BLOSSOM_SERVER_LIST_KIND as NDKKind], authors: [pubkey!] },
+    { kinds: [USER_BLOSSOM_SERVER_LIST_KIND], authors: [pubkey!] } as Filter,
     { disable: !pubkey }
   );
 
   const nip96ServerListEvent = useEvent(
-    { kinds: [USER_NIP96_SERVER_LIST_KIND as NDKKind], authors: [pubkey!] },
+    { kinds: [USER_NIP96_SERVER_LIST_KIND], authors: [pubkey!] } as Filter,
     { disable: !pubkey }
   );
 
   const blossomServers = useMemo((): Server[] | undefined => {
     if (!blossomServerListEvent || !blossomServerListEvent.isSuccess) return undefined;
-    return (blossomServerListEvent?.data?.getMatchingTags('server').map(t => t[1]) || []).map(s => {
+    return (getMatchingTags(blossomServerListEvent?.data, 'server').map(t => t[1]) || []).map(s => {
       const url = s.toLocaleLowerCase().replace(/\/$/, '');
 
       return {
@@ -79,7 +100,7 @@ export const useUserServers = (): {
   const nip96Servers = useMemo((): Server[] | undefined => {
     if (!user || !blossomServerListEvent || !blossomServerListEvent.isSuccess) return undefined;
     return [
-      ...(nip96ServerListEvent?.data?.getMatchingTags('server').map(t => t[1]) || []).map(s => {
+      ...(getMatchingTags(nip96ServerListEvent?.data, 'server').map(t => t[1]) || []).map(s => {
         const url = s.toLocaleLowerCase().replace(/\/$/, '');
         const name = url.replace(/https?:\/\//, '');
         return {

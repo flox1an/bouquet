@@ -1,4 +1,4 @@
-import { AddressPointer } from 'nostr-tools/nip19';
+import { AddressPointer, EventPointer } from 'nostr-tools/nip19';
 import {
   KIND_BLOSSOM_DRIVE,
   KIND_FILE_META,
@@ -7,15 +7,15 @@ import {
   KIND_VIDEO_VERTICAL,
 } from '../../utils/useFileMetaEvents';
 import { nip19 } from 'nostr-tools';
-import { EventPointer, NDKEvent } from '@nostr-dev-kit/ndk';
+import type { NostrEvent } from 'nostr-tools';
 
-const Badge = ({ ev }: { ev: NDKEvent }) => {
+const Badge = ({ ev }: { ev: NostrEvent }) => {
   if (ev.kind == KIND_FILE_META) {
     const nevent = nip19.neventEncode({
       kind: ev.kind,
       id: ev.id,
-      author: ev.author.pubkey,
-      relays: ev.onRelays.map(r => r.url),
+      author: ev.pubkey,
+      relays: [],
     } as EventPointer);
     return (
       <a target="_blank" href={`https://filestr.vercel.app/e/${nevent}`}>
@@ -25,12 +25,12 @@ const Badge = ({ ev }: { ev: NDKEvent }) => {
   }
 
   if (ev.kind == KIND_BLOSSOM_DRIVE) {
-    const driveIdentifier = ev.tagValue('d');
+    const driveIdentifier = ev.tags.find(t => t[0] === 'd')?.[1];
     const naddr = nip19.naddrEncode({
       kind: ev.kind,
-      identifier: driveIdentifier,
-      pubkey: ev.author.pubkey,
-      relays: ev.onRelays.map(r => r.url),
+      identifier: driveIdentifier || '',
+      pubkey: ev.pubkey,
+      relays: [],
     } as AddressPointer);
     return (
       <a
@@ -39,7 +39,7 @@ const Badge = ({ ev }: { ev: NDKEvent }) => {
         href={`https://blossom.hzrd149.com/#/drive/${naddr}`}
         data-tip={driveIdentifier}
       >
-        🌸 drive
+        drive
       </a>
     );
   }
@@ -47,9 +47,9 @@ const Badge = ({ ev }: { ev: NDKEvent }) => {
   if (ev.kind == KIND_VIDEO_HORIZONTAL || ev.kind == KIND_VIDEO_VERTICAL) {
     const naddr = nip19.naddrEncode({
       kind: ev.kind,
-      identifier: ev.tagValue('d'),
-      pubkey: ev.author.pubkey,
-      relays: ev.onRelays.map(r => r.url),
+      identifier: ev.tags.find(t => t[0] === 'd')?.[1] || '',
+      pubkey: ev.pubkey,
+      relays: [],
     } as AddressPointer);
     return (
       <a target="_blank" className="badge badge-primary mr-2" href={`https://www.flare.pub/w/${naddr}`}>
@@ -62,8 +62,8 @@ const Badge = ({ ev }: { ev: NDKEvent }) => {
     const nevent = nip19.neventEncode({
       kind: ev.kind,
       id: ev.id,
-      author: ev.author.pubkey,
-      relays: ev.onRelays.map(r => r.url),
+      author: ev.pubkey,
+      relays: [],
     } as EventPointer);
     return (
       <a target="_blank" href={`https://njump.me/${nevent}`}>

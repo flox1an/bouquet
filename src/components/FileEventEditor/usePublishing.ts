@@ -1,15 +1,29 @@
-import { NDKEvent, NostrEvent } from '@nostr-dev-kit/ndk';
+import type { NostrEvent } from 'nostr-tools';
 import dayjs from 'dayjs';
 import { FileEventData } from './FileEventEditor';
 import { uniq } from 'lodash';
-import { useNDK } from '../../utils/ndk';
+import { useNDK, accountManager } from '../../utils/ndk';
 import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../../utils/useFileMetaEvents';
+import { ReadonlyAccount } from 'applesauce-accounts/accounts';
 
 export const usePublishing = () => {
-  const { ndk, user } = useNDK();
+  const { user } = useNDK();
+
+  const signAndPublish = async (event: Omit<NostrEvent, 'id' | 'sig'>): Promise<NostrEvent> => {
+    const activeAccount = accountManager.active;
+    if (!activeAccount || activeAccount instanceof ReadonlyAccount) {
+      throw new Error('No signer available');
+    }
+
+    const signedEvent = await activeAccount.signer.signEvent(event);
+    console.log(signedEvent);
+    // Note: Event publishing is commented out in the original code
+    // await relayPool.publish(DEFAULT_RELAYS, signedEvent);
+    return signedEvent;
+  };
 
   const publishFileEvent = async (data: FileEventData): Promise<NostrEvent> => {
-    const e: NostrEvent = {
+    const e: Omit<NostrEvent, 'id' | 'sig'> = {
       created_at: dayjs().unix(),
       content: data.content,
       tags: [
@@ -42,15 +56,11 @@ export const usePublishing = () => {
       e.tags.push(['image', data.publishedThumbnail]);
     }
 
-    const ev = new NDKEvent(ndk, e);
-    await ev.sign();
-    console.log(ev.rawEvent());
-    //await ev.publish();
-    return ev.rawEvent();
+    return signAndPublish(e);
   };
 
   const publishAudioEvent = async (data: FileEventData): Promise<NostrEvent> => {
-    const e: NostrEvent = {
+    const e: Omit<NostrEvent, 'id' | 'sig'> = {
       created_at: dayjs().unix(),
       content: `${data.artist} - ${data.title}`,
       tags: [
@@ -90,17 +100,13 @@ export const usePublishing = () => {
 
     e.tags.push(['published_at', `${dayjs().unix()}`]);
 
-    const ev = new NDKEvent(ndk, e);
-    await ev.sign();
-    console.log(ev.rawEvent());
-    //await ev.publish();
-    return ev.rawEvent();
+    return signAndPublish(e);
   };
 
   const publishVideoEvent = async (data: FileEventData): Promise<NostrEvent> => {
     const videoIsHorizontal = data.width == undefined || data.height == undefined || data.width > data.height;
 
-    const e: NostrEvent = {
+    const e: Omit<NostrEvent, 'id' | 'sig'> = {
       created_at: dayjs().unix(),
       content: data.content,
       tags: [
@@ -135,11 +141,7 @@ export const usePublishing = () => {
       e.tags.push(['image', data.publishedThumbnail]);
     }
 
-    const ev = new NDKEvent(ndk, e);
-    await ev.sign();
-    console.log(ev.rawEvent());
-    //await ev.publish();
-    return ev.rawEvent();
+    return signAndPublish(e);
   };
 
   return {

@@ -17,7 +17,7 @@ import { extractDomain } from '../utils/utils';
 import { transferBlob } from '../utils/transfer';
 import { usePublishing } from '../components/FileEventEditor/usePublishing';
 import { useNavigate } from 'react-router-dom';
-import { NostrEvent } from '@nostr-dev-kit/ndk';
+import type { NostrEvent } from 'nostr-tools';
 import UploadPublished from '../components/UploadPublished';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
 import UploadOnboarding from '../components/UploadOboarding';

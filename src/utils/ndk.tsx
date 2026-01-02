@@ -1,203 +1,160 @@
 import type { EventTemplate, SignedEvent } from 'blossom-client-sdk';
-import NDK, {
-  NDKCacheAdapter,
-  NDKEvent,
-  NDKNip07Signer,
-  NDKNip46Signer,
-  NDKPrivateKeySigner,
-  NDKUser,
-} from '@nostr-dev-kit/ndk';
-import { generateSecretKey, nip19 } from 'nostr-tools';
-import { decrypt } from 'nostr-tools/nip49';
-import { bytesToHex } from '@noble/hashes/utils';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import { nip19 } from 'nostr-tools';
+import type { NostrEvent } from 'nostr-tools';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
-import NDKCacheAdapterDexie from '@nostr-dev-kit/ndk-cache-dexie';
+// Applesauce imports
+import { AccountManager } from 'applesauce-accounts';
+import { registerCommonAccountTypes, ReadonlyAccount } from 'applesauce-accounts/accounts';
+import { EventFactory } from 'applesauce-core';
+import { AccountsProvider, EventStoreProvider, FactoryProvider } from 'applesauce-react/providers';
+import { useActiveAccount } from 'applesauce-react/hooks';
+
+// Local imports
+import { eventStore, relayPool, connectToRelays, DEFAULT_RELAYS } from '../nostr/core';
+import { restoreAccountsToManager } from '../nostr/accountPersistence';
+import { useBatchedProfileLoader } from '../hooks/useBatchedProfiles';
+
+// User type
+export type ApplesauceUser = {
+  pubkey: string;
+  npub: string;
+  relayUrls: string[];
+  profile?: {
+    image?: string;
+    name?: string;
+    displayName?: string;
+  };
+};
 
 type NDKContextType = {
-  ndk: NDK;
-  user?: NDKUser;
-  logout: () => void;
-  loginWithExtension: () => Promise<void>;
-  loginWithNostrAddress: (connectionString: string) => Promise<void>;
-  loginWithPrivateKey: (key: string) => Promise<void>;
+  ndk: null; // Deprecated, keeping for compatibility
+  user?: ApplesauceUser;
+  setUserFromPubkey: (pubkey: string) => void;
+  clearUser: () => void;
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>;
   publishSignedEvent: (signedEvent: SignedEvent) => Promise<void>;
 };
 
-const defaultRelays = [
-  // 'ws://localhost:4869',
-  'wss://relay.damus.io',
-  'wss://relay.nostr.band',
-  'wss://relay.snort.social',
-  'wss://nos.lol',
-  'wss://nostr.wine',
-  'wss://relay.primal.net',
-  'wss://purplepag.es/', // needed for user profiles
-];
+// Create AccountManager and EventFactory at module level
+const accountManager = new AccountManager();
+registerCommonAccountTypes(accountManager);
+const factory = new EventFactory({ signer: accountManager.signer });
 
-const dexieAdapter = new NDKCacheAdapterDexie({ dbName: 'ndk-cache-3' });
-
-const ndk = new NDK({
-  cacheAdapter: dexieAdapter as NDKCacheAdapter,
-  autoConnectUserRelays: true,
-  enableOutboxModel: true,
-  explicitRelayUrls: defaultRelays,
-});
+// Export for use elsewhere
+export { accountManager, factory };
 
 export const NDKContext = createContext<NDKContextType>({
-  ndk,
-  logout: () => {},
-  loginWithExtension: () => Promise.reject(),
-  loginWithNostrAddress: () => Promise.reject(),
-  loginWithPrivateKey: () => Promise.reject(),
+  ndk: null,
+  setUserFromPubkey: () => {},
+  clearUser: () => {},
   signEventTemplate: () => Promise.reject(),
   publishSignedEvent: () => Promise.reject(),
 });
 
-export const NDKContextProvider = ({ children }: { children: React.ReactElement }) => {
-  const [user, setUser] = useState(ndk.activeUser);
-
-  const fetchUserData = async function () {
-    if (!ndk.signer) return;
-
-    console.log('Fetching user');
-    const user = await ndk.signer.user();
-    console.log('Fetching profile');
-    user.fetchProfile();
-    setUser(user);
-  };
-
-  const loginWithExtension = async function () {
-    const signer: NDKNip07Signer = new NDKNip07Signer();
-    console.log('Waiting for NIP-07 signer');
-    await signer.blockUntilReady();
-    await signer.user();
-    ndk.signer = signer;
-
-    await fetchUserData();
-  };
-
-  const loginWithNostrAddress = async function (connectionString: string) {
-    const localKey = localStorage.getItem('local-signer') || bytesToHex(generateSecretKey());
-    const localSigner = new NDKPrivateKeySigner(localKey);
-
-    let signer: NDKNip46Signer;
-
-    // manually set remote user and pubkey if using NIP05
-    if (connectionString.includes('@')) {
-      const user = await ndk.getUserFromNip05(connectionString);
-      if (!user?.pubkey) throw new Error('Cant find user');
-      console.log('Found user', user);
-
-      signer = new NDKNip46Signer(ndk, connectionString, localSigner);
-    } else if (connectionString.startsWith('bunker://')) {
-      const uri = new URL(connectionString);
-
-      const pubkey = uri.host || uri.pathname.replace('//', '');
-      const relays = uri.searchParams.getAll('relay');
-      for (const relay of relays) ndk.addExplicitRelay(relay);
-      if (relays.length === 0) throw new Error('Missing relays');
-      signer = new NDKNip46Signer(ndk, pubkey, localSigner);
-      signer.relayUrls = relays;
-    } else {
-      signer = new NDKNip46Signer(ndk, connectionString, localSigner);
-    }
-
-    signer.rpc.on('authUrl', (url: string) => {
-      window.open(url, '_blank');
-    });
-
-    await signer.blockUntilReady();
-    await signer.user();
-    ndk.signer = signer;
-    localStorage.setItem('local-signer', localSigner.privateKey ?? '');
-
-    await fetchUserData();
-  };
-
-  const loginWithPrivateKey = async function (key: string) {
-    if (key.startsWith('ncryptsec')) {
-      const password = prompt('Enter your private key password');
-      if (password === null) throw new Error('No password provided');
-      const plaintext = bytesToHex(decrypt(key, password));
-      console.log(plaintext);
-
-      ndk.signer = new NDKPrivateKeySigner(plaintext);
-      await ndk.signer.blockUntilReady();
-      localStorage.setItem('private-key', key);
-    } else if (key.startsWith('nsec')) {
-      const decoded = nip19.decode(key);
-      if (decoded.type !== 'nsec') throw new Error('Not nsec');
-      ndk.signer = new NDKPrivateKeySigner(bytesToHex(decoded.data));
-      await ndk.signer.blockUntilReady();
-    } else throw new Error('Unknown private format');
-
-    await fetchUserData();
-  };
-
-  const logout = function logout() {
-    localStorage.clear();
-    location.reload();
-  };
-
-  const signEventTemplate = async function signEventTemplate(template: EventTemplate): Promise<SignedEvent> {
-    console.log('signEventTemplate called');
-    const e = new NDKEvent(ndk);
-    e.kind = template.kind;
-    e.content = template.content;
-    e.tags = template.tags;
-    e.created_at = template.created_at;
-    await e.sign();
-    return e.rawEvent() as SignedEvent;
-  };
-
-  const publishSignedEvent = async function (signedEvent: SignedEvent) {
-    const e = new NDKEvent(ndk);
-    e.content = signedEvent.content;
-    e.tags = signedEvent.tags;
-    e.created_at = signedEvent.created_at;
-    e.kind = signedEvent.kind;
-    e.id = signedEvent.id;
-    e.pubkey = signedEvent.pubkey;
-    e.sig = signedEvent.sig;
-    await e.publish();
-  };
-
-  ndk.connect();
-
-  const performAutoLogin = async () => {
-    const autoLogin = localStorage.getItem('auto-login');
-    if (autoLogin) {
-      try {
-        if (autoLogin === 'nip07') {
-          await loginWithExtension().catch(() => {});
-        } else if (autoLogin === 'nsec') {
-          const key = localStorage.getItem('private-key');
-          if (key) await loginWithPrivateKey(key);
-        } else if (autoLogin.includes('@') || autoLogin.startsWith('bunker://') || autoLogin.includes('#')) {
-          await loginWithNostrAddress(autoLogin).catch(() => {});
-        }
-      } catch (e) {}
-    }
-  };
+function AccountRestoreInit({ onRestore }: { onRestore: (pubkey: string) => void }) {
+  const [restored, setRestored] = useState(false);
 
   useEffect(() => {
-    performAutoLogin();
+    if (!restored) {
+      restoreAccountsToManager(accountManager).then(() => {
+        setRestored(true);
+        const active = accountManager.active;
+        if (active) {
+          onRestore(active.pubkey);
+        }
+      });
+    }
+  }, [restored, onRestore]);
+
+  return null;
+}
+
+function BatchedProfileLoaderInit() {
+  useBatchedProfileLoader();
+  return null;
+}
+
+export const NDKContextProvider = ({ children }: { children: React.ReactElement }) => {
+  const [user, setUser] = useState<ApplesauceUser | undefined>(undefined);
+
+  const createUserFromPubkey = useCallback((pubkey: string): ApplesauceUser => {
+    return {
+      pubkey,
+      npub: nip19.npubEncode(pubkey),
+      relayUrls: DEFAULT_RELAYS,
+    };
+  }, []);
+
+  const setUserFromPubkey = useCallback((pubkey: string) => {
+    setUser(createUserFromPubkey(pubkey));
+  }, [createUserFromPubkey]);
+
+  const clearUser = useCallback(() => {
+    setUser(undefined);
+  }, []);
+
+  const handleAccountRestore = useCallback((pubkey: string) => {
+    setUser(createUserFromPubkey(pubkey));
+  }, [createUserFromPubkey]);
+
+  const signEventTemplate = useCallback(async (template: EventTemplate): Promise<SignedEvent> => {
+    const activeAccount = accountManager.active;
+    if (!activeAccount) {
+      throw new Error('No active account');
+    }
+
+    if (activeAccount instanceof ReadonlyAccount) {
+      throw new Error('Cannot sign with read-only account');
+    }
+
+    const eventTemplate = {
+      kind: template.kind,
+      content: template.content,
+      tags: template.tags,
+      created_at: template.created_at,
+    };
+
+    const signedEvent = await activeAccount.signer.signEvent(eventTemplate);
+    return signedEvent as SignedEvent;
+  }, []);
+
+  const publishSignedEvent = useCallback(async (signedEvent: SignedEvent) => {
+    await relayPool.publish(DEFAULT_RELAYS, signedEvent as NostrEvent);
+  }, []);
+
+  // Connect to relays on mount
+  useEffect(() => {
+    connectToRelays();
   }, []);
 
   const value = {
-    ndk,
+    ndk: null,
     user,
-    logout,
-    loginWithExtension,
-    loginWithNostrAddress,
-    loginWithPrivateKey,
+    setUserFromPubkey,
+    clearUser,
     signEventTemplate,
     publishSignedEvent,
   };
 
-  return <NDKContext.Provider value={value}>{children}</NDKContext.Provider>;
+  return (
+    <AccountsProvider manager={accountManager}>
+      <EventStoreProvider eventStore={eventStore}>
+        <FactoryProvider factory={factory}>
+          <NDKContext.Provider value={value}>
+            <AccountRestoreInit onRestore={handleAccountRestore} />
+            <BatchedProfileLoaderInit />
+            {children}
+          </NDKContext.Provider>
+        </FactoryProvider>
+      </EventStoreProvider>
+    </AccountsProvider>
+  );
 };
 
 export const useNDK = () => useContext(NDKContext);
+
+export const useSigner = () => {
+  const activeAccount = useActiveAccount();
+  return activeAccount?.signer;
+};

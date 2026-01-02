@@ -6,7 +6,7 @@ import TagInput from '../TagInput';
 import { allGenres } from '../../utils/genres';
 import { ServerIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import MimeTypeIcon from '../MimeTypeIcon';
-import { NostrEvent } from '@nostr-dev-kit/ndk';
+import type { NostrEvent } from 'nostr-tools';
 
 export type FileEventData = {
   originalFile: File;
