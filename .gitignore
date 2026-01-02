@@ -28,3 +28,4 @@ package-lock.json
 bun.lockb
 .nsite/
 .codegpt
+.worktrees/
