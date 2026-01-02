@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ServerSelector } from "@/components/servers/ServerSelector"
 import { ThemeToggle } from "@/components/Layout/ThemeToggle"
 import { cn } from "@/lib/utils"
 
@@ -50,7 +51,7 @@ export function TopNav() {
         {/* Right Side */}
         <div className="flex flex-1 items-center justify-end space-x-2">
           <div className="hidden md:flex items-center space-x-2">
-            {/* ServerSelector will be added in Task 5 */}
+            <ServerSelector />
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -105,6 +106,10 @@ function MobileNav() {
           </Link>
         ))}
       </nav>
+      <div className="border-t pt-4">
+        <p className="text-sm text-muted-foreground mb-2">Server</p>
+        <ServerSelector />
+      </div>
       <div className="border-t pt-4 flex items-center justify-between">
         <span className="text-sm">Theme</span>
         <ThemeToggle />
