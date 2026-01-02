@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   { to: "/upload", label: "Upload", icon: Upload },
-  { to: "/", label: "Browse", icon: FolderOpen },
+  { to: "/browse", label: "Browse", icon: FolderOpen },
   { to: "/sync", label: "Sync", icon: RefreshCw },
 ]
 
