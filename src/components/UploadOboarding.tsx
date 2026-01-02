@@ -1,6 +1,7 @@
 import { ServerIcon } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 import { Server, useUserServers } from '../utils/useUserServers';
+import { Badge } from '@/components/ui/badge';
 
 const defaultServers: (Server & { description: string; buyUrl?: string })[] = [
   {
@@ -70,7 +71,7 @@ export default function UploadOnboarding() {
                 <span className="flex items-center gap-2 text-accent">
                   <ServerIcon className="w-4 h-4" /> {server.name}
                 </span>
-                <span className="badge badge-primary">{server.type}</span>
+                <Badge>{server.type}</Badge>
               </span>
               <p>
                 {server.description}{' '}

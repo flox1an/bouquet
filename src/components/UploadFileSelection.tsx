@@ -4,6 +4,7 @@ import CheckBox from './CheckBox/CheckBox';
 import { Server } from '../utils/useUserServers';
 import { formatFileSize } from '../utils/utils';
 import { useServerInfo } from '../utils/useServerInfo';
+import { Badge } from '@/components/ui/badge';
 
 type ResizeOptionType = {
   name: string;
@@ -136,7 +137,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
                 }
               >
                 <ServerIcon className="w-6" />
-                {s.name} <div className="badge badge-neutral">{serverInfo[s.name].type}</div>
+                {s.name} <Badge variant="secondary">{serverInfo[s.name].type}</Badge>
               </CheckBox>
             ))}
           </div>

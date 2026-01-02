@@ -1,6 +1,7 @@
 import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from '@heroicons/react/24/outline';
 import React, { useState, useEffect, useRef } from 'react';
 import { Server } from '../../utils/useUserServers';
+import { Badge } from '@/components/ui/badge';
 
 interface ServerListPopupProps {
   isOpen: boolean;
@@ -71,7 +72,7 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
             {servers.map((server, index) => (
               <li key={server.url} className="flex items-center justify-between mt-2">
                 <span>
-                  {server.url} <div className="badge badge-neutral">{server.type}</div>
+                  {server.url} <Badge variant="secondary">{server.type}</Badge>
                 </span>
                 <div className="flex items-center space-x-2">
                   <button className="btn btn-ghost btn-sm" onClick={() => handleMoveUp(index)}>

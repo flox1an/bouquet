@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { formatDate, formatFileSize } from '../../utils/utils';
 import { ServerInfo } from '../../utils/useServerInfo';
+import { Badge } from '@/components/ui/badge';
 
 type ServerProps = {
   server: ServerInfo;
@@ -46,18 +47,19 @@ const Server = ({
         <div className="server-name">
           {server.name}
           {!server.virtual && (
-            <div
-              className={`badge ${selectedServer == server.name ? 'badge-primary' : 'badge-neutral'}  ml-2 align-middle`}
+            <Badge
+              variant={selectedServer == server.name ? 'default' : 'secondary'}
+              className="ml-2 align-middle"
             >
               {server.type}
-            </div>
+            </Badge>
           )}
           {server.isLoading && <span className="ml-2 loading loading-spinner loading-sm"></span>}
         </div>
         {server.isError ? (
-          <div className="badge badge-error">
-            <ExclamationTriangleIcon className="w-4 mr-2" /> Error connecting to server
-          </div>
+          <Badge variant="destructive" className="flex items-center gap-1">
+            <ExclamationTriangleIcon className="w-4" /> Error connecting to server
+          </Badge>
         ) : (
           <div className="server-stats">
             <div className="server-stat tooltip text-left text-nowrap" data-tip="Number of blobs">

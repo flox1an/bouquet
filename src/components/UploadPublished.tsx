@@ -3,8 +3,9 @@ import { FileEventData } from './FileEventEditor/FileEventEditor';
 import type { NostrEvent } from 'nostr-tools';
 import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../utils/useFileMetaEvents';
 import { nip19 } from 'nostr-tools';
-import { LinkIcon } from '@heroicons/react/24/outline';
+import { Link } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
 
 type EventVisModel = {
   id: string;
@@ -91,9 +92,9 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
           </div>
         </div>
         <div className="w-24">
-          <a className="link link-primary flex flex-row gap-2" target="_blank" href={`https://njump.me/${data.nevent}`}>
-            <LinkIcon className="w-6 h-6 flex-grow" />
-            <div className="badge badge-primary">{data.type}</div>
+          <a className="text-primary hover:underline flex flex-row gap-2 items-center" target="_blank" href={`https://njump.me/${data.nevent}`}>
+            <Link className="w-5 h-5" />
+            <Badge>{data.type}</Badge>
           </a>
         </div>
       </div>
