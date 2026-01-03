@@ -2,9 +2,12 @@ import { AddressPointer, EventPointer } from "nostr-tools/nip19"
 import {
   KIND_BLOSSOM_DRIVE,
   KIND_FILE_META,
+  KIND_PICTURE,
   KIND_SOCIAL_POST,
   KIND_VIDEO_HORIZONTAL,
+  KIND_VIDEO_HORIZONTAL_IMMUTABLE,
   KIND_VIDEO_VERTICAL,
+  KIND_VIDEO_VERTICAL_IMMUTABLE,
 } from "../../utils/useFileMetaEvents"
 import { nip19 } from "nostr-tools"
 import type { NostrEvent } from "nostr-tools"
@@ -44,6 +47,34 @@ const Badge = ({ ev }: { ev: NostrEvent }) => {
     )
   }
 
+  if (ev.kind == KIND_PICTURE) {
+    const nevent = nip19.neventEncode({
+      kind: ev.kind,
+      id: ev.id,
+      author: ev.pubkey,
+      relays: [],
+    } as EventPointer)
+    return (
+      <a target="_blank" href={`https://njump.me/${nevent}`}>
+        <ShadcnBadge className="mr-2">picture</ShadcnBadge>
+      </a>
+    )
+  }
+
+  if (ev.kind == KIND_VIDEO_HORIZONTAL_IMMUTABLE || ev.kind == KIND_VIDEO_VERTICAL_IMMUTABLE) {
+    const nevent = nip19.neventEncode({
+      kind: ev.kind,
+      id: ev.id,
+      author: ev.pubkey,
+      relays: [],
+    } as EventPointer)
+    return (
+      <a target="_blank" href={`https://nostu.be/video/${nevent}`}>
+        <ShadcnBadge className="mr-2">video</ShadcnBadge>
+      </a>
+    )
+  }
+
   if (ev.kind == KIND_VIDEO_HORIZONTAL || ev.kind == KIND_VIDEO_VERTICAL) {
     const naddr = nip19.naddrEncode({
       kind: ev.kind,
@@ -52,7 +83,7 @@ const Badge = ({ ev }: { ev: NostrEvent }) => {
       relays: [],
     } as AddressPointer)
     return (
-      <a target="_blank" href={`https://www.flare.pub/w/${naddr}`}>
+      <a target="_blank" href={`https://nostu.be/video/${naddr}`}>
         <ShadcnBadge className="mr-2">video</ShadcnBadge>
       </a>
     )

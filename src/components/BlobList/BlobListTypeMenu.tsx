@@ -1,5 +1,7 @@
-import { DocumentIcon, FilmIcon, ListBulletIcon, MusicalNoteIcon, PhotoIcon } from '@heroicons/react/24/outline';
+import { List, Image, Music, Film, FileText } from 'lucide-react';
 import { useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export type ListMode = 'gallery' | 'list' | 'audio' | 'video' | 'docs';
 
@@ -30,58 +32,37 @@ const BlobListTypeMenu = ({ mode, setMode, hasImages, hasAudio, hasDocs, hasVide
     }
   }, [hasAudio, hasDocs, hasImages, hasVideo, mode, setMode]);
 
+  const items = [
+    { id: 'list' as ListMode, icon: List, label: 'All content', enabled: true },
+    { id: 'gallery' as ListMode, icon: Image, label: 'Images', enabled: hasImages },
+    { id: 'audio' as ListMode, icon: Music, label: 'Music', enabled: hasAudio },
+    { id: 'video' as ListMode, icon: Film, label: 'Video', enabled: hasVideo },
+    { id: 'docs' as ListMode, icon: FileText, label: 'PDF documents', enabled: hasDocs },
+  ];
+
   return (
-    <ul className="menu menu-horizontal menu-active bg-base-200 rounded-box gap-1">
-      <li>
-        <a
-          className={' tooltip ' + (mode == 'list' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}
-          data-tip="All content"
-          onClick={() => setMode('list')}
-        >
-          <ListBulletIcon />
-        </a>
-      </li>
-
-      <li className={hasImages ? '' : 'disabled'}>
-        <a
-          className={' tooltip ' + (mode == 'gallery' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}
-          onClick={() => setMode('gallery')}
-          data-tip="Images"
-        >
-          <PhotoIcon />
-        </a>
-      </li>
-
-      <li className={hasAudio ? '' : 'disabled'}>
-        <a
-          className={' tooltip  ' + (mode == 'audio' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}
-          onClick={() => setMode('audio')}
-          data-tip="Music"
-        >
-          <MusicalNoteIcon />
-        </a>
-      </li>
-
-      <li className={hasVideo ? '' : 'disabled'}>
-        <a
-          className={' tooltip ' + (mode == 'video' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}
-          onClick={() => setMode('video')}
-          data-tip="Video"
-        >
-          <FilmIcon />
-        </a>
-      </li>
-
-      <li className={hasDocs ? '' : 'disabled'}>
-        <a
-          className={' tooltip ' + (mode == 'docs' ? 'bg-primary text-primary-content hover:bg-primary ' : '')}
-          onClick={() => setMode('docs')}
-          data-tip="PDF documents"
-        >
-          <DocumentIcon />
-        </a>
-      </li>
-    </ul>
+    <div className="inline-flex items-center rounded-lg border bg-muted p-1">
+      {items.map(item => {
+        const Icon = item.icon;
+        const isActive = mode === item.id;
+        return (
+          <Button
+            key={item.id}
+            variant="ghost"
+            size="sm"
+            disabled={!item.enabled}
+            title={item.label}
+            onClick={() => setMode(item.id)}
+            className={cn(
+              'h-8 w-8 p-0',
+              isActive && 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground'
+            )}
+          >
+            <Icon className="h-4 w-4" />
+          </Button>
+        );
+      })}
+    </div>
   );
 };
 

@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button';
+
 function Check() {
   /*
   const { serverInfo } = useServerInfo();
@@ -16,7 +18,7 @@ function Check() {
         onCancel={() => navigate('/')}
       ></ServerList>
   */}
-      <button className="btn">dfgfdgdfg</button>
+      <Button>dfgfdgdfg</Button>
     </>
   );
 }

@@ -2,32 +2,24 @@ import { useMemo, useState } from 'react';
 import './Home.css';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
-import { useNDK } from '../utils/ndk';
+import { useNostr } from '../utils/nostr';
 import BlobList from '../components/BlobList/BlobList';
 import { useServerInfo } from '../utils/useServerInfo';
-import { ServerList } from '../components/ServerList/ServerList';
-import { useNavigate } from 'react-router-dom';
-import { Server } from '../utils/useUserServers';
+import { ServerSelect } from '../components/ServerList/ServerSelect';
+import ServerListPopup from '../components/ServerListPopup';
+import { Server, useUserServers } from '../utils/useUserServers';
 import { deleteNip96File } from '../utils/nip96';
+import { Button } from '@/components/ui/button';
+import { RefreshCw, Settings } from 'lucide-react';
 
 /* BOUQUET Blob Organizer Update Quality Use Enhancement Tool */
 
-// TODOs
-/*
-- display flle progress for transfer
-- stop/pause transfer
-- multi threaded sync
-- Add server and pulbish list event
-- upload to single/multi servers
-- upload image resize
-- upload & publish as file event to nostr
-- check blobs (download & sha256 sum check), maybe limit max size
-*/
 function Home() {
   const [selectedServer, setSelectedServer] = useState<string | undefined>();
+  const [isServerListDialogOpen, setIsDialogOpen] = useState(false);
   const { serverInfo } = useServerInfo();
-  const navigate = useNavigate();
-  const { signEventTemplate } = useNDK();
+  const { storeUserServers } = useUserServers();
+  const { signEventTemplate } = useNostr();
 
   const queryClient = useQueryClient();
 
@@ -58,17 +50,47 @@ function Home() {
     [serverInfo, selectedServer]
   );
 
+  const servers = Object.values(serverInfo).sort((a, b) => {
+    // "All servers" (virtual) should always be first
+    if (a.virtual && !b.virtual) return -1;
+    if (!a.virtual && b.virtual) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['blobs'] });
+    queryClient.invalidateQueries({ queryKey: ['use-event'] });
+  };
+
+  const handleSaveServers = async (newServers: Server[]) => {
+    await storeUserServers(newServers);
+    queryClient.invalidateQueries({ queryKey: ['use-event'] });
+  };
+
   return (
     <div className="flex flex-col mx-auto max-w-[80em] w-full">
-      <ServerList
-        servers={Object.values(serverInfo).sort()}
-        selectedServer={selectedServer}
-        setSelectedServer={setSelectedServer}
-        onCheck={() => navigate('/check/' + selectedServer)}
-        title={<>Servers</>}
-        manageServers={true}
-        withVirtualServers={true}
-      ></ServerList>
+      <div className="flex items-center gap-2 py-4">
+        <ServerSelect
+          servers={servers}
+          selectedServer={selectedServer}
+          onServerChange={setSelectedServer}
+          placeholder="Select a server to browse"
+          className="flex-1 max-w-md"
+        />
+        <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh">
+          <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setIsDialogOpen(true)} title="Manage servers">
+          <Settings className="h-4 w-4 mr-1" /> Manage
+        </Button>
+      </div>
+
+      <ServerListPopup
+        isOpen={isServerListDialogOpen}
+        onClose={() => setIsDialogOpen(false)}
+        onSave={handleSaveServers}
+        initialServers={servers.filter(s => !s.virtual)}
+      />
 
       {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && selectedServerBlobs.length > 0 && (
         <BlobList
@@ -83,7 +105,7 @@ function Home() {
               });
             }
           }}
-        ></BlobList>
+        />
       )}
     </div>
   );

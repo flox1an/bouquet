@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { NDKContextProvider } from './utils/ndk.tsx';
+import { NostrProvider } from './utils/nostr.tsx';
 import { Navigate, Route, RouterProvider, createBrowserRouter, createRoutesFromElements } from 'react-router-dom';
 import { Layout } from './components/Layout/Layout.tsx';
 import Home from './pages/Home.tsx';
@@ -76,11 +76,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       client={queryClient}
     >*/}
     <QueryClientProvider client={queryClient}>
-      <NDKContextProvider>
+      <NostrProvider>
         <GlobalProvider>
           <RouterProvider router={router} />
         </GlobalProvider>
-      </NDKContextProvider>
+      </NostrProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   </React.StrictMode>

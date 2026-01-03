@@ -1,7 +1,7 @@
 import React from 'react';
 import { Server } from '../utils/useUserServers';
 import { TransferStats } from './UploadFileSelection';
-import { Cog6ToothIcon, ServerIcon } from '@heroicons/react/24/outline';
+import { Cog, Server as ServerIcon, Loader2 } from 'lucide-react';
 import ProgressBar from './ProgressBar/ProgressBar';
 import { formatFileSize } from '../utils/utils';
 
@@ -14,29 +14,33 @@ interface UploadProgressProps {
 const UploadProgress: React.FC<UploadProgressProps> = ({ servers, transfers, preparing }) => {
   return (
     <>
-      <h3 className="text-lg">Servers</h3>
+      <h3 className="text-lg font-semibold">Servers</h3>
       {preparing && (
-        <div className="py-2">
-          <Cog6ToothIcon className="w-6 h-6 inline" /> Preparing files...{' '}
-          <div className="loading loading-spinner loading-sm" />
+        <div className="py-2 flex items-center gap-2 text-muted-foreground">
+          <Cog className="h-5 w-5 animate-spin" />
+          <span>Preparing files...</span>
+          <Loader2 className="h-4 w-4 animate-spin" />
         </div>
       )}
 
-      <div className="cursor-pointer grid gap-2" style={{ gridTemplateColumns: '1.5em 20em auto' }}>
+      <div className="space-y-3 mt-2">
         {servers.map(
           s =>
             transfers[s.name]?.enabled && (
-              <>
-                <ServerIcon></ServerIcon> {s.name}
-                <div className="flex flex-col gap-2">
+              <div key={s.name} className="flex items-center gap-3">
+                <ServerIcon className="h-5 w-5 text-muted-foreground shrink-0" />
+                <span className="w-48 truncate">{s.name}</span>
+                <div className="flex-1 flex flex-col gap-1">
                   <ProgressBar
                     value={transfers[s.name].transferred}
                     max={transfers[s.name].size}
-                    description={transfers[s.name].rate > 0 ? '' + formatFileSize(transfers[s.name].rate) + '/s' : ''}
+                    description={transfers[s.name].rate > 0 ? formatFileSize(transfers[s.name].rate) + '/s' : ''}
                   />
-                  {transfers[s.name].error && <div className="alert alert-error">{transfers[s.name].error}</div>}
+                  {transfers[s.name].error && (
+                    <div className="text-sm text-destructive">{transfers[s.name].error}</div>
+                  )}
                 </div>
-              </>
+              </div>
             )
         )}
       </div>

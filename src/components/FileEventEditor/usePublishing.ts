@@ -2,12 +2,12 @@ import type { NostrEvent } from 'nostr-tools';
 import dayjs from 'dayjs';
 import { FileEventData } from './FileEventEditor';
 import { uniq } from 'lodash';
-import { useNDK, accountManager } from '../../utils/ndk';
+import { useNostr, accountManager } from '../../utils/nostr';
 import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../../utils/useFileMetaEvents';
 import { ReadonlyAccount } from 'applesauce-accounts/accounts';
 
 export const usePublishing = () => {
-  const { user } = useNDK();
+  const { user } = useNostr();
 
   const signAndPublish = async (event: Omit<NostrEvent, 'id' | 'sig'>): Promise<NostrEvent> => {
     const activeAccount = accountManager.active;

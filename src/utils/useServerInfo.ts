@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { useNDK } from '../utils/ndk';
+import { useNostr } from '../utils/nostr';
 import { nip19 } from 'nostr-tools';
 import { Server, useUserServers } from './useUserServers';
 import { fetchBlossomList } from './blossom';
@@ -43,7 +43,7 @@ const mergeBlobs = (
 
 export const useServerInfo = () => {
   const { servers } = useUserServers();
-  const { user, signEventTemplate } = useNDK();
+  const { user, signEventTemplate } = useNostr();
   const [features, setFeatures] = useState<SupportedFeatures>({});
 
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type

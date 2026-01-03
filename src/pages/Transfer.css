@@ -1,3 +1,5 @@
+@reference "../index.css";
+
 .message {
   @apply text-2xl text-center text-white p-4;
 }

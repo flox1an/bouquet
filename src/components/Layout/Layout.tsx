@@ -23,14 +23,16 @@ export const Layout = () => {
     }
   }, [])
 
+  const hasAudioPlayer = !!state.currentSong
+
   return (
     <div className="min-h-screen flex flex-col">
       <TopNav />
-      <main className="flex-1 container py-6">
+      <main className={`flex-1 container py-6 ${hasAudioPlayer ? 'pb-24' : ''}`}>
         {user ? <Outlet /> : <Login />}
       </main>
-      {state.currentSong && (
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t">
+      {hasAudioPlayer && (
+        <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t shadow-lg z-50">
           <AudioPlayer />
         </div>
       )}

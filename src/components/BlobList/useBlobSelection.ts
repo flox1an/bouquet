@@ -3,21 +3,21 @@ import { useState } from 'react';
 
 export type HandleSelectBlobType = (
   sha256: string,
-  event: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>
+  event?: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>
 ) => void;
 export const useBlobSelection = (blobs: BlobDescriptor[]) => {
   const [selectedBlobs, setSelectedBlobs] = useState<{ [key: string]: boolean }>({});
 
   const handleSelectBlob: HandleSelectBlobType = (
     sha256: string,
-    event: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>
+    event?: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>
   ) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const isMouseEvent = (event: any): event is React.MouseEvent<HTMLTableRowElement> => {
       return event.ctrlKey !== undefined || event.metaKey !== undefined;
     };
 
-    if (isMouseEvent(event)) {
+    if (event && isMouseEvent(event)) {
       if (event.ctrlKey || event.metaKey) {
         setSelectedBlobs(prev => ({
           ...prev,

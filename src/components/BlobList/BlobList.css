@@ -1,3 +1,5 @@
+@reference "../../index.css";
+
 .blob-list {
   @apply select-none;
 }

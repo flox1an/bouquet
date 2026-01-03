@@ -1,10 +1,19 @@
-import { ArrowUpOnSquareIcon, ExclamationTriangleIcon, ServerIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { Upload, AlertTriangle, Server as ServerIcon, Trash2 } from 'lucide-react';
 import React, { ChangeEvent, DragEvent, useMemo, useRef } from 'react';
 import CheckBox from './CheckBox/CheckBox';
 import { Server } from '../utils/useUserServers';
 import { formatFileSize } from '../utils/utils';
 import { useServerInfo } from '../utils/useServerInfo';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type ResizeOptionType = {
   name: string;
@@ -115,16 +124,16 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
       />
       <label
         htmlFor="browse"
-        className="p-12 bg-base-100 rounded-lg hover:text-primary text-neutral-content border-dashed  border-neutral-content border-opacity-50 border-2 block cursor-pointer text-center"
+        className="p-12 bg-card rounded-lg hover:text-primary text-muted-foreground border-dashed border-border border-2 block cursor-pointer text-center"
         onDrop={handleDrop}
         onDragOver={event => event.preventDefault()}
       >
-        <ArrowUpOnSquareIcon className="w-8 inline" /> Browse or drag & drop
+        <Upload className="w-8 h-8 inline" /> Browse or drag & drop
       </label>
 
       <div className="cursor-pointer gap-4 flex flex-col md:flex-row">
         <div className="flex flex-col gap-4 w-full md:w-1/2">
-          <h3 className="text-lg text-neutral-content">Servers</h3>
+          <h3 className="text-lg text-muted-foreground">Servers</h3>
           <div className="grid gap-2" style={{ gridTemplateColumns: '2em auto' }}>
             {servers.map(s => (
               <CheckBox
@@ -144,7 +153,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
         </div>
         {imagesAreUploaded && (
           <div className="flex flex-col gap-4 w-full md:w-1/2">
-            <h3 className="text-lg text-neutral-content">Image Options</h3>
+            <h3 className="text-lg text-muted-foreground">Image Options</h3>
             <div className="cursor-pointer grid gap-2 items-center" style={{ gridTemplateColumns: '1.5em auto' }}>
               <CheckBox
                 name="cleanData"
@@ -154,52 +163,55 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
               >
                 Clean private data in images (EXIF)
               </CheckBox>
-              <input
-                className="checkbox checkbox-primary "
+              <Checkbox
                 id="resizeOption"
                 disabled={uploadBusy}
-                type="checkbox"
                 checked={imageResize > 0}
-                onChange={() => setImageResize(irs => (irs > 0 ? 0 : 1))}
+                onCheckedChange={() => setImageResize(irs => (irs > 0 ? 0 : 1))}
               />
-              <div>
+              <div className="flex items-center gap-2">
                 <label htmlFor="resizeOption" className="cursor-pointer select-none">
                   Resize Image
                 </label>
-                <select
+                <Select
                   disabled={uploadBusy || imageResize == 0}
-                  className="select select-bordered select-sm ml-4 w-full max-w-xs"
-                  onChange={e => setImageResize(e.target.selectedIndex)}
-                  value={imageResize}
+                  value={String(imageResize)}
+                  onValueChange={(value) => setImageResize(Number(value))}
                 >
-                  {ResizeOptions.map((ro, i) => (
-                    <option key={ro.name} value={i} disabled={i == 0}>
-                      {ro.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-[200px] h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ResizeOptions.map((ro, i) => (
+                      <SelectItem key={ro.name} value={String(i)} disabled={i === 0}>
+                        {ro.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
         )}
       </div>
       {serversEnabledCount == 1 && (
-        <div className="text-sm flex flex-row gap-2 items-center">
-          <ExclamationTriangleIcon className="w-6 min-w-6 text-warning" />
+        <div className="text-sm flex flex-row gap-2 items-center text-yellow-600 dark:text-yellow-500">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
           <span>It's recommended to upload to multiple servers to ensure availability and censorship resistance.</span>
         </div>
       )}
       <div className="flex flex-row gap-2 justify-center md:justify-start">
-        <button
-          className="btn btn-primary"
+        <Button
           onClick={() => upload()}
           disabled={serversEnabledCount < 1 || uploadBusy || files.length == 0}
         >
+          <Upload className="w-4 h-4 mr-1" />
           Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
           {formatFileSize(sizeOfFilesToUpload)}
-        </button>
-        <button
-          className="btn  btn-secondary  "
+        </Button>
+        <Button
+          variant="secondary"
+          size="icon"
           disabled={uploadBusy || files.length == 0}
           onClick={() => {
             clearTransfers();
@@ -209,8 +221,8 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
             }
           }}
         >
-          <TrashIcon className="w-6" />
-        </button>
+          <Trash2 className="w-4 h-4" />
+        </Button>
       </div>
     </>
   );

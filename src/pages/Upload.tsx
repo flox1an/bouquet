@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
-import { useNDK } from '../utils/ndk';
+import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
 import { removeExifData } from '../utils/exif';
@@ -18,13 +18,15 @@ import { transferBlob } from '../utils/transfer';
 import { usePublishing } from '../components/FileEventEditor/usePublishing';
 import { useNavigate } from 'react-router-dom';
 import type { NostrEvent } from 'nostr-tools';
+import { Button } from '@/components/ui/button';
+import { Steps } from '@/components/ui/steps';
 import UploadPublished from '../components/UploadPublished';
-import { InformationCircleIcon } from '@heroicons/react/24/outline';
+import { Info } from 'lucide-react';
 import UploadOnboarding from '../components/UploadOboarding';
 
 function Upload() {
   const { servers, serversLoading } = useUserServers();
-  const { signEventTemplate } = useNDK();
+  const { signEventTemplate } = useNostr();
   const { serverInfo } = useServerInfo();
   const queryClient = useQueryClient();
   const [transfers, setTransfers] = useState<{ [key: string]: TransferStats }>({});
@@ -405,14 +407,17 @@ function Upload() {
         <UploadOnboarding />
       ) : (
         <>
-          <ul className="steps pt-8 pb-4 md:p-8">
-            <li className={`step ${uploadStep >= 0 ? 'step-primary' : ''}`}>Choose files</li>
-            <li className={`step ${uploadStep >= 1 ? 'step-primary' : ''}`}>Upload</li>
-            <li className={`step ${uploadStep >= 2 ? 'step-primary' : ''}`}>Add metadata</li>
-            <li className={`step ${uploadStep >= 3 ? 'step-primary' : ''}`}>Publish to NOSTR</li>
-          </ul>
+          <Steps
+            steps={[
+              { label: 'Choose files' },
+              { label: 'Upload' },
+              { label: 'Add metadata' },
+              { label: 'Publish to NOSTR' },
+            ]}
+            currentStep={uploadStep}
+          />
           {uploadStep <= 1 && (
-            <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
+            <div className="bg-muted rounded-xl p-4 text-muted-foreground gap-4 flex flex-col">
               {uploadStep == 0 && (
                 <UploadFileSelection
                   servers={servers}
@@ -448,27 +453,28 @@ function Upload() {
                 ))}
               </div>
               {audioCount > 0 && (
-                <div className="text-sm text-neutral-content flex flex-row gap-2 items-center pl-4">
-                  <InformationCircleIcon className="w-6 h-6 text-info" />
+                <div className="text-sm text-muted-foreground flex flex-row gap-2 items-center pl-4">
+                  <Info className="h-5 w-5 text-blue-500" />
                   Audio events are not widely supported yet. Currently they are only used by{' '}
                   <a className="link link-primary" href="https://stemstr.app/" target="_blank">
                     stemstr.app
                   </a>
                 </div>
               )}
-              <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-row justify-center">
-                <button
-                  className={`btn ${publishCount === 0 ? 'btn-primary' : 'btn-neutral'} w-40`}
+              <div className="bg-muted rounded-xl p-4 text-muted-foreground gap-4 flex flex-row justify-center">
+                <Button
+                  variant={publishCount === 0 ? 'default' : 'secondary'}
+                  className="w-40"
                   onClick={() => {
                     navigate('/browse');
                   }}
                 >
                   Skip publishing
-                </button>
+                </Button>
                 {publishCount > 0 && (
-                  <button className="btn btn-primary w-40" onClick={() => publishAll()}>
+                  <Button className="w-40" onClick={() => publishAll()}>
                     Publish ({publishCount} event{publishCount > 1 ? 's' : ''})
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>

@@ -1,11 +1,11 @@
 import { useActiveAccount, useAccountManager } from 'applesauce-react/hooks';
-import { useNDK } from '../utils/ndk';
+import { useNostr } from '../utils/nostr';
 import { useLoginActions, ExtensionMissingError } from './useLoginActions';
 
 export { ExtensionMissingError };
 
 export function useCurrentUser() {
-  const { user, setUserFromPubkey, clearUser } = useNDK();
+  const { user, setUserFromPubkey, clearUser } = useNostr();
   const activeAccount = useActiveAccount();
   const accountManager = useAccountManager();
   const loginActions = useLoginActions();

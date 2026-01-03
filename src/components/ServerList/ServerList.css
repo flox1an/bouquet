@@ -1,3 +1,5 @@
+@reference "../../index.css";
+
 .server-list {
   @apply flex flex-col gap-2;
 }

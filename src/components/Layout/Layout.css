@@ -1,3 +1,5 @@
+@reference "../../index.css";
+
 .main {
   @apply flex flex-col justify-center;
 }

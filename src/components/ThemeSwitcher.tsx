@@ -1,5 +1,6 @@
-import { MoonIcon, SunIcon } from '@heroicons/react/24/outline';
+import { Moon, Sun } from 'lucide-react';
 import React from 'react';
+import { Button } from '@/components/ui/button';
 
 const ThemeSwitcher = () => {
   const [theme, setTheme] = React.useState('mydark');
@@ -11,13 +12,18 @@ const ThemeSwitcher = () => {
     document.querySelector('html')?.setAttribute('data-theme', theme);
   }, [theme]);
   return (
-    <div className="tooltip tooltip-bottom" data-tip="Switch theme">
-      <label className="swap swap-rotate">
-        <input onClick={toggleTheme} type="checkbox" />
-        <MoonIcon className="w-8 tooltip swap-on" />
-        <SunIcon className="w-8 *:tooltip swap-off" />
-      </label>
-    </div>
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggleTheme}
+      title="Switch theme"
+    >
+      {theme === 'mydark' ? (
+        <Sun className="h-5 w-5" />
+      ) : (
+        <Moon className="h-5 w-5" />
+      )}
+    </Button>
   );
 };
 

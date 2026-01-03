@@ -6,6 +6,9 @@ import { nip19 } from 'nostr-tools';
 import { Link } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
 
 type EventVisModel = {
   id: string;
@@ -87,7 +90,7 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
               {data.artist} {data.album ? `(${data.album})` : ''}
             </div>
           )}
-          <div className="text-xs bg-base-300 p-4 rounded-xl text-neutral-content overflow-x-auto whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
+          <div className="text-xs bg-muted p-4 rounded-xl text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
             {JSON.stringify(event, null, 2)}
           </div>
         </div>
@@ -110,21 +113,24 @@ const UploadPublished: React.FC<{ fileEventsToPublish: FileEventData[] }> = ({ f
   return (
     <div className="flex flex-col gap-4 ">
       <h2 className="text-2xl font-bold">Published events</h2>
-      <div className="alert alert-warning">Events are not published yet. Still under development.</div>
-      <div className="flex flex-col gap-4 w-full bg-base-200 rounded-xl p-4 ">
+      <Alert variant="warning">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>Events are not published yet. Still under development.</AlertDescription>
+      </Alert>
+      <div className="flex flex-col gap-4 w-full bg-muted rounded-xl p-4">
         {allEvents.map(event => (
           <FileEvent event={event} />
         ))}
       </div>
-      <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-row justify-center">
-        <button
-          className={`btn btn-primary w-40`}
+      <div className="bg-muted rounded-xl p-4 gap-4 flex flex-row justify-center">
+        <Button
+          className="w-40"
           onClick={() => {
             navigate('/browse');
           }}
         >
           Close
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -4,9 +4,22 @@ import { fetchId3Tag } from '../../utils/id3';
 import useVideoThumbnailDvm from './dvm';
 import TagInput from '../TagInput';
 import { allGenres } from '../../utils/genres';
-import { ServerIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
+import { Server, Clipboard, Loader2 } from 'lucide-react';
 import MimeTypeIcon from '../MimeTypeIcon';
 import type { NostrEvent } from 'nostr-tools';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export type FileEventData = {
   originalFile: File;
@@ -114,228 +127,272 @@ const FileEventEditor = ({
   }, [fileEventData.thumbnails, fileEventData.selectedThumbnail]);
 
   return (
-    <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-row">
-      <div>
-        <div className="flex gap-4 flex-col">
-          {fileEventData.publish.file !== undefined && (
-            <div className="form-control flex-row">
-              <label className="label cursor-pointer gap-2">
-                <input
-                  type="checkbox"
-                  className="toggle toggle-primary"
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Left column: Publish options */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Publish Options</h3>
+
+            {fileEventData.publish.file !== undefined && (
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="publish-file"
                   checked={fileEventData.publish.file}
-                  onChange={e =>
+                  onCheckedChange={(checked) =>
                     setFileEventData({
                       ...fileEventData,
-                      publish: { ...fileEventData.publish, file: e.target.checked },
+                      publish: { ...fileEventData.publish, file: checked },
                     })
                   }
                 />
-                <span className="label-text">Publish file meta data event</span>
-              </label>
-            </div>
-          )}
-          {fileEventData.publish.video !== undefined && (
-            <div className="form-control flex-row">
-              <label className="label cursor-pointer gap-2">
-                <input
-                  type="checkbox"
-                  className="toggle toggle-primary"
+                <Label htmlFor="publish-file" className="cursor-pointer">
+                  Publish file metadata event
+                </Label>
+              </div>
+            )}
+
+            {fileEventData.publish.video !== undefined && (
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="publish-video"
                   checked={fileEventData.publish.video}
-                  onChange={e =>
+                  onCheckedChange={(checked) =>
                     setFileEventData({
                       ...fileEventData,
-                      publish: { ...fileEventData.publish, video: e.target.checked },
+                      publish: { ...fileEventData.publish, video: checked },
                     })
                   }
                 />
-                <span className="label-text">Publish video event</span>
-              </label>
-            </div>
-          )}
-          {fileEventData.publish.audio !== undefined && (
-            <div className="form-control flex-row">
-              <label className="label cursor-pointer gap-2">
-                <input
-                  type="checkbox"
-                  className="toggle toggle-primary"
+                <Label htmlFor="publish-video" className="cursor-pointer">
+                  Publish video event
+                </Label>
+              </div>
+            )}
+
+            {fileEventData.publish.audio !== undefined && (
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="publish-audio"
                   checked={fileEventData.publish.audio}
-                  onChange={e =>
+                  onCheckedChange={(checked) =>
                     setFileEventData({
                       ...fileEventData,
-                      publish: { ...fileEventData.publish, audio: e.target.checked },
+                      publish: { ...fileEventData.publish, audio: checked },
                     })
                   }
                 />
-                <span className="label-text">Publish audio event</span>
-              </label>
+                <Label htmlFor="publish-audio" className="cursor-pointer">
+                  Publish audio event
+                </Label>
+              </div>
+            )}
+          </div>
+
+          {/* Thumbnail section for video */}
+          {fileEventData.m?.startsWith('video/') && thumbnailRequestEventId && (
+            <div className="w-full lg:w-64 shrink-0">
+              {fileEventData.thumbnails && fileEventData.thumbnails.length > 0 ? (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Thumbnail</h3>
+                  <div className="rounded-lg overflow-hidden border bg-muted">
+                    <img
+                      src={getProxyUrl(fileEventData.selectedThumbnail || fileEventData.thumbnails[0])}
+                      className="w-full aspect-video object-cover"
+                      alt="Selected thumbnail"
+                    />
+                  </div>
+                  <div className="flex justify-center gap-2">
+                    {fileEventData.thumbnails.map((t, i) => (
+                      <Button
+                        key={`thumb-${i}`}
+                        size="sm"
+                        variant={t === fileEventData.selectedThumbnail ? 'default' : 'outline'}
+                        onClick={() => setFileEventData({ ...fileEventData, selectedThumbnail: t })}
+                      >
+                        {i + 1}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Creating previews...</span>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      </div>
-      {fileEventData.m?.startsWith('video/') && (
-        <>
-          {thumbnailRequestEventId &&
-            (fileEventData.thumbnails && fileEventData.thumbnails.length > 0 ? (
-              <div className="w-2/6">
-                <div className="carousel w-full">
-                  {fileEventData.thumbnails.map((t, i) => (
-                    <div id={`item${i + 1}`} key={`item${i + 1}`} className="carousel-item w-full">
-                      <img width={300} height={300} src={getProxyUrl(t)} className="w-full" />
+
+          {/* Thumbnail section for image/audio */}
+          {(isImage || isAudio) && (fileEventData.publishedThumbnail || fileEventData.selectedThumbnail) && (
+            <div className="w-full lg:w-64 shrink-0">
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Preview</h3>
+                <div className="rounded-lg overflow-hidden border bg-muted p-4">
+                  <img
+                    src={
+                      fileEventData.publishedThumbnail
+                        ? getProxyUrl(fileEventData.publishedThumbnail)
+                        : fileEventData.selectedThumbnail
+                    }
+                    className="w-full rounded"
+                    alt="Preview"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Right column: Metadata form */}
+          <div className="flex-1 space-y-4">
+            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Metadata</h3>
+
+            {(isAudio || isVideo) && (
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  value={fileEventData.title || ''}
+                  onChange={e => setFileEventData({ ...fileEventData, title: e.target.value })}
+                  placeholder="Enter title"
+                />
+              </div>
+            )}
+
+            {isAudio && fileEventData.artist && (
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Artist</span>
+                  <p className="font-medium">{fileEventData.artist}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Album</span>
+                  <p className="font-medium">{fileEventData.album || '—'}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Year</span>
+                  <p className="font-medium">{fileEventData.year || '—'}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Summary / Description</Label>
+              <Textarea
+                id="description"
+                value={fileEventData.content}
+                onChange={e => setFileEventData({ ...fileEventData, content: e.target.value })}
+                placeholder="Add a caption or description"
+                rows={3}
+              />
+            </div>
+
+            {isAudio && (
+              <div className="space-y-2">
+                <Label>Genre</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Select
+                    value={fileEventData.genre || ''}
+                    onValueChange={(value) => setFileEventData({ ...fileEventData, genre: value, subgenre: '' })}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select genre" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(allGenres).map(g => (
+                        <SelectItem key={g} value={g}>
+                          {g}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={fileEventData.subgenre || ''}
+                    disabled={
+                      !fileEventData.genre ||
+                      !allGenres[fileEventData.genre] ||
+                      allGenres[fileEventData.genre].length === 0
+                    }
+                    onValueChange={(value) => setFileEventData({ ...fileEventData, subgenre: value })}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Sub-genre" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fileEventData.genre &&
+                        allGenres[fileEventData.genre]?.map(g => (
+                          <SelectItem key={g} value={g}>
+                            {g}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              <TagInput
+                tags={fileEventData.tags}
+                setTags={(tags: string[]) => setFileEventData({ ...fileEventData, tags })}
+              />
+            </div>
+
+            {/* File info grid */}
+            <div className="pt-4 border-t space-y-3">
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">File Info</h3>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Type</span>
+                  <p className="font-medium flex items-center gap-2">
+                    <MimeTypeIcon className="h-4 w-4" type={fileEventData.m} />
+                    {fileEventData.m}
+                  </p>
+                </div>
+
+                <div>
+                  <span className="text-muted-foreground">Size</span>
+                  <p className="font-medium">{fileEventData.size ? formatFileSize(fileEventData.size) : 'Unknown'}</p>
+                </div>
+
+                {fileEventData.dim && (
+                  <div>
+                    <span className="text-muted-foreground">Dimensions</span>
+                    <p className="font-medium">{fileEventData.dim}</p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <span className="text-sm text-muted-foreground">URLs</span>
+                <div className="mt-1 space-y-1">
+                  {fileEventData.url.map((url, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm">
+                      <Server className="h-4 w-4 text-muted-foreground" />
+                      <a href={url} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                        {extractDomain(url)}
+                      </a>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => copyToClipboard(url)}
+                        title="Copy to clipboard"
+                      >
+                        <Clipboard className="h-3 w-3" />
+                      </Button>
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-center w-full py-2 gap-2">
-                  {fileEventData.thumbnails.map((t, i) => (
-                    <a
-                      key={`link${i + 1}`}
-                      href={`#item${i + 1}`}
-                      onClick={() => setFileEventData({ ...fileEventData, selectedThumbnail: t })}
-                      className={'btn btn-xs ' + (t == fileEventData.selectedThumbnail ? 'btn-primary' : '')}
-                    >{`${i + 1}`}</a>
-                  ))}
-                </div>
               </div>
-            ) : (
-              <div>
-                Creating previews <span className="loading loading-spinner loading-md"></span>
-              </div>
-            ))}
-        </>
-      )}
-      {(isImage || isAudio) && (fileEventData.publishedThumbnail || fileEventData.selectedThumbnail) && (
-        <div className="p-4 bg-base-300 w-2/6">
-          <img
-            width={300}
-            height={300}
-            src={
-              fileEventData.publishedThumbnail
-                ? getProxyUrl(fileEventData.publishedThumbnail)
-                : fileEventData.selectedThumbnail
-            }
-            className="w-full"
-          />
-        </div>
-      )}
-
-      <div className="grid gap-4 w-4/6" style={{ gridTemplateColumns: '1fr 30em' }}>
-        {(isAudio || isVideo) && (
-          <>
-            <span className="font-bold">Title</span>
-            <input
-              type="text"
-              className="input input-primary"
-              value={fileEventData.title}
-              onChange={e => setFileEventData({ ...fileEventData, title: e.target.value })}
-            ></input>
-          </>
-        )}
-        {isAudio && (
-          <>
-            <span className="font-bold">Artist</span>
-            <span>{fileEventData.artist}</span>
-          </>
-        )}
-        {isAudio && (
-          <>
-            <span className="font-bold">Album</span>
-            <span>{fileEventData.album}</span>
-          </>
-        )}
-        {isAudio && (
-          <>
-            <span className="font-bold">Year</span>
-            <span>{fileEventData.year}</span>
-          </>
-        )}
-
-        <span className="font-bold">Summary / Description</span>
-        <textarea
-          value={fileEventData.content}
-          onChange={e => setFileEventData({ ...fileEventData, content: e.target.value })}
-          className="textarea textarea-primary"
-          placeholder="Caption"
-        ></textarea>
-        {isAudio && (
-          <>
-            <span className="font-bold">Genre</span>
-            <div>
-              <select
-                className="select select-bordered select-primary w-full max-w-xs"
-                value={fileEventData.genre}
-                onChange={e => setFileEventData({ ...fileEventData, genre: e.target.value, subgenre: '' })}
-              >
-                <option disabled>Select a genre</option>
-                {Object.keys(allGenres).map(g => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="select select-bordered select-primary w-full max-w-xs mt-2"
-                value={fileEventData.subgenre}
-                disabled={
-                  fileEventData.genre == undefined ||
-                  allGenres[fileEventData.genre] == undefined ||
-                  allGenres[fileEventData.genre].length == 0
-                }
-                onChange={e => setFileEventData({ ...fileEventData, subgenre: e.target.value })}
-              >
-                <option disabled value="">
-                  Select a sub genre
-                </option>
-                {fileEventData.genre &&
-                  allGenres[fileEventData.genre] &&
-                  allGenres[fileEventData.genre].length > 0 &&
-                  allGenres[fileEventData.genre].map(g => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-              </select>
             </div>
-          </>
-        )}
-        <span className="font-bold">Tags</span>
-        <TagInput
-          tags={fileEventData.tags}
-          setTags={(tags: string[]) => setFileEventData({ ...fileEventData, tags })}
-        ></TagInput>
-
-        <span className="font-bold">Type</span>
-        <span className="flex flex-row gap-2">
-          <MimeTypeIcon className="w-6 h-6" type={fileEventData.m} /> {fileEventData.m}
-        </span>
-
-        {fileEventData.dim && (
-          <>
-            <span className="font-bold">Dimensions</span>
-            <span>{fileEventData.dim}</span>
-          </>
-        )}
-
-        <span className="font-bold">File size</span>
-        <span>{fileEventData.size ? formatFileSize(fileEventData.size) : 'unknown'}</span>
-        <span className="font-bold">URLs</span>
-        <div className="flex flex-col gap-2">
-          {fileEventData.url.map((url, i) => (
-            <div key={i} className="flex flex-row gap-2 items-center">
-              <a href={url} className="flex flex-row gap-2 hover:text-primary" target="_blank">
-                <ServerIcon className="w-6 h-6" /> {extractDomain(url)}
-              </a>
-              <a
-                onClick={() => copyToClipboard(url)}
-                className="btn btn-sm btn-ghost hover:btn-neutral p-1 tooltip"
-                data-tip="Copy to clipboard"
-              >
-                <ClipboardDocumentIcon className="w-6 h-6" />
-              </a>
-            </div>
-          ))}
+          </div>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 

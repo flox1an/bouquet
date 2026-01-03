@@ -1,15 +1,19 @@
 import {
-  ArrowDownOnSquareIcon,
-  ArrowUpOnSquareIcon,
-  CheckBadgeIcon,
-  DocumentIcon,
-  ExclamationTriangleIcon,
-} from '@heroicons/react/24/outline';
-import { ServerList } from '../components/ServerList/ServerList';
-import { useServerInfo } from '../utils/useServerInfo';
+  ArrowDownSquare,
+  ArrowUpSquare,
+  CheckCircle2,
+  FileText,
+  AlertTriangle,
+  X,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Steps } from '@/components/ui/steps';
+import { ServerSelect } from '../components/ServerList/ServerSelect';
+import { ServerInfo, useServerInfo } from '../utils/useServerInfo';
+import { Label } from '@/components/ui/label';
 import { useMemo, useState } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { useNDK } from '../utils/ndk';
+import { useNostr } from '../utils/nostr';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatFileSize } from '../utils/utils';
 import BlobList from '../components/BlobList/BlobList';
@@ -41,7 +45,7 @@ export const Transfer = () => {
   const navigate = useNavigate();
   const { serverInfo } = useServerInfo();
   const [transferTarget, setTransferTarget] = useState<string | undefined>();
-  const { signEventTemplate } = useNDK();
+  const { signEventTemplate } = useNostr();
   const queryClient = useQueryClient();
   const [started, setStarted] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
@@ -64,6 +68,22 @@ export const Transfer = () => {
     }
     return [];
   }, [serverInfo, transferSource, transferTarget]);
+
+  const getTransferPreview = (targetServer: ServerInfo): string | undefined => {
+    if (!transferSource || !serverInfo[transferSource]) return undefined;
+    const sourceBlobs = serverInfo[transferSource].blobs;
+    const targetBlobs = targetServer.blobs;
+    if (!sourceBlobs) return undefined;
+
+    const missingCount = sourceBlobs.filter(
+      src => !targetBlobs?.find(tgt => tgt.sha256 === src.sha256)
+    ).length;
+
+    if (missingCount === 0) {
+      return 'No objects to transfer';
+    }
+    return `${missingCount} object${missingCount > 1 ? 's' : ''} to transfer`;
+  };
 
   const performTransfer = async (sourceServer: string, targetServer: string, blobs: BlobDescriptor[]) => {
     setTransferLog({});
@@ -195,56 +215,78 @@ export const Transfer = () => {
 
   const transferErrors = useMemo(() => Object.values(transferLog).filter(b => b.status == 'error'), [transferLog]);
 
-  const currentTransferStep = 0;
+  const currentTransferStep = transferSource ? (transferTarget ? 2 : 1) : 0;
   const transferSteps = (
-    <ul className="steps pt-8 pb-4 md:p-8">
-      <li className={`step ${currentTransferStep >= 0 ? 'step-primary' : ''}`}>Choose source</li>
-      <li className={`step ${currentTransferStep >= 1 ? 'step-primary' : ''}`}>Choose target</li>
-      <li className={`step ${currentTransferStep >= 2 ? 'step-primary' : ''}`}>Sync blobs</li>
-    </ul>
+    <Steps
+      steps={[
+        { label: 'Choose source' },
+        { label: 'Choose target' },
+        { label: 'Sync blobs' },
+      ]}
+      currentStep={currentTransferStep}
+    />
   );
+
+  const sourceServers = Object.values(serverInfo)
+    .filter(s => !s.virtual)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const targetServers = Object.values(serverInfo)
+    .filter(s => s.type === 'blossom')
+    .filter(s => s.name !== transferSource)
+    .filter(s => !s.virtual)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return transferSource ? (
     <div className="flex flex-col mx-auto max-w-[80em] w-full">
       {transferSteps}
-      <ServerList
-        selectedServer={transferSource}
-        servers={Object.values(serverInfo)
-          .filter(s => s.type == 'blossom')
-          .filter(s => s.name == transferSource)}
-        onCancel={() => closeTransferMode()}
-        title={
-          <>
-            <ArrowUpOnSquareIcon /> Sync Source
-          </>
-        }
-      ></ServerList>
-      <ServerList
-        servers={Object.values(serverInfo)
-          .filter(s => s.type == 'blossom')
-          .filter(s => s.name != transferSource)
-          .sort()}
-        selectedServer={transferTarget}
-        setSelectedServer={setTransferTarget}
-        title={
-          <>
-            <ArrowDownOnSquareIcon /> Transfer Target
-          </>
-        }
-      ></ServerList>
+
+      <div className="grid gap-6 md:grid-cols-2 py-4">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <ArrowUpSquare className="h-4 w-4" />
+              Source Server
+            </Label>
+            <Button variant="ghost" size="sm" onClick={() => closeTransferMode()}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <ServerSelect
+            servers={sourceServers}
+            selectedServer={transferSource}
+            onServerChange={setTransferSource}
+            disabled={started}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <ArrowDownSquare className="h-4 w-4" />
+            Target Server
+          </Label>
+          <ServerSelect
+            servers={targetServers}
+            selectedServer={transferTarget}
+            onServerChange={setTransferTarget}
+            placeholder="Select target server"
+            disabled={started}
+            getPreviewText={getTransferPreview}
+          />
+        </div>
+      </div>
       {transferTarget && transferJobs && transferJobs.length > 0 ? (
         <>
-          <div className=" bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col my-4">
+          <div className="bg-muted rounded-xl p-4 text-muted-foreground gap-4 flex flex-col my-4">
             <div className="message">
               {transferJobs.length} object{transferJobs.length > 1 ? 's' : ''} to transfer{' '}
               {!started && (
-                <button
-                  className="action-button"
+                <Button
                   onClick={() => performTransfer(transferSource, transferTarget, transferJobs)}
                 >
-                  <ArrowUpOnSquareIcon />
+                  <ArrowUpSquare className="h-4 w-4 mr-1" />
                   Start
-                </button>
+                </Button>
               )}
             </div>
             <div className="w-5/6">
@@ -288,11 +330,11 @@ export const Transfer = () => {
                     {transferErrors.map(t => (
                       <div key={t.sha256}>
                         <span>
-                          <DocumentIcon />
+                          <FileText className="h-4 w-4" />
                         </span>
                         <span>{t.sha256}</span>
                         <span>{formatFileSize(t.size)}</span>
-                        <span>{t.status && (t.status == 'error' ? <ExclamationTriangleIcon /> : '')}</span>
+                        <span>{t.status && (t.status == 'error' ? <AlertTriangle className="h-4 w-4" /> : '')}</span>
                         <span>{t.message}</span>
                       </div>
                     ))}
@@ -300,20 +342,20 @@ export const Transfer = () => {
                 </>
               )}
             </div>
-            <button className="btn btn-primary" onClick={cancelTransfer} disabled={!abortController}>
+            <Button onClick={cancelTransfer} disabled={!abortController}>
               Cancel transfer
-            </button>
+            </Button>
           </div>
           {!started && <BlobList blobs={transferJobs}></BlobList>}
         </>
       ) : (
-        <div className="message">
+        <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
           {transferTarget ? (
             <>
-              <CheckBadgeIcon /> no missing objects to transfer
+              <CheckCircle2 className="h-5 w-5 text-green-500" /> No missing objects to transfer
             </>
           ) : (
-            <>choose a transfer target above</>
+            <>Select a target server above</>
           )}
         </div>
       )}
@@ -321,16 +363,18 @@ export const Transfer = () => {
   ) : (
     <div className="flex flex-col mx-auto max-w-[80em] w-full">
       {transferSteps}
-      <ServerList
-        title={
-          <>
-            <ArrowUpOnSquareIcon /> Sync Source
-          </>
-        }
-        servers={Object.values(serverInfo).sort()}
-        selectedServer={transferSource}
-        setSelectedServer={s => setTransferSource(s)}
-      ></ServerList>
+      <div className="py-4 max-w-md">
+        <Label className="flex items-center gap-2 mb-2">
+          <ArrowUpSquare className="h-4 w-4" />
+          Select Source Server
+        </Label>
+        <ServerSelect
+          servers={sourceServers}
+          selectedServer={transferSource}
+          onServerChange={s => setTransferSource(s)}
+          placeholder="Choose a source server"
+        />
+      </div>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useNDK, accountManager } from '../utils/ndk';
+import { useNostr, accountManager } from '../utils/nostr';
 import { nip19 } from 'nostr-tools';
 import type { Filter, NostrEvent } from 'nostr-tools';
 import { USER_BLOSSOM_SERVER_LIST_KIND } from 'blossom-client-sdk';
@@ -33,7 +33,7 @@ export const useUserServers = (): {
   serversLoading: boolean;
   storeUserServers: (newServers: Server[]) => Promise<void>;
 } => {
-  const { user } = useNDK();
+  const { user } = useNostr();
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string);
 
   const storeUserServers = async (newServers: Server[]) => {

@@ -2,7 +2,7 @@ import type { NostrEvent, Filter } from 'nostr-tools';
 import { nip19 } from 'nostr-tools';
 import { FileEventData } from './FileEventEditor';
 import { useEffect, useMemo, useState } from 'react';
-import { useNDK, accountManager } from '../../utils/ndk';
+import { useNostr, accountManager } from '../../utils/nostr';
 import useEvents from '../../utils/useEvents';
 import dayjs from 'dayjs';
 import { relayPool, DEFAULT_RELAYS } from '../../nostr/core';
@@ -38,7 +38,7 @@ const ensureDecrypted = async (dvmPubkey: string, event: NostrEvent): Promise<No
 
 const useVideoThumbnailDvm = (fileEventData: FileEventData, setFileEventData: (data: FileEventData) => void) => {
   const [thumbnailRequestEventId, setThumbnailRequestEventId] = useState<string | undefined>();
-  const { user } = useNDK();
+  const { user } = useNostr();
 
   // Decode the npub to get the pubkey
   const dvmPubkey = useMemo(() => {

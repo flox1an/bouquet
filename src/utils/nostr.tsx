@@ -27,8 +27,7 @@ export type ApplesauceUser = {
   };
 };
 
-type NDKContextType = {
-  ndk: null; // Deprecated, keeping for compatibility
+type NostrContextType = {
   user?: ApplesauceUser;
   setUserFromPubkey: (pubkey: string) => void;
   clearUser: () => void;
@@ -44,8 +43,7 @@ const factory = new EventFactory({ signer: accountManager.signer });
 // Export for use elsewhere
 export { accountManager, factory };
 
-export const NDKContext = createContext<NDKContextType>({
-  ndk: null,
+export const NostrContext = createContext<NostrContextType>({
   setUserFromPubkey: () => {},
   clearUser: () => {},
   signEventTemplate: () => Promise.reject(),
@@ -75,7 +73,7 @@ function BatchedProfileLoaderInit() {
   return null;
 }
 
-export const NDKContextProvider = ({ children }: { children: React.ReactElement }) => {
+export const NostrProvider = ({ children }: { children: React.ReactElement }) => {
   const [user, setUser] = useState<ApplesauceUser | undefined>(undefined);
 
   const createUserFromPubkey = useCallback((pubkey: string): ApplesauceUser => {
@@ -129,7 +127,6 @@ export const NDKContextProvider = ({ children }: { children: React.ReactElement 
   }, []);
 
   const value = {
-    ndk: null,
     user,
     setUserFromPubkey,
     clearUser,
@@ -141,18 +138,18 @@ export const NDKContextProvider = ({ children }: { children: React.ReactElement 
     <AccountsProvider manager={accountManager}>
       <EventStoreProvider eventStore={eventStore}>
         <FactoryProvider factory={factory}>
-          <NDKContext.Provider value={value}>
+          <NostrContext.Provider value={value}>
             <AccountRestoreInit onRestore={handleAccountRestore} />
             <BatchedProfileLoaderInit />
             {children}
-          </NDKContext.Provider>
+          </NostrContext.Provider>
         </FactoryProvider>
       </EventStoreProvider>
     </AccountsProvider>
   );
 };
 
-export const useNDK = () => useContext(NDKContext);
+export const useNostr = () => useContext(NostrContext);
 
 export const useSigner = () => {
   const activeAccount = useActiveAccount();

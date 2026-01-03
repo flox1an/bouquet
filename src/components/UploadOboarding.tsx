@@ -1,7 +1,9 @@
-import { ServerIcon } from '@heroicons/react/24/outline';
+import { Server as ServerIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Server, useUserServers } from '../utils/useUserServers';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const defaultServers: (Server & { description: string; buyUrl?: string })[] = [
   {
@@ -55,35 +57,40 @@ export default function UploadOnboarding() {
         {defaultServers.map((server, index) => (
           <div
             key={server.name}
-            className="flex flex-row items-start gap-2 my-2 p-4 bg-base-200 rounded-md cursor-pointer"
+            className="flex flex-row items-start gap-3 my-2 p-4 bg-muted rounded-md cursor-pointer"
             onClick={() => handleCheckboxChange(index)}
           >
-            <div className="flex  justify-center items-center gap-2">
-              <input
-                type="checkbox"
-                className="checkbox checkbox-primary"
+            <div className="flex justify-center items-center pt-1">
+              <Checkbox
                 checked={checkedState[index]}
-                onChange={() => handleCheckboxChange(index)}
+                onCheckedChange={() => handleCheckboxChange(index)}
               />
             </div>
-            <div className="flex flex-col">
+            <div className="flex flex-col gap-1">
               <span className="flex items-center gap-2">
-                <span className="flex items-center gap-2 text-accent">
+                <span className="flex items-center gap-2 text-primary">
                   <ServerIcon className="w-4 h-4" /> {server.name}
                 </span>
                 <Badge>{server.type}</Badge>
               </span>
-              <p>
+              <p className="text-sm text-muted-foreground">
                 {server.description}{' '}
                 {server.buyUrl && (
-                  <a
-                    href={server.buyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-sm btn-neutral mt-1"
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="mt-1"
+                    asChild
                   >
-                    Buy Storage
-                  </a>
+                    <a
+                      href={server.buyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Buy Storage
+                    </a>
+                  </Button>
                 )}
               </p>
             </div>
@@ -91,14 +98,13 @@ export default function UploadOnboarding() {
         ))}
       </div>
       <div className="mt-4 flex justify-center">
-        <button
-          className="btn btn-primary"
+        <Button
           onClick={() => {
             storeUserServers(defaultServers);
           }}
         >
           Use these servers
-        </button>
+        </Button>
       </div>
     </div>
   );
