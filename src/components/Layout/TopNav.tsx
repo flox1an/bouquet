@@ -1,24 +1,26 @@
-import { Link, useLocation } from "react-router-dom"
-import { Menu, Upload, FolderOpen, RefreshCw, User } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Link, useLocation } from 'react-router-dom';
+import { Menu, Upload, FolderOpen, RefreshCw, User } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { ThemeToggle } from "@/components/Layout/ThemeToggle"
-import { cn } from "@/lib/utils"
+} from '@/components/ui/dropdown-menu';
+import { ThemeToggle } from '@/components/Layout/ThemeToggle';
+import { cn } from '@/lib/utils';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 const navItems = [
-  { to: "/upload", label: "Upload", icon: Upload },
-  { to: "/browse", label: "Browse", icon: FolderOpen },
-  { to: "/sync", label: "Sync", icon: RefreshCw },
-]
+  { to: '/upload', label: 'Upload', icon: Upload },
+  { to: '/browse', label: 'Browse', icon: FolderOpen },
+  { to: '/sync', label: 'Sync', icon: RefreshCw },
+];
 
 export function TopNav() {
-  const location = useLocation()
+  const location = useLocation();
+  const { logout } = useCurrentUser();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -31,15 +33,13 @@ export function TopNav() {
 
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
-          {navItems.map((item) => (
+          {navItems.map(item => (
             <Link
               key={item.to}
               to={item.to}
               className={cn(
-                "transition-colors hover:text-foreground/80",
-                location.pathname === item.to
-                  ? "text-foreground"
-                  : "text-foreground/60"
+                'transition-colors hover:text-foreground/80',
+                location.pathname === item.to ? 'text-foreground' : 'text-foreground/60'
               )}
             >
               {item.label}
@@ -58,9 +58,7 @@ export function TopNav() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>Profile</DropdownMenuItem>
-                <DropdownMenuItem>Settings</DropdownMenuItem>
-                <DropdownMenuItem>Logout</DropdownMenuItem>
+                <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -79,24 +77,22 @@ export function TopNav() {
         </div>
       </div>
     </header>
-  )
+  );
 }
 
 function MobileNav() {
-  const location = useLocation()
+  const location = useLocation();
 
   return (
     <div className="flex flex-col space-y-4 mt-4">
       <nav className="flex flex-col space-y-2">
-        {navItems.map((item) => (
+        {navItems.map(item => (
           <Link
             key={item.to}
             to={item.to}
             className={cn(
-              "flex items-center space-x-2 px-2 py-2 rounded-md transition-colors",
-              location.pathname === item.to
-                ? "bg-accent text-accent-foreground"
-                : "hover:bg-accent/50"
+              'flex items-center space-x-2 px-2 py-2 rounded-md transition-colors',
+              location.pathname === item.to ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
             )}
           >
             <item.icon className="h-5 w-5" />
@@ -109,5 +105,5 @@ function MobileNav() {
         <ThemeToggle />
       </div>
     </div>
-  )
+  );
 }

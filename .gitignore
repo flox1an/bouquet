@@ -29,3 +29,4 @@ bun.lockb
 .nsite/
 .codegpt
 .worktrees/
+.env*.local

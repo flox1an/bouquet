@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useObservable, useSubscription } from 'observable-hooks';
+import { use$ } from 'applesauce-react/hooks';
 import { createTimelineLoader, TimelineLoader } from 'applesauce-loaders/loaders';
-import type { Filter, NostrEvent } from 'nostr-tools';
+import type { Filter } from 'nostr-tools';
 import { eventStore, relayPool, cacheRequest, DEFAULT_RELAYS } from '../nostr/core';
 import { hashSha256 } from './utils';
 
@@ -16,7 +16,6 @@ export default function useEvents(
   relays?: string[]
 ) {
   const [eose, setEose] = useState(false);
-  const [events, setEvents] = useState<NostrEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
@@ -37,7 +36,6 @@ export default function useEvents(
   // Create and manage loader subscription
   useEffect(() => {
     if (opts?.disable || !normalizedFilter) {
-      setEvents([]);
       setEose(false);
       setHasMore(true);
       oldestTimestampRef.current = undefined;
@@ -73,25 +71,19 @@ export default function useEvents(
     };
   }, [id, opts?.disable]);
 
-  // Create observable for timeline from event store
-  const timeline$ = useObservable(
-    () => eventStore.timeline(normalizedFilter),
-    [normalizedFilter]
-  );
+  // Subscribe to timeline from event store
+  const events = use$(
+    () => (opts?.disable ? undefined : eventStore.timeline(normalizedFilter)),
+    [normalizedFilter, opts?.disable]
+  ) ?? [];
 
-  // Subscribe to timeline updates
-  useSubscription(timeline$, {
-    next: (timelineEvents: NostrEvent[]) => {
-      if (!opts?.disable) {
-        setEvents(timelineEvents);
-        // Track the oldest timestamp for pagination
-        if (timelineEvents.length > 0) {
-          const oldest = Math.min(...timelineEvents.map(e => e.created_at));
-          oldestTimestampRef.current = oldest;
-        }
-      }
-    },
-  });
+  // Track the oldest timestamp for pagination
+  useEffect(() => {
+    if (events.length > 0) {
+      const oldest = Math.min(...events.map(e => e.created_at));
+      oldestTimestampRef.current = oldest;
+    }
+  }, [events]);
 
   // Load more (older) events
   const loadMore = useCallback(() => {

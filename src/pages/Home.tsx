@@ -10,7 +10,8 @@ import ServerListPopup from '../components/ServerListPopup';
 import { Server, useUserServers } from '../utils/useUserServers';
 import { deleteNip96File } from '../utils/nip96';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Settings } from 'lucide-react';
+import { RefreshCw, Settings, Upload } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 /* BOUQUET Blob Organizer Update Quality Use Enhancement Tool */
 
@@ -20,6 +21,7 @@ function Home() {
   const { serverInfo } = useServerInfo();
   const { storeUserServers } = useUserServers();
   const { signEventTemplate } = useNostr();
+  const navigate = useNavigate();
 
   const queryClient = useQueryClient();
 
@@ -67,6 +69,14 @@ function Home() {
     queryClient.invalidateQueries({ queryKey: ['use-event'] });
   };
 
+  const handleUploadClick = () => {
+    if (selectedServer && serverInfo[selectedServer]) {
+      navigate('/upload', { state: { preSelectedServer: serverInfo[selectedServer] } });
+    }
+  };
+
+  const isAllServersSelected = selectedServer ? serverInfo[selectedServer]?.virtual === true : false;
+
   return (
     <div className="flex flex-col mx-auto max-w-[80em] w-full">
       <div className="flex items-center gap-2 py-4">
@@ -77,6 +87,15 @@ function Home() {
           placeholder="Select a server to browse"
           className="flex-1 max-w-md"
         />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleUploadClick}
+          disabled={!selectedServer || isAllServersSelected}
+          title={isAllServersSelected ? "Cannot upload to 'All servers'" : 'Upload to this server'}
+        >
+          <Upload className="h-4 w-4 mr-1" /> Upload
+        </Button>
         <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh">
           <RefreshCw className="h-4 w-4 mr-1" /> Refresh
         </Button>

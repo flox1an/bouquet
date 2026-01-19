@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import {
   Clipboard,
@@ -27,21 +27,8 @@ import { useBlobSelection } from './useBlobSelection';
 import MimeTypeIcon from '../MimeTypeIcon';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,14 +54,16 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   const fileMetaEventsByHash = useFileMetaEventsByHash();
   const { handleSelectBlob, selectedBlobs, setSelectedBlobs } = useBlobSelection(blobs);
 
+  // Reset to page 1 when blobs change (e.g., switching servers)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [blobs]);
+
   // Pagination calculations
   const totalPages = Math.ceil(blobs.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const paginatedBlobs = useMemo(
-    () => blobs.slice(startIndex, endIndex),
-    [blobs, startIndex, endIndex]
-  );
+  const paginatedBlobs = useMemo(() => blobs.slice(startIndex, endIndex), [blobs, startIndex, endIndex]);
 
   // Reset to page 1 when blobs change or page size changes
   const handlePageSizeChange = (value: string) => {
@@ -146,11 +135,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
             {selectedCount} blobs selected
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  size="sm"
-                  className="flex whitespace-nowrap"
-                  title="Add selected blobs to collection"
-                >
+                <Button size="sm" className="flex whitespace-nowrap" title="Add selected blobs to collection">
                   <Plus className="h-4 w-4" />
                   <Folder className="h-4 w-4" />
                 </Button>

@@ -6,8 +6,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import useLocalStorageState from "../../utils/useLocalStorageState"
 import { useCurrentUser, ExtensionMissingError } from "../../hooks/useCurrentUser"
 import { cn } from "@/lib/utils"
+import { QRCodeLogin } from "./QRCodeLogin"
 
-type LoginMethod = "extension" | "bunker" | "nsec"
+type LoginMethod = "extension" | "qr" | "bunker" | "nsec"
 
 const Login: React.FC = () => {
   const { loginWithExtension, loginWithBunker, loginWithNsec } = useCurrentUser()
@@ -74,6 +75,7 @@ const Login: React.FC = () => {
 
   const tabs: { id: LoginMethod; label: string }[] = [
     { id: "extension", label: "Extension" },
+    { id: "qr", label: "QR" },
     { id: "bunker", label: "Bunker" },
     { id: "nsec", label: "Nsec" },
   ]
@@ -128,6 +130,13 @@ const Login: React.FC = () => {
                   Login with Extension
                 </Button>
               </>
+            )}
+
+            {activeTab === "qr" && (
+              <QRCodeLogin
+                onLogin={() => setAutoLogin(true)}
+                onError={(err) => setError(err)}
+              />
             )}
 
             {activeTab === "bunker" && (

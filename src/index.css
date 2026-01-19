@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @plugin "tailwindcss-animate";
 
 @custom-variant dark (&:is(.dark *));
@@ -72,7 +72,7 @@
     --card-foreground: 262 84% 10%;
     --popover: 0 0% 100%;
     --popover-foreground: 262 84% 10%;
-    --primary: 262 83% 58%;
+    --primary: 333 77% 42%;
     --primary-foreground: 0 0% 100%;
     --secondary: 262 30% 96%;
     --secondary-foreground: 262 84% 20%;
@@ -84,9 +84,9 @@
     --destructive-foreground: 0 0% 100%;
     --border: 262 20% 90%;
     --input: 262 20% 90%;
-    --ring: 262 83% 58%;
+    --ring: 333 77% 42%;
     --radius: 0.5rem;
-    --chart-1: 262 83% 58%;
+    --chart-1: 333 77% 42%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
@@ -94,26 +94,26 @@
   }
 
   .dark {
-    --background: 262 30% 6%;
-    --foreground: 262 10% 98%;
-    --card: 262 30% 8%;
-    --card-foreground: 262 10% 98%;
-    --popover: 262 30% 8%;
-    --popover-foreground: 262 10% 98%;
-    --primary: 262 83% 65%;
-    --primary-foreground: 262 84% 10%;
-    --secondary: 262 30% 15%;
-    --secondary-foreground: 262 10% 98%;
-    --muted: 262 30% 15%;
-    --muted-foreground: 262 10% 65%;
-    --accent: 262 30% 18%;
-    --accent-foreground: 262 10% 98%;
+    --background: 210 17% 14%;
+    --foreground: 225 15% 69%;
+    --card: 214 19% 13%;
+    --card-foreground: 225 15% 69%;
+    --popover: 214 19% 13%;
+    --popover-foreground: 225 15% 69%;
+    --primary: 333 77% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 17% 20%;
+    --secondary-foreground: 225 15% 69%;
+    --muted: 210 17% 20%;
+    --muted-foreground: 225 15% 60%;
+    --accent: 214 19% 13%;
+    --accent-foreground: 225 15% 69%;
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 262 30% 18%;
-    --input: 262 30% 18%;
-    --ring: 262 83% 65%;
-    --chart-1: 262 83% 65%;
+    --border: 214 19% 18%;
+    --input: 214 19% 18%;
+    --ring: 333 77% 42%;
+    --chart-1: 333 77% 42%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
@@ -131,7 +131,9 @@
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
     overflow-x: hidden;
     width: 100%;
     box-sizing: border-box;

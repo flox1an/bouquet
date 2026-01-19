@@ -16,7 +16,7 @@ import { uploadNip96File } from '../utils/nip96';
 import { extractDomain } from '../utils/utils';
 import { transferBlob } from '../utils/transfer';
 import { usePublishing } from '../components/FileEventEditor/usePublishing';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import type { NostrEvent } from 'nostr-tools';
 import { Button } from '@/components/ui/button';
 import { Steps } from '@/components/ui/steps';
@@ -29,6 +29,7 @@ function Upload() {
   const { signEventTemplate } = useNostr();
   const { serverInfo } = useServerInfo();
   const queryClient = useQueryClient();
+  const location = useLocation();
   const [transfers, setTransfers] = useState<{ [key: string]: TransferStats }>({});
   const [files, setFiles] = useState<File[]>([]);
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
@@ -40,6 +41,9 @@ function Upload() {
   const [uploadStep, setUploadStep] = useState(0);
   const { publishFileEvent, publishAudioEvent, publishVideoEvent } = usePublishing();
   const navigate = useNavigate();
+
+  // Get pre-selected server from navigation state
+  const preSelectedServer = (location.state as { preSelectedServer?: Server })?.preSelectedServer;
 
   async function getListOfFilesToUpload() {
     const filesToUpload: File[] = [];
@@ -242,7 +246,13 @@ function Upload() {
         (acc, s, i) => ({
           ...acc,
           [s.name]: {
-            enabled: !serverInfo[s.name].isError && (tfs[s.name] !== undefined ? tfs[s.name].enabled : i < 2), // select first two servers by default.
+            enabled:
+              !serverInfo[s.name].isError &&
+              (tfs[s.name] !== undefined
+                ? tfs[s.name].enabled
+                : preSelectedServer
+                  ? s.name === preSelectedServer.name
+                  : i < 2), // select pre-selected server or first two servers by default
             size: 0,
             transferred: 0,
           },

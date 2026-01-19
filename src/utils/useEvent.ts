@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { useObservableState } from 'observable-hooks';
+import { use$ } from 'applesauce-react/hooks';
 import { createTimelineLoader } from 'applesauce-loaders/loaders';
 import type { Filter, NostrEvent } from 'nostr-tools';
 import { map } from 'rxjs/operators';
@@ -45,16 +45,14 @@ export default function useEvent(
     };
   }, [id, opts?.disable]);
 
-  // Create observable for timeline from event store and return first event
-  const event$ = useMemo(
+  // Subscribe to timeline from event store and return first event
+  const event = use$(
     () =>
       eventStore.timeline(filter).pipe(
         map((events: NostrEvent[]) => (events.length > 0 ? events[0] : undefined))
       ),
     [filter]
   );
-
-  const event = useObservableState(event$, undefined);
 
   return {
     data: event,
