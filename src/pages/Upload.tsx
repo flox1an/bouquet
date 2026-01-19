@@ -15,6 +15,7 @@ import UploadProgress from '../components/UploadProgress';
 import { uploadNip96File } from '../utils/nip96';
 import { extractDomain } from '../utils/utils';
 import { transferBlob } from '../utils/transfer';
+import { calculateFileHash, checkBlobExists } from '../utils/blossom';
 import { usePublishing } from '../components/FileEventEditor/usePublishing';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { NostrEvent } from 'nostr-tools';
@@ -147,34 +148,70 @@ function Upload() {
       const serverUrl = serverInfo[server.name].url;
       let serverTransferred = 0;
       for (const file of filesToUpload) {
-        const authStartTime = Date.now();
-        // TODO do this only once for each file. Currently this is called for every server
-        const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file);
-        console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
-
         try {
           let newBlob: BlobDescriptor;
-          const progressHandler = (progressEvent: AxiosProgressEvent) => {
+
+          // Check if blob already exists on Blossom servers
+          if (server.type == 'blossom') {
+            const fileHash = await calculateFileHash(file);
+            console.log(`Calculated hash for ${file.name}: ${fileHash}`);
+
+            // Check if blob exists using HEAD request
+            const existingBlob = await checkBlobExists(serverUrl, fileHash);
+
+            if (existingBlob) {
+              console.log(`Blob already exists on ${server.name}, skipping upload`);
+              newBlob = existingBlob;
+              // Mark as transferred immediately since we're skipping upload
+              serverTransferred += file.size;
+              setTransfers(ut => ({
+                ...ut,
+                [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
+              }));
+            } else {
+              // Blob doesn't exist, proceed with upload
+              const authStartTime = Date.now();
+              const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file);
+              console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
+
+              const progressHandler = (progressEvent: AxiosProgressEvent) => {
+                setTransfers(ut => ({
+                  ...ut,
+                  [server.name]: {
+                    ...ut[server.name],
+                    transferred: serverTransferred + progressEvent.loaded,
+                    rate: progressEvent.rate || 0,
+                  },
+                }));
+              };
+
+              newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressHandler);
+              console.log('newBlob', newBlob);
+              serverTransferred += file.size;
+              setTransfers(ut => ({
+                ...ut,
+                [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
+              }));
+            }
+          } else {
+            // NIP-96 servers - upload as normal (no HEAD check yet)
+            const progressHandler = (progressEvent: AxiosProgressEvent) => {
+              setTransfers(ut => ({
+                ...ut,
+                [server.name]: {
+                  ...ut[server.name],
+                  transferred: serverTransferred + progressEvent.loaded,
+                  rate: progressEvent.rate || 0,
+                },
+              }));
+            };
+            newBlob = await uploadNip96File(server, file, '', signEventTemplate, progressHandler);
+            serverTransferred += file.size;
             setTransfers(ut => ({
               ...ut,
-              [server.name]: {
-                ...ut[server.name],
-                transferred: serverTransferred + progressEvent.loaded,
-                rate: progressEvent.rate || 0,
-              },
+              [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
             }));
-          };
-          if (server.type == 'blossom') {
-            newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressHandler);
-          } else {
-            newBlob = await uploadNip96File(server, file, '', signEventTemplate, progressHandler);
           }
-          console.log('newBlob', newBlob);
-          serverTransferred += file.size;
-          setTransfers(ut => ({
-            ...ut,
-            [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
-          }));
 
           fileDimensions[file.name] = {
             ...fileDimensions[file.name],
