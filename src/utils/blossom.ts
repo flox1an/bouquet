@@ -119,8 +119,15 @@ export const checkBlobExists = async (
 
     // If HEAD request succeeds, the blob exists
     // Construct a BlobDescriptor from the response headers
-    const contentType = response.headers['content-type'] || response.headers['Content-Type'];
-    const contentLength = response.headers['content-length'] || response.headers['Content-Length'];
+    const getHeaderValue = (name: string): string | undefined => {
+      const value = response.headers[name] ?? response.headers[name.toLowerCase()];
+      if (typeof value === 'string') return value;
+      if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+      return undefined;
+    };
+
+    const contentType = getHeaderValue('content-type');
+    const contentLength = getHeaderValue('content-length');
 
     return {
       url: `${serverUrl}/${hash}`,
