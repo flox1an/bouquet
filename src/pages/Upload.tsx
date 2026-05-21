@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
 import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -278,7 +278,7 @@ function Upload() {
     }
   };
 
-  const clearTransfers = () => {
+  const clearTransfers = useCallback(() => {
     setTransfers(tfs =>
       servers.reduce(
         (acc, s, i) => ({
@@ -301,7 +301,7 @@ function Upload() {
 
     setFileEventsToPublish([]);
     setUploadStep(0);
-  };
+  }, [servers, serverInfo, preSelectedServer]);
 
   const [transfersInitialized, setTransfersInitialized] = useState(false);
 
@@ -310,7 +310,7 @@ function Upload() {
       clearTransfers();
       setTransfersInitialized(true);
     }
-  }, [servers, transfersInitialized]);
+  }, [servers, transfersInitialized, clearTransfers]);
 
   const publishSelectedThumbnailToAllOwnServers = async (
     fileEventData: FileEventData

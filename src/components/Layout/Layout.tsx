@@ -21,7 +21,7 @@ export const Layout = () => {
         setAutoLogin(false)
       })
     }
-  }, [])
+  }, [user, autoLogin, loginWithExtension, setAutoLogin])
 
   const hasAudioPlayer = !!state.currentSong
 

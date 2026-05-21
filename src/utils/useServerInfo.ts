@@ -89,7 +89,7 @@ export const useServerInfo = () => {
       };
     });
     return info;
-  }, [servers, blobs]);
+  }, [servers, blobs, features]);
 
   const allServersAggregation = useMemo(() => {
     const serversInfos = Object.values(serverInfo);
