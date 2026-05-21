@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { NostrProvider } from './utils/nostr.tsx';
 import { Navigate, Route, RouterProvider, createBrowserRouter, createRoutesFromElements } from 'react-router-dom';
 import { Layout } from './components/Layout/Layout.tsx';
@@ -60,6 +59,12 @@ const queryClient = new QueryClient({
   },
 });
 
+const ReactQueryDevtools = import.meta.env.DEV
+  ? React.lazy(() =>
+      import('@tanstack/react-query-devtools').then(module => ({ default: module.ReactQueryDevtools }))
+    )
+  : null;
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     {/* 
@@ -81,7 +86,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <RouterProvider router={router} />
         </GlobalProvider>
       </NostrProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
+      {ReactQueryDevtools && (
+        <React.Suspense fallback={null}>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </React.Suspense>
+      )}
     </QueryClientProvider>
   </React.StrictMode>
 );
