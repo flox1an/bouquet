@@ -47,6 +47,19 @@ function Upload() {
   // Get pre-selected server from navigation state
   const preSelectedServer = (location.state as { preSelectedServer?: Server })?.preSelectedServer;
 
+  const formatUploadError = (error: AxiosError): string => {
+    const status = error.response?.status;
+    const response = error.response?.data as { message?: string } | undefined;
+    const responseMessage = response?.message;
+
+    if (status === 403) return `Forbidden (403)${responseMessage ? `: ${responseMessage}` : ''}`;
+    if (status === 401) return `Unauthorized (401)${responseMessage ? `: ${responseMessage}` : ''}`;
+    if (status === 404) return `Not found (404)${responseMessage ? `: ${responseMessage}` : ''}`;
+    if (status && status >= 500) return `Server error (${status})${responseMessage ? `: ${responseMessage}` : ''}`;
+
+    return responseMessage ? `${error.message}: ${responseMessage}` : error.message;
+  };
+
   async function getListOfFilesToUpload() {
     const filesToUpload: File[] = [];
     for (const f of files) {
@@ -225,13 +238,12 @@ function Upload() {
           };
         } catch (e) {
           const axiosError = e as AxiosError;
-          const response = axiosError.response?.data as { message?: string };
           console.error(e);
           failedServers.add(server.name);
           // Record error in transfer log
           setTransfers(ut => ({
             ...ut,
-            [server.name]: { ...ut[server.name], error: `${axiosError.message} / ${response?.message}` },
+            [server.name]: { ...ut[server.name], error: formatUploadError(axiosError) },
           }));
         }
       }

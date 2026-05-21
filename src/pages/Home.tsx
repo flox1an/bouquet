@@ -130,6 +130,18 @@ function Home() {
         initialServers={servers.filter(s => !s.virtual)}
       />
 
+      {!selectedServer && (
+        <div className="rounded-lg border border-dashed bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+          Select a server to browse content.
+        </div>
+      )}
+
+      {selectedServer && serverInfo[selectedServer] && (!selectedServerBlobs || selectedServerBlobs.length === 0) && (
+        <div className="rounded-lg border border-dashed bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+          No files found on this server yet.
+        </div>
+      )}
+
       {selectedServer && serverInfo[selectedServer] && selectedServerBlobs && selectedServerBlobs.length > 0 && (
         <BlobList
           title={`Content on ${serverInfo[selectedServer].name}`}
