@@ -172,8 +172,8 @@ export const Transfer = () => {
           errorMessage = 'Blob not found (404)';
         } else if (e.response?.status === 401 || e.response?.status === 403) {
           errorMessage = 'Authentication failed';
-        } else if (e.response?.status >= 500) {
-          errorMessage = `Server error (${e.response.status})`;
+        } else if ((e.response?.status ?? 0) >= 500) {
+          errorMessage = `Server error (${e.response?.status ?? 'unknown'})`;
         } else if (e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT') {
           errorMessage = 'Network error';
         } else if (e.message) {
