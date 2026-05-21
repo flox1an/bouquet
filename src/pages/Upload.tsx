@@ -24,6 +24,7 @@ import { Steps } from '@/components/ui/steps';
 import UploadPublished from '../components/UploadPublished';
 import { Info } from 'lucide-react';
 import UploadOnboarding from '../components/UploadOboarding';
+import { toast } from '@/hooks/use-toast';
 
 function Upload() {
   const { servers, serversLoading } = useUserServers();
@@ -226,6 +227,7 @@ function Upload() {
           const axiosError = e as AxiosError;
           const response = axiosError.response?.data as { message?: string };
           console.error(e);
+          failedServers.add(server.name);
           // Record error in transfer log
           setTransfers(ut => ({
             ...ut,
@@ -264,16 +266,15 @@ function Upload() {
 
     setUploadBusy(false);
 
-    //console.log(transfers);
-    // TODO transfer can not be accessed yet, errors are not visible here. TODO pout errors somewhere else
-    // setter for error transfers has not executed when we reach here.
-    const errorsTransfers = Object.keys(transfers).filter(ts => transfers[ts].enabled && !!transfers[ts].error);
-    console.log('errorCheck', errorsTransfers);
-    if (errorsTransfers.length == 0) {
+    if (failedServers.size === 0) {
       // Only go to the next step if no errors have occured
-      // TODO why dont we detect errors here?????? INVESTIGATE
-      // Should show button to "skip" despite of errors
       setUploadStep(2);
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Upload completed with errors',
+        description: `Some uploads failed on ${failedServers.size} server(s). Check the transfer status below.`,
+      });
     }
   };
 
@@ -534,3 +535,4 @@ function Upload() {
 }
 
 export default Upload;
+    const failedServers = new Set<string>();
