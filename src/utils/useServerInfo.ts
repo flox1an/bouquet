@@ -129,8 +129,8 @@ export const useServerInfo = () => {
     servers.forEach(server => {
       const si = serverInfo[server.name];
 
-      si.blobs &&
-        si.blobs.forEach((blob: BlobDescriptor) => {
+      if (!si.blobs) return;
+      si.blobs.forEach((blob: BlobDescriptor) => {
           if (dict[blob.sha256]) {
             dict[blob.sha256].servers.push(server.name);
           } else {
