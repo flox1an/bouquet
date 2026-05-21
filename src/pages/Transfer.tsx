@@ -22,6 +22,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { transferBlob, TransferPhase } from '../utils/transfer';
 
+type TransferError = {
+  message?: string;
+  code?: string;
+  response?: {
+    status?: number;
+  };
+};
+
 type TransferStatus = {
   [key: string]: {
     sha256: string;
@@ -151,9 +159,10 @@ export const Transfer = () => {
             status: 'done',
           },
         }));
-      } catch (e: any) {
+      } catch (error: unknown) {
+        const e = error as TransferError;
         console.error(`Transfer failed for ${b.sha256}:`, e);
-        
+
         let errorMessage = 'Unknown error';
         if (e.message?.includes('cancelled')) {
           errorMessage = 'Transfer cancelled';
