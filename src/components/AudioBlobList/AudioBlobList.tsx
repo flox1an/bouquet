@@ -46,7 +46,7 @@ const AudioBlobList = ({ audioFiles, handleSelectBlob, selectedBlobs }: AudioBlo
           | undefined;
         try {
           id3Tag = await fetchId3Tag(af.sha256, af.url);
-        } catch (e) {
+        } catch {
           // ignore
         }
         return { ...af, id3: id3Tag?.id3 } as AudioBlob;

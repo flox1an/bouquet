@@ -136,7 +136,7 @@ export const checkBlobExists = async (
       type: contentType || '',
       uploaded: dayjs().unix(), // We don't have this from HEAD, use current time
     };
-  } catch (error) {
+  } catch {
     // If HEAD request fails (404, etc.), the blob doesn't exist
     return null;
   }
