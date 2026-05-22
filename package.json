@@ -33,6 +33,7 @@
     "@tanstack/react-query-devtools": "^5.91.2",
     "add": "^2.0.6",
     "applesauce-accounts": "^6.0.0",
+    "applesauce-content": "^6.0.0",
     "applesauce-core": "^6.1.0",
     "applesauce-loaders": "^6.1.0",
     "applesauce-react": "^6.0.0",
