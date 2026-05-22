@@ -5,22 +5,24 @@ import {
   FileText,
   AlertTriangle,
   X,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Steps } from '@/components/ui/steps';
 import { ServerSelect } from '../components/ServerList/ServerSelect';
 import { ServerInfo, useServerInfo } from '../utils/useServerInfo';
-import { Label } from '@/components/ui/label';
 import { useMemo, useState } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { useNostr } from '../utils/nostr';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatFileSize } from '../utils/utils';
 import BlobList from '../components/BlobList/BlobList';
-import './Transfer.css';
 import { useNavigate, useParams } from 'react-router-dom';
-import ProgressBar from '../components/ProgressBar/ProgressBar';
 import { transferBlob, TransferPhase } from '../utils/transfer';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 type TransferError = {
   message?: string;
@@ -43,6 +45,41 @@ type TransferStatus = {
     retries?: number;
   };
 };
+
+const getPercent = (value: number, max: number) => (max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0);
+
+const SyncMeter = ({
+  label,
+  value,
+  max,
+}: {
+  label: string;
+  value: number;
+  max: number;
+}) => {
+  const percent = getPercent(value, max);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="font-medium">{label}</span>
+        <span className="whitespace-nowrap tabular-nums text-muted-foreground">
+          {formatFileSize(value)} / {formatFileSize(max)}
+        </span>
+      </div>
+      <div className="flex items-center gap-3">
+        <Progress value={percent} className="h-2" />
+        <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{percent}%</span>
+      </div>
+    </div>
+  );
+};
+
+const SyncStat = ({ label, value }: { label: string; value: string | number }) => (
+  <div className="rounded-md border bg-muted/30 px-3 py-2">
+    <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
+    <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
+  </div>
+);
 
 export const Transfer = () => {
   // TODO add transfer for single files
@@ -72,7 +109,7 @@ export const Transfer = () => {
     if (transferSource && transferTarget) {
       const sourceBlobs = serverInfo[transferSource].blobs;
       const targetBlobs = serverInfo[transferTarget].blobs;
-      return sourceBlobs?.filter(src => targetBlobs?.find(tgt => tgt.sha256 == src.sha256) == undefined);
+      return sourceBlobs?.filter(src => targetBlobs?.find(tgt => tgt.sha256 == src.sha256) == undefined) || [];
     }
     return [];
   }, [serverInfo, transferSource, transferTarget]);
@@ -223,6 +260,8 @@ export const Transfer = () => {
   }, [transferLog, transferJobs]);
 
   const transferErrors = useMemo(() => Object.values(transferLog).filter(b => b.status == 'error'), [transferLog]);
+  const currentTransfer = useMemo(() => Object.values(transferLog).find(t => t.status === 'pending'), [transferLog]);
+  const isTransferComplete = started && Object.keys(transferLog).length > 0 && transferStatus.pending === 0;
 
   const currentTransferStep = transferSource ? (transferTarget ? 2 : 1) : 0;
   const transferSteps = (
@@ -246,144 +285,161 @@ export const Transfer = () => {
     .filter(s => !s.virtual)
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return transferSource ? (
-    <div className="flex flex-col mx-auto max-w-[80em] w-full">
+  return (
+    <div className="mx-auto flex w-full max-w-[80em] flex-col gap-6 py-2">
       {transferSteps}
 
-      <div className="grid gap-6 md:grid-cols-2 py-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="flex items-center gap-2">
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
               <ArrowUpSquare className="h-4 w-4" />
               Source Server
-            </Label>
+            </CardTitle>
+            <CardDescription className="truncate">
+              {transferSource ? serverInfo[transferSource]?.url : 'Choose a source server'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ServerSelect
+              servers={sourceServers}
+              selectedServer={transferSource}
+              onServerChange={setTransferSource}
+              placeholder="Choose a source server"
+              disabled={started}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ArrowDownSquare className="h-4 w-4" />
+              Target Server
+            </CardTitle>
+            <CardDescription className="truncate">
+              {transferTarget ? serverInfo[transferTarget]?.url : 'Choose a target server'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ServerSelect
+              servers={targetServers}
+              selectedServer={transferTarget}
+              onServerChange={setTransferTarget}
+              placeholder="Select target server"
+              disabled={started || !transferSource}
+              getPreviewText={getTransferPreview}
+            />
+          </CardContent>
+        </Card>
+
+        <div className="flex items-start justify-end">
+          {transferSource && (
             <Button variant="ghost" size="sm" onClick={() => closeTransferMode()}>
               <X className="h-4 w-4" />
             </Button>
-          </div>
-          <ServerSelect
-            servers={sourceServers}
-            selectedServer={transferSource}
-            onServerChange={setTransferSource}
-            disabled={started}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label className="flex items-center gap-2">
-            <ArrowDownSquare className="h-4 w-4" />
-            Target Server
-          </Label>
-          <ServerSelect
-            servers={targetServers}
-            selectedServer={transferTarget}
-            onServerChange={setTransferTarget}
-            placeholder="Select target server"
-            disabled={started}
-            getPreviewText={getTransferPreview}
-          />
-        </div>
-      </div>
-      {transferTarget && transferJobs && transferJobs.length > 0 ? (
-        <>
-          <div className="bg-muted rounded-xl p-4 text-muted-foreground gap-4 flex flex-col my-4">
-            <div className="message">
-              {transferJobs.length} object{transferJobs.length > 1 ? 's' : ''} to transfer{' '}
-              {!started && (
-                <Button
-                  onClick={() => performTransfer(transferSource, transferTarget, transferJobs)}
-                >
-                  <ArrowUpSquare className="h-4 w-4 mr-1" />
-                  Start
-                </Button>
-              )}
-            </div>
-            <div className="w-5/6">
-              <ProgressBar
-                value={transferStatus.downloaded}
-                max={transferStatus.fullSize}
-                description={
-                  formatFileSize(transferStatus.downloaded) +
-                  ' / ' +
-                  formatFileSize(transferStatus.fullSize) +
-                  ' downloaded'
-                }
-              />
-
-              <ProgressBar
-                value={transferStatus.uploaded}
-                max={transferStatus.fullSize}
-                description={
-                  formatFileSize(transferStatus.uploaded) +
-                  ' / ' +
-                  formatFileSize(transferStatus.fullSize) +
-                  ' uploaded'
-                }
-              />
-
-              {started && (
-                <div className="message mt-4">
-                  <strong>Status:</strong> {transferStatus.done} completed, {transferStatus.pending} pending, {transferStatus.error} failed
-                  {Object.values(transferLog).find(t => t.status === 'pending') && (
-                    <div className="mt-2">
-                      <strong>Current:</strong> {Object.values(transferLog).find(t => t.status === 'pending')?.sha256.substring(0, 16)}... 
-                      {' - '}{Object.values(transferLog).find(t => t.status === 'pending')?.phase || 'starting'}
-                    </div>
-                  )}
-                </div>
-              )}
-              {transferErrors.length > 0 && (
-                <>
-                  <h2>Errors</h2>
-                  <div className="error-log">
-                    {transferErrors.map(t => (
-                      <div key={t.sha256}>
-                        <span>
-                          <FileText className="h-4 w-4" />
-                        </span>
-                        <span>{t.sha256}</span>
-                        <span>{formatFileSize(t.size)}</span>
-                        <span>{t.status && (t.status == 'error' ? <AlertTriangle className="h-4 w-4" /> : '')}</span>
-                        <span>{t.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            <Button onClick={cancelTransfer} disabled={!abortController}>
-              Cancel transfer
-            </Button>
-          </div>
-          {!started && <BlobList blobs={transferJobs}></BlobList>}
-        </>
-      ) : (
-        <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
-          {transferTarget ? (
-            <>
-              <CheckCircle2 className="h-5 w-5 text-green-500" /> No missing objects to transfer
-            </>
-          ) : (
-            <>Select a target server above</>
           )}
         </div>
-      )}
-    </div>
-  ) : (
-    <div className="flex flex-col mx-auto max-w-[80em] w-full">
-      {transferSteps}
-      <div className="py-4 max-w-md">
-        <Label className="flex items-center gap-2 mb-2">
-          <ArrowUpSquare className="h-4 w-4" />
-          Select Source Server
-        </Label>
-        <ServerSelect
-          servers={sourceServers}
-          selectedServer={transferSource}
-          onServerChange={s => setTransferSource(s)}
-          placeholder="Choose a source server"
-        />
       </div>
+
+      {transferTarget && transferJobs && transferJobs.length > 0 ? (
+        <>
+          <Card className="shadow-sm">
+            <CardHeader className="gap-3 pb-4 md:flex-row md:items-start md:justify-between md:space-y-0">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  {started && !isTransferComplete ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUpSquare className="h-4 w-4" />
+                  )}
+                  Sync Summary
+                </CardTitle>
+                <CardDescription>
+                  {transferJobs.length} object{transferJobs.length > 1 ? 's' : ''} missing on {serverInfo[transferTarget]?.name}
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {isTransferComplete && transferStatus.error === 0 && (
+                  <Badge variant="secondary" className="gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Complete
+                  </Badge>
+                )}
+                {!started ? (
+                  <Button onClick={() => transferSource && performTransfer(transferSource, transferTarget, transferJobs)}>
+                    <ArrowUpSquare className="mr-1 h-4 w-4" />
+                    Start sync
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={cancelTransfer} disabled={!abortController}>
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <SyncStat label="Total" value={transferJobs.length} />
+                <SyncStat label="Completed" value={transferStatus.done} />
+                <SyncStat label="Pending" value={transferStatus.pending} />
+                <SyncStat label="Failed" value={transferStatus.error} />
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-2">
+                <SyncMeter label="Downloaded" value={transferStatus.downloaded} max={transferStatus.fullSize} />
+                <SyncMeter label="Uploaded" value={transferStatus.uploaded} max={transferStatus.fullSize} />
+              </div>
+
+              {started && currentTransfer && (
+                <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  <Badge variant="outline">{currentTransfer.phase || 'starting'}</Badge>
+                  <span className="font-mono text-xs text-muted-foreground">{currentTransfer.sha256.slice(0, 24)}</span>
+                </div>
+              )}
+
+              {transferErrors.length > 0 && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>{transferErrors.length} transfer error{transferErrors.length > 1 ? 's' : ''}</AlertTitle>
+                  <AlertDescription>
+                    <div className="mt-2 grid w-full gap-2">
+                      {transferErrors.map(t => (
+                        <div key={t.sha256} className="grid gap-2 rounded-md border border-destructive/20 bg-background/60 p-2 text-xs md:grid-cols-[1fr_auto_auto]">
+                          <span className="flex min-w-0 items-center gap-2 font-mono">
+                            <FileText className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{t.sha256}</span>
+                          </span>
+                          <span className="whitespace-nowrap text-muted-foreground">{formatFileSize(t.size)}</span>
+                          <span className="text-destructive">{t.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {!started && <BlobList blobs={transferJobs} />}
+        </>
+      ) : (
+        <Card className="shadow-sm">
+          <CardContent className="flex min-h-40 items-center justify-center p-8 text-center text-sm text-muted-foreground">
+            {transferTarget ? (
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+                No missing objects to transfer.
+              </div>
+            ) : transferSource ? (
+              <>Select a target server above.</>
+            ) : (
+              <>Select a source server above.</>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
