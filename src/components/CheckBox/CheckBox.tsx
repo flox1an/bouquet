@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const CheckBox = ({
   name,
@@ -14,13 +15,11 @@ const CheckBox = ({
   disabled: boolean;
 }) => (
   <>
-    <input
-      className="checkbox checkbox-primary"
+    <Checkbox
       id={name}
       disabled={disabled}
-      type="checkbox"
       checked={checked}
-      onChange={e => setChecked(e.currentTarget.checked)}
+      onCheckedChange={(checked) => setChecked(checked === true)}
     />
     <label htmlFor={name} className="cursor-pointer select-none flex flex-row gap-2">
       {children}

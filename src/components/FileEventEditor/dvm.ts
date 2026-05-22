@@ -1,46 +1,36 @@
-/*
-  async function createDvmBlossemAuthToken() {
-    const pubkey = ndk.activeUser?.pubkey;
-    if (!ndk.signer || !pubkey) return;
-    const tenMinutes = () => dayjs().unix() + 10 * 60;
-    const authEvent = ({
-      pubkey,
-      created_at: dayjs().unix(),
-      kind: 24242,
-      content: 'Upload thumbail',
-      tags: [
-        ['t', 'upload'],
-        ['name', `thumb_${Math.random().toString(36).substring(2)}`], // make sure the auth events are unique
-        ['expiration', String(tenMinutes())],
-      ],
-    });
-    const ev = new NDKEvent(ndk, authEvent);
-    await ev.sign();
-    console.log(JSON.stringify(ev.rawEvent()));
-    return btoa(JSON.stringify(ev.rawEvent()));
-  }
-  */
-
-import { NDKEvent, NDKKind, NDKUser, NostrEvent } from '@nostr-dev-kit/ndk';
+import type { NostrEvent, Filter } from 'nostr-tools';
+import { nip19 } from 'nostr-tools';
 import { FileEventData } from './FileEventEditor';
 import { useEffect, useMemo, useState } from 'react';
-import { useNDK } from '../../utils/ndk';
+import { useNostr, accountManager } from '../../utils/nostr';
 import useEvents from '../../utils/useEvents';
 import dayjs from 'dayjs';
+import { relayPool, mergeRelays } from '../../nostr/core';
+import { ReadonlyAccount } from 'applesauce-accounts/accounts';
 
 const NPUB_DVM_THUMBNAIL_CREATION = 'npub1q8cv87l47fql2xer2uyw509y5n5s9f53h76hvf9377efdptmsvusxf3n8s';
 
-const ensureDecrypted = async (dvm: NDKUser, event: NDKEvent): Promise<NDKEvent | undefined> => {
+const ensureDecrypted = async (dvmPubkey: string, event: NostrEvent): Promise<NostrEvent | undefined> => {
   if (!event) return undefined;
 
   const encrypted = event.tags.some(t => t[0] == 'encrypted');
 
   if (encrypted) {
-    const decryptedContent = await event.ndk?.signer?.decrypt(dvm, event.content);
+    const activeAccount = accountManager.active;
+    if (!activeAccount || activeAccount instanceof ReadonlyAccount) {
+      return undefined;
+    }
 
-    if (decryptedContent) {
-      event.tags = event.tags.filter(t => t[0] !== 'encrypted').concat(JSON.parse(decryptedContent));
-      return event;
+    try {
+      const decryptedContent = await activeAccount.signer.nip04.decrypt(dvmPubkey, event.content);
+
+      if (decryptedContent) {
+        event.tags = event.tags.filter(t => t[0] !== 'encrypted').concat(JSON.parse(decryptedContent));
+        return event;
+      }
+    } catch (error) {
+      console.error('Failed to decrypt:', error);
+      return undefined;
     }
   }
   return event;
@@ -48,11 +38,16 @@ const ensureDecrypted = async (dvm: NDKUser, event: NDKEvent): Promise<NDKEvent 
 
 const useVideoThumbnailDvm = (fileEventData: FileEventData, setFileEventData: (data: FileEventData) => void) => {
   const [thumbnailRequestEventId, setThumbnailRequestEventId] = useState<string | undefined>();
-  const { ndk, user } = useNDK();
-  const dvm = ndk.getUser({ npub: NPUB_DVM_THUMBNAIL_CREATION });
+  const { user } = useNostr();
+
+  // Decode the npub to get the pubkey
+  const dvmPubkey = useMemo(() => {
+    const decoded = nip19.decode(NPUB_DVM_THUMBNAIL_CREATION);
+    return decoded.type === 'npub' ? decoded.data : '';
+  }, []);
 
   const thumbnailDvmFilter = useMemo(
-    () => ({ kinds: [6204 as NDKKind], '#e': [thumbnailRequestEventId || ''] }),
+    () => ({ kinds: [6204], '#e': [thumbnailRequestEventId || ''] }) as Filter,
     [thumbnailRequestEventId]
   );
   const thumbnailSubscription = useEvents(thumbnailDvmFilter, {
@@ -62,9 +57,9 @@ const useVideoThumbnailDvm = (fileEventData: FileEventData, setFileEventData: (d
 
   useEffect(() => {
     const doASync = async () => {
-      const firstEvent = await ensureDecrypted(dvm, thumbnailSubscription.events[0]);
+      const firstEvent = await ensureDecrypted(dvmPubkey, thumbnailSubscription.events[0]);
       if (firstEvent) {
-        console.log(firstEvent.rawEvent());
+        console.log(firstEvent);
         const urls = firstEvent.tags.filter(t => t[0] === 'thumb').map(t => t[1]);
         const dim = firstEvent.tags.find(t => t[0] === 'dim')?.[1];
         const duration = firstEvent.tags.find(t => t[0] === 'duration')?.[1];
@@ -75,44 +70,38 @@ const useVideoThumbnailDvm = (fileEventData: FileEventData, setFileEventData: (d
   }, [thumbnailSubscription.events]);
 
   const createDvmThumbnailRequest = async (data: FileEventData) => {
-    if (!ndk.signer) return;
+    const activeAccount = accountManager.active;
+    if (!activeAccount || activeAccount instanceof ReadonlyAccount) {
+      console.error('No signer available');
+      return;
+    }
 
     const thumbCount = 3;
 
-    /*s
-    const authTokens = [];
-    for (let i = 0; i < thumbCount; i++) {
-      const uploadAuth = await createDvmBlossemAuthToken();
-      if (uploadAuth) {
-        authTokens.push(['param', 'authToken', uploadAuth]);
-      }
-    }
-    */
+    const relays = mergeRelays(user?.relayUrls);
 
-    const e: NostrEvent = {
+    const encryptedContent = await activeAccount.signer.nip04.encrypt(
+      dvmPubkey,
+      JSON.stringify([
+        ['i', data.url[0], 'url'],
+        ['output', 'image/jpeg'],
+        ['param', 'thumbnailCount', `${thumbCount}`],
+        ['relays', relays.join(',')],
+      ])
+    );
+
+    const e: Omit<NostrEvent, 'id' | 'sig'> = {
       created_at: dayjs().unix(),
-      content: await ndk.signer?.encrypt(
-        dvm,
-        JSON.stringify([
-          ['i', data.url[0], 'url'],
-          ['output', 'image/jpeg'],
-          ['param', 'thumbnailCount', `${thumbCount}`],
-          ['relays', user?.relayUrls.join(',') || ndk.explicitRelayUrls?.join(',') || ''],
-        ])
-      ),
-      tags: [
-        ['p', dvm.pubkey],
-        ['encrypted'],
-        // TODO set expiration
-      ],
+      content: encryptedContent,
+      tags: [['p', dvmPubkey], ['encrypted']],
       kind: 5204,
       pubkey: user?.pubkey || '',
     };
-    const ev = new NDKEvent(ndk, e);
-    await ev.sign();
-    console.log(ev.rawEvent());
-    setThumbnailRequestEventId(ev.id);
-    await ev.publish();
+
+    const signedEvent = await activeAccount.signer.signEvent(e);
+    console.log(signedEvent);
+    setThumbnailRequestEventId(signedEvent.id);
+    await relayPool.publish(relays, signedEvent);
   };
 
   return {

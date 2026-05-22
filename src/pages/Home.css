@@ -1,5 +1,7 @@
+@reference "../index.css";
+
 body h2 {
-  @apply text-2xl text-base-content;
+  @apply text-2xl text-foreground;
 }
 
 body h2 svg {

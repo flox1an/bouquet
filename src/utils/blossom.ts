@@ -1,5 +1,5 @@
 import axios, { AxiosProgressEvent } from 'axios';
-import { BlobDescriptor, BlossomClient, EventTemplate, SignedEvent } from 'blossom-client-sdk';
+import { BlobDescriptor, BlossomClient, EventTemplate, SignedEvent, getBlobSha256 } from 'blossom-client-sdk';
 import dayjs from 'dayjs';
 
 const blossomUrlRegex = /https?:\/\/(?:www\.)?[^\s/]+\/([a-fA-F0-9]{64})(?:\.[a-zA-Z0-9]+)?/g;
@@ -32,7 +32,7 @@ export async function fetchBlossomList(
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
 ): Promise<BlobDescriptor[]> {
   const listAuthEvent = await BlossomClient.createListAuth(signEventTemplate);
-  
+
   // Fetch all pages by iterating through results
   // Most servers paginate by returning the most recent blobs first
   // We'll fetch pages until we get an empty response or see duplicate blobs
@@ -41,46 +41,46 @@ export async function fetchBlossomList(
   let hasMore = true;
   const seenHashes = new Set<string>();
   let previousBatchSize = 0;
-  
+
   while (hasMore) {
     const options: any = { auth: listAuthEvent };
     if (until !== undefined) {
       options.until = until;
     }
-    
+
     const blobs = await BlossomClient.listBlobs(serverUrl, pubkey!, options);
-    
+
     // Stop if we got no results
     if (blobs.length === 0) {
       hasMore = false;
       break;
     }
-    
+
     // Filter out any duplicates (shouldn't happen but be safe)
     const newBlobs = blobs.filter(b => !seenHashes.has(b.sha256));
-    
+
     // Stop if all blobs in this batch were duplicates
     if (newBlobs.length === 0) {
       hasMore = false;
       break;
     }
-    
+
     // Add new blobs to our collection
     newBlobs.forEach(b => seenHashes.add(b.sha256));
     allBlobs = [...allBlobs, ...newBlobs];
-    
+
     // If this batch is smaller than the previous one, we're likely at the end
     // Also stop if we got very few results (likely the last page)
     if (newBlobs.length < 10 || (previousBatchSize > 0 && newBlobs.length < previousBatchSize * 0.5)) {
       hasMore = false;
       break;
     }
-    
+
     previousBatchSize = newBlobs.length;
-    
+
     // Find the oldest blob in this batch to use as 'until' for next page
     const oldestUpload = Math.min(...newBlobs.map(b => b.uploaded || 0));
-    
+
     // Stop if we got invalid timestamps
     if (oldestUpload === 0 || (until !== undefined && oldestUpload >= until)) {
       hasMore = false;
@@ -93,6 +93,54 @@ export async function fetchBlossomList(
   // fallback to deprecated created attibute for servers that are not using 'uploaded' yet
   return allBlobs.map(b => ({ ...b, uploaded: b.uploaded || dayjs().unix() }));
 }
+
+/**
+ * Calculate SHA-256 hash of a file
+ */
+export const calculateFileHash = async (file: File): Promise<string> => {
+  return await getBlobSha256(file);
+};
+
+/**
+ * Check if a blob exists on a server using HEAD request
+ */
+export const checkBlobExists = async (
+  serverUrl: string,
+  hash: string,
+  auth?: SignedEvent
+): Promise<BlobDescriptor | null> => {
+  try {
+    const headers: Record<string, string> = {};
+    if (auth) {
+      headers.authorization = BlossomClient.encodeAuthorizationHeader(auth);
+    }
+
+    const response = await axios.head(`${serverUrl}/${hash}`, { headers });
+
+    // If HEAD request succeeds, the blob exists
+    // Construct a BlobDescriptor from the response headers
+    const getHeaderValue = (name: string): string | undefined => {
+      const value = response.headers[name] ?? response.headers[name.toLowerCase()];
+      if (typeof value === 'string') return value;
+      if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+      return undefined;
+    };
+
+    const contentType = getHeaderValue('content-type');
+    const contentLength = getHeaderValue('content-length');
+
+    return {
+      url: `${serverUrl}/${hash}`,
+      sha256: hash,
+      size: contentLength ? parseInt(contentLength, 10) : 0,
+      type: contentType || '',
+      uploaded: dayjs().unix(), // We don't have this from HEAD, use current time
+    };
+  } catch {
+    // If HEAD request fails (404, etc.), the blob doesn't exist
+    return null;
+  }
+};
 
 export const uploadBlossomBlob = async (
   server: string,

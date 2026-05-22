@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
-import { useNDK } from '../utils/ndk';
+import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
 import { removeExifData } from '../utils/exif';
@@ -15,18 +15,23 @@ import UploadProgress from '../components/UploadProgress';
 import { uploadNip96File } from '../utils/nip96';
 import { extractDomain } from '../utils/utils';
 import { transferBlob } from '../utils/transfer';
+import { calculateFileHash, checkBlobExists } from '../utils/blossom';
 import { usePublishing } from '../components/FileEventEditor/usePublishing';
-import { useNavigate } from 'react-router-dom';
-import { NostrEvent } from '@nostr-dev-kit/ndk';
+import { useNavigate, useLocation } from 'react-router-dom';
+import type { NostrEvent } from 'nostr-tools';
+import { Button } from '@/components/ui/button';
+import { Steps } from '@/components/ui/steps';
 import UploadPublished from '../components/UploadPublished';
-import { InformationCircleIcon } from '@heroicons/react/24/outline';
+import { Info } from 'lucide-react';
 import UploadOnboarding from '../components/UploadOboarding';
+import { toast } from '@/hooks/use-toast';
 
 function Upload() {
   const { servers, serversLoading } = useUserServers();
-  const { signEventTemplate } = useNDK();
+  const { signEventTemplate } = useNostr();
   const { serverInfo } = useServerInfo();
   const queryClient = useQueryClient();
+  const location = useLocation();
   const [transfers, setTransfers] = useState<{ [key: string]: TransferStats }>({});
   const [files, setFiles] = useState<File[]>([]);
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
@@ -38,6 +43,22 @@ function Upload() {
   const [uploadStep, setUploadStep] = useState(0);
   const { publishFileEvent, publishAudioEvent, publishVideoEvent } = usePublishing();
   const navigate = useNavigate();
+
+  // Get pre-selected server from navigation state
+  const preSelectedServer = (location.state as { preSelectedServer?: Server })?.preSelectedServer;
+
+  const formatUploadError = (error: AxiosError): string => {
+    const status = error.response?.status;
+    const response = error.response?.data as { message?: string } | undefined;
+    const responseMessage = response?.message;
+
+    if (status === 403) return `Forbidden (403)${responseMessage ? `: ${responseMessage}` : ''}`;
+    if (status === 401) return `Unauthorized (401)${responseMessage ? `: ${responseMessage}` : ''}`;
+    if (status === 404) return `Not found (404)${responseMessage ? `: ${responseMessage}` : ''}`;
+    if (status && status >= 500) return `Server error (${status})${responseMessage ? `: ${responseMessage}` : ''}`;
+
+    return responseMessage ? `${error.message}: ${responseMessage}` : error.message;
+  };
 
   async function getListOfFilesToUpload() {
     const filesToUpload: File[] = [];
@@ -127,6 +148,7 @@ function Upload() {
   const upload = async () => {
     setUploadBusy(true);
     setPreparing(true);
+    const failedServers = new Set<string>();
 
     setUploadStep(1);
     // TODO this blocks the UI
@@ -141,34 +163,70 @@ function Upload() {
       const serverUrl = serverInfo[server.name].url;
       let serverTransferred = 0;
       for (const file of filesToUpload) {
-        const authStartTime = Date.now();
-        // TODO do this only once for each file. Currently this is called for every server
-        const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file);
-        console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
-
         try {
           let newBlob: BlobDescriptor;
-          const progressHandler = (progressEvent: AxiosProgressEvent) => {
+
+          // Check if blob already exists on Blossom servers
+          if (server.type == 'blossom') {
+            const fileHash = await calculateFileHash(file);
+            console.log(`Calculated hash for ${file.name}: ${fileHash}`);
+
+            // Check if blob exists using HEAD request
+            const existingBlob = await checkBlobExists(serverUrl, fileHash);
+
+            if (existingBlob) {
+              console.log(`Blob already exists on ${server.name}, skipping upload`);
+              newBlob = existingBlob;
+              // Mark as transferred immediately since we're skipping upload
+              serverTransferred += file.size;
+              setTransfers(ut => ({
+                ...ut,
+                [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
+              }));
+            } else {
+              // Blob doesn't exist, proceed with upload
+              const authStartTime = Date.now();
+              const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file);
+              console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
+
+              const progressHandler = (progressEvent: AxiosProgressEvent) => {
+                setTransfers(ut => ({
+                  ...ut,
+                  [server.name]: {
+                    ...ut[server.name],
+                    transferred: serverTransferred + progressEvent.loaded,
+                    rate: progressEvent.rate || 0,
+                  },
+                }));
+              };
+
+              newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressHandler);
+              console.log('newBlob', newBlob);
+              serverTransferred += file.size;
+              setTransfers(ut => ({
+                ...ut,
+                [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
+              }));
+            }
+          } else {
+            // NIP-96 servers - upload as normal (no HEAD check yet)
+            const progressHandler = (progressEvent: AxiosProgressEvent) => {
+              setTransfers(ut => ({
+                ...ut,
+                [server.name]: {
+                  ...ut[server.name],
+                  transferred: serverTransferred + progressEvent.loaded,
+                  rate: progressEvent.rate || 0,
+                },
+              }));
+            };
+            newBlob = await uploadNip96File(server, file, '', signEventTemplate, progressHandler);
+            serverTransferred += file.size;
             setTransfers(ut => ({
               ...ut,
-              [server.name]: {
-                ...ut[server.name],
-                transferred: serverTransferred + progressEvent.loaded,
-                rate: progressEvent.rate || 0,
-              },
+              [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
             }));
-          };
-          if (server.type == 'blossom') {
-            newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressHandler);
-          } else {
-            newBlob = await uploadNip96File(server, file, '', signEventTemplate, progressHandler);
           }
-          console.log('newBlob', newBlob);
-          serverTransferred += file.size;
-          setTransfers(ut => ({
-            ...ut,
-            [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
-          }));
 
           fileDimensions[file.name] = {
             ...fileDimensions[file.name],
@@ -181,12 +239,12 @@ function Upload() {
           };
         } catch (e) {
           const axiosError = e as AxiosError;
-          const response = axiosError.response?.data as { message?: string };
           console.error(e);
+          failedServers.add(server.name);
           // Record error in transfer log
           setTransfers(ut => ({
             ...ut,
-            [server.name]: { ...ut[server.name], error: `${axiosError.message} / ${response?.message}` },
+            [server.name]: { ...ut[server.name], error: formatUploadError(axiosError) },
           }));
         }
       }
@@ -221,26 +279,31 @@ function Upload() {
 
     setUploadBusy(false);
 
-    //console.log(transfers);
-    // TODO transfer can not be accessed yet, errors are not visible here. TODO pout errors somewhere else
-    // setter for error transfers has not executed when we reach here.
-    const errorsTransfers = Object.keys(transfers).filter(ts => transfers[ts].enabled && !!transfers[ts].error);
-    console.log('errorCheck', errorsTransfers);
-    if (errorsTransfers.length == 0) {
+    if (failedServers.size === 0) {
       // Only go to the next step if no errors have occured
-      // TODO why dont we detect errors here?????? INVESTIGATE
-      // Should show button to "skip" despite of errors
       setUploadStep(2);
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Upload completed with errors',
+        description: `Some uploads failed on ${failedServers.size} server(s). Check the transfer status below.`,
+      });
     }
   };
 
-  const clearTransfers = () => {
+  const clearTransfers = useCallback(() => {
     setTransfers(tfs =>
       servers.reduce(
         (acc, s, i) => ({
           ...acc,
           [s.name]: {
-            enabled: !serverInfo[s.name].isError && (tfs[s.name] !== undefined ? tfs[s.name].enabled : i < 2), // select first two servers by default.
+            enabled:
+              !serverInfo[s.name].isError &&
+              (tfs[s.name] !== undefined
+                ? tfs[s.name].enabled
+                : preSelectedServer
+                  ? s.name === preSelectedServer.name
+                  : i < 2), // select pre-selected server or first two servers by default
             size: 0,
             transferred: 0,
           },
@@ -251,7 +314,7 @@ function Upload() {
 
     setFileEventsToPublish([]);
     setUploadStep(0);
-  };
+  }, [servers, serverInfo, preSelectedServer]);
 
   const [transfersInitialized, setTransfersInitialized] = useState(false);
 
@@ -260,7 +323,7 @@ function Upload() {
       clearTransfers();
       setTransfersInitialized(true);
     }
-  }, [servers, transfersInitialized]);
+  }, [servers, transfersInitialized, clearTransfers]);
 
   const publishSelectedThumbnailToAllOwnServers = async (
     fileEventData: FileEventData
@@ -400,19 +463,23 @@ function Upload() {
   }, [fileEventsToPublish, audioCount]);
 
   return (
-    <div className="flex flex-col mx-auto max-w-[80em] w-full">
+    <div className="mx-auto flex w-full max-w-[80em] flex-col gap-4 py-1">
       {!serversLoading && (!servers || servers.length == 0) ? (
         <UploadOnboarding />
       ) : (
         <>
-          <ul className="steps pt-8 pb-4 md:p-8">
-            <li className={`step ${uploadStep >= 0 ? 'step-primary' : ''}`}>Choose files</li>
-            <li className={`step ${uploadStep >= 1 ? 'step-primary' : ''}`}>Upload</li>
-            <li className={`step ${uploadStep >= 2 ? 'step-primary' : ''}`}>Add metadata</li>
-            <li className={`step ${uploadStep >= 3 ? 'step-primary' : ''}`}>Publish to NOSTR</li>
-          </ul>
+          <Steps
+            steps={[
+              { label: 'Choose files' },
+              { label: 'Upload' },
+              { label: 'Add metadata' },
+              { label: 'Publish to NOSTR' },
+            ]}
+            currentStep={uploadStep}
+            className="-mt-0.5"
+          />
           {uploadStep <= 1 && (
-            <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-col">
+            <div className="bg-muted rounded-xl p-4 text-muted-foreground gap-4 flex flex-col">
               {uploadStep == 0 && (
                 <UploadFileSelection
                   servers={servers}
@@ -448,27 +515,28 @@ function Upload() {
                 ))}
               </div>
               {audioCount > 0 && (
-                <div className="text-sm text-neutral-content flex flex-row gap-2 items-center pl-4">
-                  <InformationCircleIcon className="w-6 h-6 text-info" />
+                <div className="text-sm text-muted-foreground flex flex-row gap-2 items-center pl-4">
+                  <Info className="h-5 w-5 text-blue-500" />
                   Audio events are not widely supported yet. Currently they are only used by{' '}
                   <a className="link link-primary" href="https://stemstr.app/" target="_blank">
                     stemstr.app
                   </a>
                 </div>
               )}
-              <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-row justify-center">
-                <button
-                  className={`btn ${publishCount === 0 ? 'btn-primary' : 'btn-neutral'} w-40`}
+              <div className="bg-muted rounded-xl p-4 text-muted-foreground gap-4 flex flex-row justify-center">
+                <Button
+                  variant={publishCount === 0 ? 'default' : 'secondary'}
+                  className="w-40"
                   onClick={() => {
                     navigate('/browse');
                   }}
                 >
                   Skip publishing
-                </button>
+                </Button>
                 {publishCount > 0 && (
-                  <button className="btn btn-primary w-40" onClick={() => publishAll()}>
+                  <Button className="w-40" onClick={() => publishAll()}>
                     Publish ({publishCount} event{publishCount > 1 ? 's' : ''})
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>

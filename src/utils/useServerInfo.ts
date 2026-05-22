@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { useNDK } from '../utils/ndk';
+import { useNostr } from '../utils/nostr';
 import { nip19 } from 'nostr-tools';
 import { Server, useUserServers } from './useUserServers';
 import { fetchBlossomList } from './blossom';
@@ -43,7 +43,7 @@ const mergeBlobs = (
 
 export const useServerInfo = () => {
   const { servers } = useUserServers();
-  const { user, signEventTemplate } = useNDK();
+  const { user, signEventTemplate } = useNostr();
   const [features, setFeatures] = useState<SupportedFeatures>({});
 
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type
@@ -89,7 +89,7 @@ export const useServerInfo = () => {
       };
     });
     return info;
-  }, [servers, blobs]);
+  }, [servers, blobs, features]);
 
   const allServersAggregation = useMemo(() => {
     const serversInfos = Object.values(serverInfo);
@@ -129,8 +129,8 @@ export const useServerInfo = () => {
     servers.forEach(server => {
       const si = serverInfo[server.name];
 
-      si.blobs &&
-        si.blobs.forEach((blob: BlobDescriptor) => {
+      if (!si.blobs) return;
+      si.blobs.forEach((blob: BlobDescriptor) => {
           if (dict[blob.sha256]) {
             dict[blob.sha256].servers.push(server.name);
           } else {

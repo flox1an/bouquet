@@ -1,4 +1,4 @@
-import { ArrowPathRoundedSquareIcon, Cog8ToothIcon } from '@heroicons/react/24/outline';
+import { RefreshCw, Settings } from 'lucide-react';
 import { ServerInfo, useServerInfo } from '../../utils/useServerInfo';
 import { Server as ServerType, useUserServers } from '../../utils/useUserServers';
 import Server from './Server';
@@ -6,6 +6,7 @@ import './ServerList.css';
 import ServerListPopup from '../ServerListPopup';
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
 
 type ServerListProps = {
   servers: ServerInfo[];
@@ -65,13 +66,13 @@ export const ServerList = ({
         {title && <h2 className=" flex-grow">{title}</h2>}
 
         {manageServers && (
-          <div className="content-center">
-            <button onClick={handleRefresh} className="btn btn-ghost btn-sm" title="Refresh">
-              <ArrowPathRoundedSquareIcon className="h-6 w-6" /> Refresh
-            </button>
-            <button onClick={handleOpenDialog} className="btn btn-ghost btn-sm" title="Manage servers">
-              <Cog8ToothIcon className="h-6 w-6" /> Manage servers
-            </button>
+          <div className="flex gap-1">
+            <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh">
+              <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleOpenDialog} title="Manage servers">
+              <Settings className="h-4 w-4 mr-1" /> Manage servers
+            </Button>
           </div>
         )}
       </div>

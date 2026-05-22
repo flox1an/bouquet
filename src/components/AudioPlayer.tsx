@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useGlobalContext } from '../GlobalState';
-import { PauseIcon, PlayIcon, SpeakerWaveIcon, SpeakerXMarkIcon, XMarkIcon } from '@heroicons/react/24/solid';
+import { Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
+import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 
 dayjs.extend(duration);
 
@@ -64,9 +66,8 @@ const AudioPlayer: React.FC = () => {
     }
   };
 
-  const changeVolume = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseFloat(event.target.value);
-    tuneVolume(newVolume);
+  const changeVolume = (value: number[]) => {
+    tuneVolume(value[0]);
   };
 
   const resetPlayer = () => {
@@ -81,74 +82,91 @@ const AudioPlayer: React.FC = () => {
 
   return (
     currentSong && (
-      <div className="audio-player flex items-center md:gap-4 gap-2 w-full">
+      <div className="flex items-center gap-3 px-4 py-3 w-full">
         <audio ref={audioRef} />
-        <button className="btn btn-icon" onClick={playPause}>
-          {isPlaying ? <PauseIcon className="h-6 w-6" /> : <PlayIcon className="h-6 w-6" />}
-        </button>
 
-        <span className="w-10 hidden md:block">
-          {dayjs.duration(audioRef.current?.currentTime || 0, 'seconds').format('m:ss')}
-        </span>
-        <div className="flex-grow w-60 hidden md:block">
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={progress}
-            onChange={e => {
-              if (audioRef.current) {
-                audioRef.current.currentTime = (parseInt(e.target.value) / 100) * audioRef.current.duration;
-              }
-            }}
-            className="progress progress-primary w-full cursor-pointer"
-          />
-        </div>
-
-        <div className="items-center md:space-x-2 hidden md:flex">
-          {volume === 0 ? (
-            <SpeakerXMarkIcon
-              className="h-6 w-6 text-gray-500"
-              onClick={() => {
-                tuneVolume(volumeBeforeMute);
-              }}
-            />
-          ) : (
-            <SpeakerWaveIcon
-              className="h-6 w-6 text-gray-500"
-              onClick={() => {
-                setVolumeBeforeMute(volume);
-                tuneVolume(0);
-              }}
-            />
-          )}
-
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={changeVolume}
-            className="progress progress-primary cursor-pointer hidden md:block"
-          />
-        </div>
-
+        {/* Track info - left side */}
         {currentSong.id3 && (
-          <>
-            <div>
-              <img className="w-12 h-12" src={currentSong.id3.cover} alt={currentSong.id3.title} />
+          <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
+            <img
+              className="w-10 h-10 rounded-md shadow-sm"
+              src={currentSong.id3.cover}
+              alt={currentSong.id3.title}
+            />
+            <div className="flex flex-col min-w-0 hidden sm:flex">
+              <span className="text-sm font-medium truncate">{currentSong.id3.title}</span>
+              <span className="text-xs text-muted-foreground truncate">{currentSong.id3.artist}</span>
             </div>
-            <div className="flex flex-col text-sm">
-              <div className="text-accent">{currentSong.id3.title}</div>
-              <div>{currentSong.id3.artist}</div>
-            </div>
-          </>
+          </div>
         )}
 
-        <button className="btn btn-icon ml-auto" onClick={resetPlayer}>
-          <XMarkIcon className="h-6 w-6 text-gray-500" />
-        </button>
+        {/* Playback controls - center */}
+        <div className="flex-1 flex flex-col items-center gap-1 max-w-xl mx-auto">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={playPause}>
+              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2 w-full">
+            <span className="text-xs text-muted-foreground w-10 text-right hidden md:block">
+              {dayjs.duration(audioRef.current?.currentTime || 0, 'seconds').format('m:ss')}
+            </span>
+            <Slider
+              value={[progress]}
+              max={100}
+              step={0.1}
+              onValueChange={(value) => {
+                if (audioRef.current) {
+                  audioRef.current.currentTime = (value[0] / 100) * audioRef.current.duration;
+                }
+              }}
+              className="flex-1"
+            />
+            <span className="text-xs text-muted-foreground w-10 hidden md:block">
+              {audioRef.current?.duration
+                ? dayjs.duration(audioRef.current.duration, 'seconds').format('m:ss')
+                : '--:--'}
+            </span>
+          </div>
+        </div>
+
+        {/* Volume & close - right side */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="items-center gap-1 hidden md:flex">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (volume === 0) {
+                  tuneVolume(volumeBeforeMute);
+                } else {
+                  setVolumeBeforeMute(volume);
+                  tuneVolume(0);
+                }
+              }}
+            >
+              {volume === 0 ? (
+                <VolumeX className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <Volume2 className="h-4 w-4 text-muted-foreground" />
+              )}
+            </Button>
+
+            <Slider
+              value={[volume]}
+              max={1}
+              step={0.01}
+              onValueChange={changeVolume}
+              className="w-24"
+            />
+          </div>
+
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetPlayer}>
+            <X className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        </div>
       </div>
     )
   );

@@ -1,10 +1,14 @@
 import React, { useMemo } from 'react';
 import { FileEventData } from './FileEventEditor/FileEventEditor';
-import { NostrEvent } from '@nostr-dev-kit/ndk';
+import type { NostrEvent } from 'nostr-tools';
 import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../utils/useFileMetaEvents';
 import { nip19 } from 'nostr-tools';
-import { LinkIcon } from '@heroicons/react/24/outline';
+import { Link } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
 
 type EventVisModel = {
   id: string;
@@ -86,14 +90,14 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
               {data.artist} {data.album ? `(${data.album})` : ''}
             </div>
           )}
-          <div className="text-xs bg-base-300 p-4 rounded-xl text-neutral-content overflow-x-auto whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
+          <div className="text-xs bg-muted p-4 rounded-xl text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
             {JSON.stringify(event, null, 2)}
           </div>
         </div>
         <div className="w-24">
-          <a className="link link-primary flex flex-row gap-2" target="_blank" href={`https://njump.me/${data.nevent}`}>
-            <LinkIcon className="w-6 h-6 flex-grow" />
-            <div className="badge badge-primary">{data.type}</div>
+          <a className="text-primary hover:underline flex flex-row gap-2 items-center" target="_blank" href={`https://njump.me/${data.nevent}`}>
+            <Link className="w-5 h-5" />
+            <Badge>{data.type}</Badge>
           </a>
         </div>
       </div>
@@ -109,21 +113,24 @@ const UploadPublished: React.FC<{ fileEventsToPublish: FileEventData[] }> = ({ f
   return (
     <div className="flex flex-col gap-4 ">
       <h2 className="text-2xl font-bold">Published events</h2>
-      <div className="alert alert-warning">Events are not published yet. Still under development.</div>
-      <div className="flex flex-col gap-4 w-full bg-base-200 rounded-xl p-4 ">
+      <Alert variant="warning">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>Events are not published yet. Still under development.</AlertDescription>
+      </Alert>
+      <div className="flex flex-col gap-4 w-full bg-muted rounded-xl p-4">
         {allEvents.map(event => (
           <FileEvent event={event} />
         ))}
       </div>
-      <div className="bg-base-200 rounded-xl p-4 text-neutral-content gap-4 flex flex-row justify-center">
-        <button
-          className={`btn btn-primary w-40`}
+      <div className="bg-muted rounded-xl p-4 gap-4 flex flex-row justify-center">
+        <Button
+          className="w-40"
           onClick={() => {
             navigate('/browse');
           }}
         >
           Close
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -1,0 +1,108 @@
+{
+  "content": "#nostrcypher #V - SOVEREIGN \n\nhttps://zapstr.live/t/naddr1qq2kymfjvf4nwenvv45xgenf89jhqwf38pmxjqsqqvzqqqr6dytz8ed5\n\nhttps://cdn.satellite.earth/3a78579b9b588184a418f99fd1377f0da5db462b7036566fef80e3e8addcdad1.jpg",
+  "created_at": 1690852396,
+  "id": "541bbf199a62e72f504917cd50f8b69480f03c5ca513f16c329eb43ce572a5ed",
+  "kind": 31337,
+  "pubkey": "693c2832de939b4af8ccd842b17f05df2edd551e59989d3c4ef9a44957b2f1fb",
+  "sig": "4d4b7699ea0f9c669b77c192d0db5897f1346f56af7fe824e5183431f4d9628bb946ca072a6419c574c30562f3dc27edad90553d320e5e5d09f07b37ac1a8cc6",
+  "tags": [
+    [
+      "d",
+      "bm2bk7flehdfi9ep918vi"
+    ],
+    [
+      "p",
+      "693c2832de939b4af8ccd842b17f05df2edd551e59989d3c4ef9a44957b2f1fb",
+      "author"
+    ],
+    [
+      "p",
+      "faaf47af27e3de06e83f346fc6ccea0aabfc7520d82ffe90c48dfcd740c69caa",
+      "Producer"
+    ],
+    [
+      "p",
+      "3335d373e6c1b5bc669b4b1220c08728ea8ce622e5a7cfeeb4c0001d91ded1de",
+      "Musician "
+    ],
+    [
+      "p",
+      "693c2832de939b4af8ccd842b17f05df2edd551e59989d3c4ef9a44957b2f1fb",
+      "Author"
+    ],
+    [
+      "p",
+      "cdd14c033697e4a90017c784522a12057bbaa9b35f6f824d4aa2dcc299bc56d5",
+      "Author"
+    ],
+    [
+      "p",
+      "4ce6abbd68dab6e9fdf6e8e9912a8e12f9b539e078c634c55a9bff2994a514dd",
+      "Author"
+    ],
+    [
+      "p",
+      "7c4ace6ac563c140ab8bd0b49f1db4dba1e375f69cac96b0042569bd7086bae8",
+      "Author"
+    ],
+    [
+      "p",
+      "30ceb64e73197a05958c8bd92ab079c815bb44fbfbb3eb5d9766c5207f08bdf5",
+      "Author "
+    ],
+    [
+      "c",
+      "Hip Hop"
+    ],
+    [
+      "cover",
+      "https://cdn.satellite.earth/3a78579b9b588184a418f99fd1377f0da5db462b7036566fef80e3e8addcdad1.jpg"
+    ],
+    [
+      "subject",
+      "#nostrcypher #V - SOVEREIGN "
+    ]
+  ]
+}
+
+
+{
+  "content": "Voyage Futur - Innersphere Full Album\n\nhttps://zapstr.live/t/naddr1qq2k56e4dpe8xd3cx3mkswr2xek8x7nfweshvqsqqvzqqqr6dywxd6fa\n\nhttps://i.discogs.com/8hfdBYzLZimoXHqXxwduTVXTRxkvUpauFLNbElKSb6A/rs:fit/g:sm/q:90/h:600/w:586/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE1Mzky/ODcxLTE1OTA3OTA1/MjUtMTc1Mi5qcGVn.jpeg",
+  "created_at": 1690822670,
+  "id": "1da3498e5aa760868f4a997748f8e180d177bb231f741538f1281861c4e76b38",
+  "kind": 31337,
+  "pubkey": "6da819f91d69cbe591c08b31f555c6d0ab9905197eb515856e339049c018c1af",
+  "sig": "d16d05f1a24e43bca6cf68efb4c3acd249853f9cbc972dd744f9f2c1248a8e90bbffc989c4403d9666600f9457881aede3c4cb7f71019e01c0770d2cc094e7b3",
+  "tags": [
+    [
+      "d",
+      "jk5hrs684wh8j6lszivav"
+    ],
+    [
+      "p",
+      "6da819f91d69cbe591c08b31f555c6d0ab9905197eb515856e339049c018c1af",
+      "author"
+    ],
+    [
+      "c",
+      "Podcast"
+    ],
+    [
+      "media",
+      "https://youtu.be/99uSO_D8XBo",
+      "http"
+    ],
+    [
+      "cover",
+      "https://i.discogs.com/8hfdBYzLZimoXHqXxwduTVXTRxkvUpauFLNbElKSb6A/rs:fit/g:sm/q:90/h:600/w:586/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE1Mzky/ODcxLTE1OTA3OTA1/MjUtMTc1Mi5qcGVn.jpeg"
+    ],
+    [
+      "subject",
+      "Voyage Futur - Innersphere Full Album"
+    ],
+    [
+      "zap",
+      ""
+    ]
+  ]
+}
