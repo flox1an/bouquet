@@ -1,50 +1,77 @@
 # Bouquet
 
-A tool to manage your content on blossom severs (Upload, Distribution, Posting)
+Bouquet is a web app for managing media blobs across Blossom and NIP-96 servers.
+It supports upload, browsing, deletion, and server-to-server sync workflows.
 
+## Features
 
+- Upload files to one or more servers
+- Browse blobs by server, including a virtual `All servers` view
+- Delete blobs from selected servers (including multi-server delete from `All servers`)
+- Sync missing blobs from one server to another
+- Manage Blossom and NIP-96 servers in-app
 
-## TODO / Ideas
+## Tech Stack
 
-Add cancel button for upload stream
+- React 18 + TypeScript + Vite
+- TanStack Query
+- Radix UI primitives + local UI components
+- Tailwind CSS
+- Nostr tooling (`nostr-tools`, Applesauce stack)
 
-Add Blurhash
-https://github.com/verbiricha/filestr/blob/master/src/blur.tsx
+## Requirements
 
-Upload
+- Node.js 20+ recommended
+- npm 10+ recommended
 
-  Audio
-   Audio Event 31337, maybe Podcast 31338
-   Album Event 30029
-   Read ID3 INfo
-   Display in Metadata Editor 
-   Post Audio Events
-   Option to select "Full Album" and POst Album (Playlist) Event
-   Upload of Album Art from Disc
-   Usage of Album Art from ID3
-   --> Album art as new blob
+## Local Development
 
+Install dependencies:
 
-  Video
-    FileMeta Data Event 1063
-    Video Preview
+```bash
+npm install
+```
 
-  PDF
-    FileMeta Data Event 1063
+Start the dev server:
 
-  Images
-    FileMeta Data Event 1063
-    dimensions
-    blurhash
+```bash
+npm run dev
+```
 
-Nav
-  Add AUdio Player like Soundcloud
+Build production assets:
 
-Blob List
-  - Selection -> Delete Selected
+```bash
+npm run build
+```
 
-Audio List
-  Audio List, mit Mini Thumnnail (Artitst / Title )
-  Join von Album/year aus Album (Playlist) Event ????
-  Display blob as "published" when in Audio Event, else as "unlisted"
+Run lint checks:
+
+```bash
+npm run lint
+```
+
+Preview production build locally:
+
+```bash
+npm run preview
+```
+
+## Scripts
+
+- `npm run dev` start Vite dev server
+- `npm run build` type-check and production build
+- `npm run lint` lint TypeScript/React code
+- `npm run preview` preview built app
+- `npm run format` run Prettier on `src/`
+- `npm run analyze` inspect bundle composition
+
+## Release Notes
+
+- `nsite-cli` was removed from dependencies and scripts.
+- Security audit currently reports `0 vulnerabilities` in this workspace.
+- There are known lint warnings that do not block build output; see `RELEASE_CHECKLIST.md`.
+
+## Docker
+
+See [README.Docker.md](/Users/flox/dev/nostr/bouquet/README.Docker.md) for container build and run instructions.
 
