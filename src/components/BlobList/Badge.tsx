@@ -69,7 +69,7 @@ const Badge = ({ ev }: { ev: NostrEvent }) => {
       relays: [],
     } as EventPointer)
     return (
-      <a target="_blank" href={`https://nostu.be/video/${nevent}`}>
+      <a target="_blank" href={`https://nostu.be/v/${nevent}`}>
         <ShadcnBadge className="mr-2">video</ShadcnBadge>
       </a>
     )
@@ -83,7 +83,7 @@ const Badge = ({ ev }: { ev: NostrEvent }) => {
       relays: [],
     } as AddressPointer)
     return (
-      <a target="_blank" href={`https://nostu.be/video/${naddr}`}>
+      <a target="_blank" href={`https://nostu.be/v/${naddr}`}>
         <ShadcnBadge className="mr-2">video</ShadcnBadge>
       </a>
     )

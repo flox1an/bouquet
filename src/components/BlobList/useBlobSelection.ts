@@ -1,5 +1,5 @@
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 export type HandleSelectBlobType = (
   sha256: string,
@@ -7,6 +7,7 @@ export type HandleSelectBlobType = (
 ) => void;
 export const useBlobSelection = (blobs: BlobDescriptor[]) => {
   const [selectedBlobs, setSelectedBlobs] = useState<{ [key: string]: boolean }>({});
+  const anchorRef = useRef<string | null>(null);
 
   const handleSelectBlob: HandleSelectBlobType = (
     sha256: string,
@@ -18,39 +19,27 @@ export const useBlobSelection = (blobs: BlobDescriptor[]) => {
     };
 
     if (event && isMouseEvent(event)) {
-      if (event.ctrlKey || event.metaKey) {
-        setSelectedBlobs(prev => ({
-          ...prev,
-          [sha256]: !prev[sha256],
-        }));
-      } else if (event.shiftKey) {
-        const lastSelectedIndex = blobs.findIndex(
-          blob => blob.sha256 === Object.keys(selectedBlobs).find(key => selectedBlobs[key])
-        );
-        const currentIndex = blobs.findIndex(blob => blob.sha256 === sha256);
-        const [start, end] = [lastSelectedIndex, currentIndex].sort((a, b) => a - b);
-        const newSelection = blobs.slice(start, end + 1).reduce(
-          (acc, blob) => {
-            acc[blob.sha256] = true;
-            return acc;
-          },
-          {} as { [key: string]: boolean }
-        );
-        setSelectedBlobs(prev => ({
-          ...prev,
-          ...newSelection,
-        }));
-      } else {
-        setSelectedBlobs(prev => ({
-          ...prev,
-          [sha256]: !prev[sha256],
-        }));
+      if (event.shiftKey && anchorRef.current !== null) {
+        const anchorIndex = blobs.findIndex(b => (b.sha256 || b.url) === anchorRef.current);
+        const currentIndex = blobs.findIndex(b => (b.sha256 || b.url) === sha256);
+        if (anchorIndex !== -1 && currentIndex !== -1) {
+          const [start, end] = [anchorIndex, currentIndex].sort((a, b) => a - b);
+          const newSelection = blobs.slice(start, end + 1).reduce(
+            (acc, blob) => {
+              acc[blob.sha256 || blob.url] = true;
+              return acc;
+            },
+            {} as { [key: string]: boolean }
+          );
+          setSelectedBlobs(prev => ({ ...prev, ...newSelection }));
+          return;
+        }
       }
+      anchorRef.current = sha256;
+      setSelectedBlobs(prev => ({ ...prev, [sha256]: !prev[sha256] }));
     } else {
-      setSelectedBlobs(prev => ({
-        ...prev,
-        [sha256]: !prev[sha256],
-      }));
+      anchorRef.current = sha256;
+      setSelectedBlobs(prev => ({ ...prev, [sha256]: !prev[sha256] }));
     }
   };
 

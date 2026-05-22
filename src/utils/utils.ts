@@ -1,5 +1,4 @@
 import { sha256 } from '@noble/hashes/sha256';
-import dayjs from 'dayjs';
 
 export const formatFileSize = (size: number) => {
   if (size < 1024) {
@@ -42,7 +41,16 @@ export const pl = (value: string | number, len: number) => {
 export const formatDate = (unixTimeStamp: number): string => {
   const ts = unixTimeStamp > 1711200000000 ? unixTimeStamp / 1000 : unixTimeStamp;
   if (ts == 0) return 'never';
-  return dayjs(ts * 1000).format('YYYY-MM-DD');
+  const date = new Date(ts * 1000);
+  const uses24h = !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).format(date).match(/am|pm/i);
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: !uses24h,
+  }).format(date);
 };
 
 export function extractDomain(url: string): string | null {

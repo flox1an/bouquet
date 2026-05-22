@@ -19,6 +19,31 @@ export const DEFAULT_RELAYS = [
   'wss://purplepag.es/',
 ];
 
+/**
+ * Merges default relays with user relays, removing duplicates
+ * @param userRelays - Array of user-specific relay URLs
+ * @returns Combined array of unique relay URLs with user relays prioritized
+ */
+export function mergeRelays(userRelays: string[] = []): string[] {
+  const relaySet = new Set<string>();
+
+  // Add user relays first (higher priority)
+  for (const relay of userRelays) {
+    if (relay && relay.trim()) {
+      relaySet.add(relay.trim());
+    }
+  }
+
+  // Add default relays
+  for (const relay of DEFAULT_RELAYS) {
+    relaySet.add(relay);
+  }
+
+  const merged = Array.from(relaySet);
+  console.log('🔗 Merged relays:', { userRelays, defaultRelays: DEFAULT_RELAYS, merged });
+  return merged;
+}
+
 // IndexedDB cache for local event storage
 let cache: NostrIDBDatabase | undefined;
 
@@ -45,9 +70,7 @@ const originalRequest = relayPool.request.bind(relayPool);
 
 relayPool.request = ((relays, filters, opts) => {
   const timeout$ = timer(REQUEST_TIMEOUT_MS).pipe(
-    mergeMap(() =>
-      throwError(() => new Error(`Relay request timed out after ${REQUEST_TIMEOUT_MS}ms`))
-    )
+    mergeMap(() => throwError(() => new Error(`Relay request timed out after ${REQUEST_TIMEOUT_MS}ms`)))
   );
   return race(originalRequest(relays, filters, opts), timeout$);
 }) as typeof relayPool.request;
@@ -63,17 +86,10 @@ createEventLoaderForStore(eventStore, relayPool, {
 persistEventsToCache(eventStore, (events: NostrEvent[]) => addEvents(cache!, events));
 
 // Configure NostrConnectSigner with relay pool methods
-export const subscriptionMethod: NostrSubscriptionMethod = (
-  relays: string[],
-  filters: Filter[]
-) => {
+export const subscriptionMethod: NostrSubscriptionMethod = (relays: string[], filters: Filter[]) => {
   return relayPool
     .subscription(relays, filters)
-    .pipe(
-      filter(
-        (response): response is NostrEvent => typeof response !== 'string' && 'kind' in response
-      )
-    );
+    .pipe(filter((response): response is NostrEvent => typeof response !== 'string' && 'kind' in response));
 };
 
 export const publishMethod: NostrPublishMethod = async (relays: string[], event: NostrEvent) => {

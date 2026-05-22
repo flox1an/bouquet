@@ -3,24 +3,29 @@ import { use$ } from 'applesauce-react/hooks';
 import { createTimelineLoader } from 'applesauce-loaders/loaders';
 import type { Filter, NostrEvent } from 'nostr-tools';
 import { map } from 'rxjs/operators';
-import { eventStore, relayPool, cacheRequest, DEFAULT_RELAYS } from '../nostr/core';
+import { eventStore, relayPool, cacheRequest, mergeRelays } from '../nostr/core';
 import { hashSha256 } from './utils';
 import { SubscriptionOptions } from './useEvents';
+import { useNostr } from './nostr';
 
 export default function useEvent(
   filter: Filter,
-  opts?: SubscriptionOptions,
+  opts?: SubscriptionOptions & { waitForRelays?: boolean },
   relays?: string[]
 ): { data: NostrEvent | undefined; isLoading: boolean; isSuccess: boolean } {
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+  const { user, relaysReady } = useNostr();
 
-  const effectiveRelays = relays?.length ? relays : DEFAULT_RELAYS;
+  const effectiveRelays = useMemo(() => mergeRelays(relays || user?.relayUrls), [relays, user?.relayUrls]);
 
   const id = useMemo(() => hashSha256(filter), [filter]);
 
+  // Determine if we should wait for relays to be ready
+  const shouldWaitForRelays = opts?.waitForRelays !== false && !!user && !relaysReady;
+
   // Create and manage loader subscription
   useEffect(() => {
-    if (opts?.disable || !filter) {
+    if (opts?.disable || !filter || shouldWaitForRelays) {
       return;
     }
 
@@ -43,14 +48,11 @@ export default function useEvent(
       sub.unsubscribe();
       subscriptionRef.current = null;
     };
-  }, [id, opts?.disable]);
+  }, [id, opts?.disable, shouldWaitForRelays, effectiveRelays]);
 
   // Subscribe to timeline from event store and return first event
   const event = use$(
-    () =>
-      eventStore.timeline(filter).pipe(
-        map((events: NostrEvent[]) => (events.length > 0 ? events[0] : undefined))
-      ),
+    () => eventStore.timeline(filter).pipe(map((events: NostrEvent[]) => (events.length > 0 ? events[0] : undefined))),
     [filter]
   );
 

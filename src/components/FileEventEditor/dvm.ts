@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNostr, accountManager } from '../../utils/nostr';
 import useEvents from '../../utils/useEvents';
 import dayjs from 'dayjs';
-import { relayPool, DEFAULT_RELAYS } from '../../nostr/core';
+import { relayPool, mergeRelays } from '../../nostr/core';
 import { ReadonlyAccount } from 'applesauce-accounts/accounts';
 
 const NPUB_DVM_THUMBNAIL_CREATION = 'npub1q8cv87l47fql2xer2uyw509y5n5s9f53h76hvf9377efdptmsvusxf3n8s';
@@ -47,7 +47,7 @@ const useVideoThumbnailDvm = (fileEventData: FileEventData, setFileEventData: (d
   }, []);
 
   const thumbnailDvmFilter = useMemo(
-    () => ({ kinds: [6204], '#e': [thumbnailRequestEventId || ''] } as Filter),
+    () => ({ kinds: [6204], '#e': [thumbnailRequestEventId || ''] }) as Filter,
     [thumbnailRequestEventId]
   );
   const thumbnailSubscription = useEvents(thumbnailDvmFilter, {
@@ -78,23 +78,22 @@ const useVideoThumbnailDvm = (fileEventData: FileEventData, setFileEventData: (d
 
     const thumbCount = 3;
 
+    const relays = mergeRelays(user?.relayUrls);
+
     const encryptedContent = await activeAccount.signer.nip04.encrypt(
       dvmPubkey,
       JSON.stringify([
         ['i', data.url[0], 'url'],
         ['output', 'image/jpeg'],
         ['param', 'thumbnailCount', `${thumbCount}`],
-        ['relays', user?.relayUrls.join(',') || DEFAULT_RELAYS.join(',')],
+        ['relays', relays.join(',')],
       ])
     );
 
     const e: Omit<NostrEvent, 'id' | 'sig'> = {
       created_at: dayjs().unix(),
       content: encryptedContent,
-      tags: [
-        ['p', dvmPubkey],
-        ['encrypted'],
-      ],
+      tags: [['p', dvmPubkey], ['encrypted']],
       kind: 5204,
       pubkey: user?.pubkey || '',
     };
@@ -102,7 +101,7 @@ const useVideoThumbnailDvm = (fileEventData: FileEventData, setFileEventData: (d
     const signedEvent = await activeAccount.signer.signEvent(e);
     console.log(signedEvent);
     setThumbnailRequestEventId(signedEvent.id);
-    await relayPool.publish(DEFAULT_RELAYS, signedEvent);
+    await relayPool.publish(relays, signedEvent);
   };
 
   return {

@@ -7,7 +7,7 @@ import useEvent from './useEvent';
 import { useQueries } from '@tanstack/react-query';
 import { Nip96ServerConfig, fetchNip96ServerConfig } from './nip96';
 import dayjs from 'dayjs';
-import { relayPool, DEFAULT_RELAYS } from '../nostr/core';
+import { relayPool, mergeRelays } from '../nostr/core';
 import { ReadonlyAccount } from 'applesauce-accounts/accounts';
 
 type ServerType = 'blossom' | 'nip96';
@@ -57,7 +57,8 @@ export const useUserServers = (): {
 
     const signedBlossom = await activeAccount.signer.signEvent(blossomEvent);
     console.log(signedBlossom);
-    await relayPool.publish(DEFAULT_RELAYS, signedBlossom);
+    const relays = mergeRelays(user?.relayUrls);
+    await relayPool.publish(relays, signedBlossom);
 
     const nip96Event: NostrEvent = {
       kind: USER_NIP96_SERVER_LIST_KIND,
@@ -71,18 +72,16 @@ export const useUserServers = (): {
 
     const signedNip96 = await activeAccount.signer.signEvent(nip96Event);
     console.log(signedNip96);
-    await relayPool.publish(DEFAULT_RELAYS, signedNip96);
+    await relayPool.publish(relays, signedNip96);
   };
 
-  const blossomServerListEvent = useEvent(
-    { kinds: [USER_BLOSSOM_SERVER_LIST_KIND], authors: [pubkey!] } as Filter,
-    { disable: !pubkey }
-  );
+  const blossomServerListEvent = useEvent({ kinds: [USER_BLOSSOM_SERVER_LIST_KIND], authors: [pubkey!] } as Filter, {
+    disable: !pubkey,
+  });
 
-  const nip96ServerListEvent = useEvent(
-    { kinds: [USER_NIP96_SERVER_LIST_KIND], authors: [pubkey!] } as Filter,
-    { disable: !pubkey }
-  );
+  const nip96ServerListEvent = useEvent({ kinds: [USER_NIP96_SERVER_LIST_KIND], authors: [pubkey!] } as Filter, {
+    disable: !pubkey,
+  });
 
   const blossomServers = useMemo((): Server[] | undefined => {
     if (!blossomServerListEvent || !blossomServerListEvent.isSuccess) return undefined;
