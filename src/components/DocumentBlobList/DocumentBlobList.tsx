@@ -1,8 +1,10 @@
 import { formatFileSize, formatDate } from '../../utils/utils';
 import { Clipboard } from 'lucide-react';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { Document, Page } from 'react-pdf';
+import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from '@/components/ui/button';
+
+pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 type DocumentBlobListProps = {
   docs: BlobDescriptor[];

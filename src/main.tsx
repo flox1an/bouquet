@@ -9,11 +9,7 @@ import Home from './pages/Home.tsx';
 import { Transfer } from './pages/Transfer.tsx';
 import Upload from './pages/Upload.tsx';
 import Check from './pages/Check.tsx';
-
-import { pdfjs } from 'react-pdf';
 import { GlobalProvider } from './GlobalState.tsx';
-
-pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString();
 
 /**
  * Creates an Indexed DB persister

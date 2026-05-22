@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { lazy, Suspense, useState, useMemo, useEffect, useCallback } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import {
   Clipboard,
@@ -14,7 +14,6 @@ import { formatFileSize, formatDate } from '../../utils/utils';
 import ImageBlobList from '../ImageBlobList/ImageBlobList';
 import VideoBlobList from '../VideoBlobList/VideoBlobList';
 import AudioBlobList from '../AudioBlobList/AudioBlobList';
-import DocumentBlobList from '../DocumentBlobList/DocumentBlobList';
 import { useServerInfo } from '../../utils/useServerInfo';
 import Badge from './Badge';
 import BlobListTypeMenu, { ListMode } from './BlobListTypeMenu';
@@ -36,6 +35,7 @@ type BlobListProps = {
 };
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 500] as const;
+const DocumentBlobList = lazy(() => import('../DocumentBlobList/DocumentBlobList'));
 
 const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => {
   const [mode, setMode] = useState<ListMode>('list');
@@ -163,7 +163,11 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
       {mode === 'audio' && (
         <AudioBlobList audioFiles={audioFiles} selectedBlobs={selectedBlobs} handleSelectBlob={handleSelectBlob} />
       )}
-      {mode === 'docs' && <DocumentBlobList docs={docs} />}
+      {mode === 'docs' && (
+        <Suspense fallback={<div className="rounded-md border p-6 text-sm text-muted-foreground">Loading documents...</div>}>
+          <DocumentBlobList docs={docs} />
+        </Suspense>
+      )}
 
       {mode === 'list' && (
         <>
