@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 type TransferError = {
+  name?: string;
   message?: string;
   code?: string;
   response?: {
@@ -94,6 +95,7 @@ export const Transfer = () => {
   const queryClient = useQueryClient();
   const [started, setStarted] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [mirrorSupport, setMirrorSupport] = useState<Record<string, boolean | undefined>>({});
 
   const [transferLog, setTransferLog] = useState<TransferStatus>({});
 
@@ -162,6 +164,10 @@ export const Transfer = () => {
             signal: controller.signal,
             timeout: 120000,
             maxRetries: 2,
+            allowMirror: mirrorSupport[targetServer] !== false,
+            onMirrorUnsupported: () => {
+              setMirrorSupport(ms => ({ ...ms, [targetServer]: false }));
+            },
             onPhaseChange: (phase) => {
               setTransferLog(ts => ({
                 ...ts,
@@ -205,6 +211,8 @@ export const Transfer = () => {
           errorMessage = 'Transfer cancelled';
         } else if (e.message?.includes('timeout')) {
           errorMessage = 'Operation timed out';
+        } else if (e.name === 'SourceBlobNotFoundError') {
+          errorMessage = `Missing on source server (${sourceServer})`;
         } else if (e.response?.status === 404) {
           errorMessage = 'Blob not found (404)';
         } else if (e.response?.status === 401 || e.response?.status === 403) {
@@ -360,6 +368,9 @@ export const Transfer = () => {
                 </CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {mirrorSupport[transferTarget] === false && (
+                  <Badge variant="outline">Mirror unavailable on target</Badge>
+                )}
                 {isTransferComplete && transferStatus.error === 0 && (
                   <Badge variant="secondary" className="gap-1">
                     <CheckCircle2 className="h-3.5 w-3.5" />

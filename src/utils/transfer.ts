@@ -1,10 +1,10 @@
-import { AxiosProgressEvent } from 'axios';
+import axios, { AxiosError, AxiosProgressEvent } from 'axios';
 import { BlobDescriptor, EventTemplate, SignedEvent } from 'blossom-client-sdk';
 import { downloadBlossomBlob, mirrordBlossomBlob, uploadBlossomBlob } from './blossom';
 import { Server } from './useUserServers';
 import { uploadNip96File } from './nip96';
 
-export type TransferPhase = 'mirroring' | 'downloading' | 'uploading' | 'completed' | 'error';
+export type TransferPhase = 'validating' | 'mirroring' | 'downloading' | 'uploading' | 'completed' | 'error';
 
 export interface TransferOptions {
   signal?: AbortSignal;
@@ -12,6 +12,15 @@ export interface TransferOptions {
   onPhaseChange?: (phase: TransferPhase) => void;
   onProgress?: (progressEvent: AxiosProgressEvent) => void;
   maxRetries?: number;
+  allowMirror?: boolean;
+  onMirrorUnsupported?: () => void;
+}
+
+class SourceBlobNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SourceBlobNotFoundError';
+  }
 }
 
 async function blobUrlToFile(blobUrl: string, fileName: string): Promise<File> {
@@ -78,13 +87,27 @@ export const transferBlob = async (
     timeout = 60000, 
     onPhaseChange, 
     onProgress,
-    maxRetries = 2
+    maxRetries = 2,
+    allowMirror = true,
+    onMirrorUnsupported,
   } = options;
 
   console.log({ sourceUrl, targetServer });
 
   if (signal?.aborted) {
     throw new Error('Transfer cancelled');
+  }
+
+  onPhaseChange?.('validating');
+  try {
+    await withTimeout(axios.head(sourceUrl, { signal }), timeout, signal);
+  } catch (error) {
+    const e = error as AxiosError;
+    const status = e.response?.status;
+    // Treat only hard 404/410 as definitive missing source blobs.
+    if (status === 404 || status === 410) {
+      throw new SourceBlobNotFoundError('Source blob is missing (not found on origin server).');
+    }
   }
 
   if (sourceUrl.startsWith('blob:')) {
@@ -103,7 +126,7 @@ export const transferBlob = async (
     onPhaseChange?.('completed');
     return result;
   } else {
-    if (targetServer.type == 'blossom') {
+    if (targetServer.type == 'blossom' && allowMirror) {
       try {
         onPhaseChange?.('mirroring');
         const mirrorFn = () => mirrordBlossomBlob(targetServer.url, sourceUrl, signEventTemplate, signal);
@@ -122,6 +145,11 @@ export const transferBlob = async (
       } catch (e: any) {
         if (signal?.aborted || e.message?.includes('cancelled')) {
           throw e;
+        }
+        const status = e.response?.status;
+        // Mirror endpoint unsupported or disabled on target server.
+        if (status === 400 || status === 404 || status === 405 || status === 501) {
+          onMirrorUnsupported?.();
         }
         console.log('Mirror failed. Using download + upload instead.', e.message);
       }
