@@ -86,6 +86,14 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({
     onClose()
   }
 
+  const shortenUrl = (url: string, maxLength = 44) => {
+    const normalized = url.replace(/^https?:\/\//, "")
+    if (normalized.length <= maxLength) return normalized
+
+    const keep = Math.max(8, Math.floor((maxLength - 1) / 2))
+    return `${normalized.slice(0, keep)}…${normalized.slice(-keep)}`
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl">
@@ -121,8 +129,11 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({
                           </span>
                         )}
                         <span className="truncate font-medium">{server.name}</span>
-                        <span className="text-xs text-muted-foreground truncate hidden sm:inline">
-                          {server.url}
+                        <span
+                          className="hidden max-w-[28ch] truncate text-xs text-muted-foreground sm:inline md:max-w-[40ch]"
+                          title={server.url}
+                        >
+                          {shortenUrl(server.url)}
                         </span>
                       </div>
                     </TableCell>
