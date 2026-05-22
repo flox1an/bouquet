@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BlobDescriptor, BlossomClient } from 'blossom-client-sdk';
+import { BlobDescriptor } from 'blossom-client-sdk';
+import { createDeleteAuth } from 'blossom-client-sdk/auth';
+import { deleteBlob as deleteBlobFromServer } from 'blossom-client-sdk/actions/delete';
 import { useNostr } from '../utils/nostr';
 import BlobList from '../components/BlobList/BlobList';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -25,8 +27,8 @@ function Home() {
   const deleteBlob = useMutation({
     mutationFn: async ({ server, hash }: { server: Server; hash: string }) => {
       if (server.type === 'blossom') {
-        const deleteAuth = await BlossomClient.createDeleteAuth(signEventTemplate, hash);
-        return BlossomClient.deleteBlob(server.url, hash, { auth: deleteAuth });
+        const deleteAuth = await createDeleteAuth(signEventTemplate, hash);
+        return deleteBlobFromServer(server.url, hash, { auth: deleteAuth });
       } else {
         return deleteNip96File(server, hash, signEventTemplate);
       }

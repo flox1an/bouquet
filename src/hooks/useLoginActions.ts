@@ -1,6 +1,6 @@
 import { nip19 } from 'nostr-tools';
 import { decrypt } from 'nostr-tools/nip49';
-import { bytesToHex } from '@noble/hashes/utils';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { useAccountManager } from 'applesauce-react/hooks';
 import {
   ExtensionAccount,

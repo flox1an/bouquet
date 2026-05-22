@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BlobDescriptor, BlossomClient, SignedEvent } from 'blossom-client-sdk';
+import { BlobDescriptor, SignedEvent } from 'blossom-client-sdk';
+import { createUploadAuth, encodeAuthorizationHeader } from 'blossom-client-sdk/auth';
 import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
@@ -137,7 +138,7 @@ function Upload() {
     };
 
     const res = await axios.put<BlobDescriptor>(`${server}/upload`, file, {
-      headers: auth ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(auth) } : headers,
+      headers: auth ? { ...headers, authorization: encodeAuthorizationHeader(auth) } : headers,
       onUploadProgress,
       signal,
     });
@@ -186,7 +187,7 @@ function Upload() {
             } else {
               // Blob doesn't exist, proceed with upload
               const authStartTime = Date.now();
-              const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file);
+              const uploadAuth = await createUploadAuth(signEventTemplate, file);
               console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
 
               const progressHandler = (progressEvent: AxiosProgressEvent) => {

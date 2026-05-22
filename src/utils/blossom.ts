@@ -1,5 +1,7 @@
 import axios, { AxiosProgressEvent } from 'axios';
-import { BlobDescriptor, BlossomClient, EventTemplate, SignedEvent, getBlobSha256 } from 'blossom-client-sdk';
+import { BlobDescriptor, EventTemplate, SignedEvent, getBlobSha256 } from 'blossom-client-sdk';
+import { createListAuth, createUploadAuth, createMirrorAuth, encodeAuthorizationHeader } from 'blossom-client-sdk/auth';
+import { listBlobs } from 'blossom-client-sdk/actions/list';
 import dayjs from 'dayjs';
 
 const blossomUrlRegex = /https?:\/\/(?:www\.)?[^\s/]+\/([a-fA-F0-9]{64})(?:\.[a-zA-Z0-9]+)?/g;
@@ -31,7 +33,7 @@ export async function fetchBlossomList(
   pubkey: string,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
 ): Promise<BlobDescriptor[]> {
-  const listAuthEvent = await BlossomClient.createListAuth(signEventTemplate);
+  const listAuthEvent = await createListAuth(signEventTemplate);
 
   // Fetch all pages by iterating through results
   // Most servers paginate by returning the most recent blobs first
@@ -48,7 +50,7 @@ export async function fetchBlossomList(
       options.until = until;
     }
 
-    const blobs = await BlossomClient.listBlobs(serverUrl, pubkey!, options);
+    const blobs = await listBlobs(serverUrl, pubkey!, options);
 
     // Stop if we got no results
     if (blobs.length === 0) {
@@ -112,7 +114,7 @@ export const checkBlobExists = async (
   try {
     const headers: Record<string, string> = {};
     if (auth) {
-      headers.authorization = BlossomClient.encodeAuthorizationHeader(auth);
+      headers.authorization = encodeAuthorizationHeader(auth);
     }
 
     const response = await axios.head(`${serverUrl}/${hash}`, { headers });
@@ -149,7 +151,7 @@ export const uploadBlossomBlob = async (
   onUploadProgress?: (progressEvent: AxiosProgressEvent) => void,
   signal?: AbortSignal
 ) => {
-  const uploadAuth = await BlossomClient.createUploadAuth(signEventTemplate, file);
+  const uploadAuth = await createUploadAuth(signEventTemplate, file);
 
   const headers = {
     Accept: 'application/json',
@@ -157,7 +159,7 @@ export const uploadBlossomBlob = async (
   };
 
   const res = await axios.put<BlobDescriptor>(`${server}/upload`, file, {
-    headers: uploadAuth ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(uploadAuth) } : headers,
+    headers: uploadAuth ? { ...headers, authorization: encodeAuthorizationHeader(uploadAuth) } : headers,
     onUploadProgress,
     signal,
   });
@@ -189,8 +191,7 @@ export const mirrordBlossomBlob = async (
   console.log({ sourceUrl, hash });
   if (!hash) throw 'The soureUrl does not contain a blossom hash.';
 
-  const blossomClient = new BlossomClient(targetServer, signEventTemplate);
-  const mirrorAuth = await blossomClient.createMirrorAuth(hash);
+  const mirrorAuth = await createMirrorAuth(signEventTemplate, hash);
 
   const headers = {
     Accept: 'application/json',
@@ -202,7 +203,7 @@ export const mirrordBlossomBlob = async (
     { url: sourceUrl },
     {
       headers: mirrorAuth
-        ? { ...headers, authorization: BlossomClient.encodeAuthorizationHeader(mirrorAuth) }
+        ? { ...headers, authorization: encodeAuthorizationHeader(mirrorAuth) }
         : headers,
       signal,
     }

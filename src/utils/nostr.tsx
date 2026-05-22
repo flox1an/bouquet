@@ -6,8 +6,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 // Applesauce imports
 import { AccountManager } from 'applesauce-accounts';
 import { registerCommonAccountTypes, ReadonlyAccount } from 'applesauce-accounts/accounts';
-import { EventFactory } from 'applesauce-core';
-import { AccountsProvider, EventStoreProvider, FactoryProvider } from 'applesauce-react/providers';
+import { AccountsProvider, EventStoreProvider } from 'applesauce-react/providers';
 import { useActiveAccount } from 'applesauce-react/hooks';
 
 // Local imports
@@ -37,13 +36,12 @@ type NostrContextType = {
   publishSignedEvent: (signedEvent: SignedEvent) => Promise<void>;
 };
 
-// Create AccountManager and EventFactory at module level
+// Create AccountManager at module level
 const accountManager = new AccountManager();
 registerCommonAccountTypes(accountManager);
-const factory = new EventFactory({ signer: accountManager.signer });
 
 // Export for use elsewhere
-export { accountManager, factory };
+export { accountManager };
 
 export const NostrContext = createContext<NostrContextType>({
   relaysReady: false,
@@ -233,18 +231,16 @@ export const NostrProvider = ({ children }: { children: React.ReactElement }) =>
   return (
     <AccountsProvider manager={accountManager}>
       <EventStoreProvider eventStore={eventStore}>
-        <FactoryProvider factory={factory}>
-          <NostrContext.Provider value={value}>
-            <AccountRestoreInit onRestore={handleAccountRestore} />
-            <BatchedProfileLoaderInit />
-            <UserRelayLoader
-              user={user}
-              onRelaysLoaded={handleRelaysLoaded}
-              onRelaysReady={() => setRelaysReady(true)}
-            />
-            {children}
-          </NostrContext.Provider>
-        </FactoryProvider>
+        <NostrContext.Provider value={value}>
+          <AccountRestoreInit onRestore={handleAccountRestore} />
+          <BatchedProfileLoaderInit />
+          <UserRelayLoader
+            user={user}
+            onRelaysLoaded={handleRelaysLoaded}
+            onRelaysReady={() => setRelaysReady(true)}
+          />
+          {children}
+        </NostrContext.Provider>
       </EventStoreProvider>
     </AccountsProvider>
   );
