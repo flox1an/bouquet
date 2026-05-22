@@ -148,6 +148,7 @@ function Upload() {
   const upload = async () => {
     setUploadBusy(true);
     setPreparing(true);
+    const failedServers = new Set<string>();
 
     setUploadStep(1);
     // TODO this blocks the UI
@@ -462,7 +463,7 @@ function Upload() {
   }, [fileEventsToPublish, audioCount]);
 
   return (
-    <div className="flex flex-col mx-auto max-w-[80em] w-full">
+    <div className="mx-auto flex w-full max-w-[80em] flex-col gap-4 py-1">
       {!serversLoading && (!servers || servers.length == 0) ? (
         <UploadOnboarding />
       ) : (
@@ -475,6 +476,7 @@ function Upload() {
               { label: 'Publish to NOSTR' },
             ]}
             currentStep={uploadStep}
+            className="-mt-0.5"
           />
           {uploadStep <= 1 && (
             <div className="bg-muted rounded-xl p-4 text-muted-foreground gap-4 flex flex-col">
@@ -547,4 +549,3 @@ function Upload() {
 }
 
 export default Upload;
-    const failedServers = new Set<string>();

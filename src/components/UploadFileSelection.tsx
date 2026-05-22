@@ -1,5 +1,5 @@
 import { Upload, AlertTriangle, Server as ServerIcon, Trash2 } from 'lucide-react';
-import React, { ChangeEvent, DragEvent, useMemo, useRef } from 'react';
+import React, { ChangeEvent, DragEvent, useMemo, useRef, useState } from 'react';
 import CheckBox from './CheckBox/CheckBox';
 import { Server } from '../utils/useUserServers';
 import { formatFileSize } from '../utils/utils';
@@ -83,6 +83,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { serverInfo } = useServerInfo();
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (uploadBusy) return;
@@ -98,6 +99,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
   const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
     if (uploadBusy) return;
     event.preventDefault();
+    setIsDragging(false);
 
     const droppedFiles = event.dataTransfer?.files;
     if (droppedFiles && droppedFiles.length > 0) {
@@ -124,9 +126,18 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
       />
       <label
         htmlFor="browse"
-        className="p-12 bg-card rounded-lg hover:text-primary text-muted-foreground border-dashed border-border border-2 block cursor-pointer text-center"
+        className={`block cursor-pointer rounded-lg border-2 border-dashed p-12 text-center transition-colors ${
+          isDragging
+            ? 'border-primary bg-primary/5 text-primary'
+            : 'border-muted-foreground/50 bg-card text-muted-foreground hover:border-primary/60 hover:bg-muted/40'
+        }`}
         onDrop={handleDrop}
-        onDragOver={event => event.preventDefault()}
+        onDragOver={event => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragEnter={() => setIsDragging(true)}
+        onDragLeave={() => setIsDragging(false)}
       >
         <Upload className="w-8 h-8 inline" /> Browse or drag & drop
       </label>

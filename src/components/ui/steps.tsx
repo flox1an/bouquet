@@ -13,8 +13,8 @@ type StepsProps = {
 
 export function Steps({ steps, currentStep, className }: StepsProps) {
   return (
-    <div className={cn('flex items-center justify-center py-4 md:py-8', className)}>
-      <div className="inline-flex items-center rounded-lg border bg-muted p-1">
+    <div className={cn('flex items-center justify-center py-2 md:py-3', className)}>
+      <div className="inline-flex items-center rounded-lg border bg-muted p-0.5">
         {steps.map((step, index) => {
           const isCompleted = index < currentStep;
           const isCurrent = index === currentStep;
@@ -23,8 +23,8 @@ export function Steps({ steps, currentStep, className }: StepsProps) {
           return (
             <div
               key={index}
-              className={cn(
-                'flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+                className={cn(
+                'flex items-center gap-2 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
                 isCompleted && 'text-muted-foreground',
                 isCurrent && 'bg-background text-foreground shadow-sm',
                 isUpcoming && 'text-muted-foreground'

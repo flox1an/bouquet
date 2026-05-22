@@ -294,8 +294,8 @@ export const Transfer = () => {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div className="mx-auto flex w-full max-w-[80em] flex-col gap-6 py-2">
-      {transferSteps}
+    <div className="mx-auto flex w-full max-w-[80em] flex-col gap-4 py-1">
+      <div className="-mt-0.5">{transferSteps}</div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
         <Card className="shadow-sm">

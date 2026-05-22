@@ -179,14 +179,14 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({
             </Table>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-8 text-center border rounded-md bg-muted/50">
+          <div className="flex flex-col items-center justify-center rounded-md border bg-muted/50 py-6 text-center">
             <ServerIcon className="h-10 w-10 text-muted-foreground mb-3" />
             <p className="text-sm text-muted-foreground">No servers configured</p>
             <p className="text-xs text-muted-foreground">Add a server below to get started</p>
           </div>
         )}
 
-        <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+        <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
           <Label className="text-sm font-medium">Add New Server</Label>
           <div className="flex gap-2">
             <Input
@@ -218,7 +218,7 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({
           </RadioGroup>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="pt-1">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>

@@ -91,7 +91,7 @@ function Home() {
   const isAllServersSelected = selectedServer ? serverInfo[selectedServer]?.virtual === true : false;
 
   return (
-    <div className="mx-auto flex w-full max-w-[80em] flex-col gap-6 py-6">
+    <div className="mx-auto flex w-full max-w-[80em] flex-col gap-4 py-2">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <ServerSelect

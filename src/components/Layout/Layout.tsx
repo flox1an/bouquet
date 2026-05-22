@@ -36,7 +36,7 @@ export const Layout = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <TopNav />
-      <main className={`flex-1 container py-6 ${hasAudioPlayer ? 'pb-24' : ''}`}>
+      <main className={`flex-1 container py-4 md:py-5 ${hasAudioPlayer ? 'pb-24' : ''}`}>
         {user ? <Outlet /> : <Login />}
       </main>
       {hasAudioPlayer && (
