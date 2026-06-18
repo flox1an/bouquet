@@ -17,6 +17,7 @@ export const DEFAULT_RELAYS = [
   'wss://nostr.wine',
   'wss://relay.primal.net',
   'wss://purplepag.es/',
+  'wss://relay.nostu.be',
 ];
 
 /**

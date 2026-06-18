@@ -26,6 +26,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DeleteProgressDialog from './DeleteProgressDialog';
+import RelationshipTree from './RelationshipTree';
+import { useBlobRelationshipGraph } from '../../utils/useBlobRelationshipGraph';
 
 type BlobListProps = {
   blobs: BlobDescriptor[];
@@ -41,11 +43,12 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   const [mode, setMode] = useState<ListMode>('list');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(20);
-  const { distribution } = useServerInfo();
+  const { distribution, serverInfo } = useServerInfo();
   const fileMetaEventsByHash = useFileMetaEventsByHash();
   const { handleSelectBlob, selectedBlobs, setSelectedBlobs } = useBlobSelection(blobs);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [blobsToDelete, setBlobsToDelete] = useState<BlobDescriptor[]>([]);
+  const relationshipState = useBlobRelationshipGraph(blobs, mode === 'relationships');
 
   const handleDeleteSelected = useCallback(() => {
     const selected = blobs.filter(b => selectedBlobs[b.sha256 || b.url]);
@@ -94,6 +97,18 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   );
 
   const selectedCount = useMemo(() => Object.values(selectedBlobs).filter(v => v).length, [selectedBlobs]);
+  const handleSelectRelationshipGroup = useCallback(
+    (nodeIds: string[]) => {
+      setSelectedBlobs(prev => {
+        const next = { ...prev };
+        for (const id of nodeIds) {
+          if (id.startsWith('blob:')) next[id.slice(5)] = true;
+        }
+        return next;
+      });
+    },
+    [setSelectedBlobs]
+  );
 
   const pageKeys = useMemo(() => paginatedBlobs.map(b => b.sha256 || b.url), [paginatedBlobs]);
 
@@ -167,6 +182,20 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
         <Suspense fallback={<div className="rounded-md border p-6 text-sm text-muted-foreground">Loading documents...</div>}>
           <DocumentBlobList docs={docs} />
         </Suspense>
+      )}
+
+      {mode === 'relationships' && (
+        <RelationshipTree
+          graph={relationshipState.graph}
+          loading={relationshipState.loading}
+          relaysReady={relationshipState.relaysReady}
+          playlistFetches={relationshipState.playlistFetches}
+          distribution={distribution}
+          serverInfo={serverInfo}
+          selectedBlobs={selectedBlobs}
+          handleSelectBlob={handleSelectBlob}
+          onSelectGroup={handleSelectRelationshipGroup}
+        />
       )}
 
       {mode === 'list' && (

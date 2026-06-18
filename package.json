@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 200",
     "preview": "vite preview",
+    "test": "vitest run",
     "format": "prettier -w src/",
     "analyze": "vite-bundle-visualizer"
   },
@@ -61,6 +62,7 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/eslint-plugin-query": "^5.91.2",
     "@types/lodash": "^4.17.21",
@@ -79,7 +81,8 @@
     "tailwindcss": "^4.1.18",
     "typescript": "^6.0.3",
     "vite": "^8.0.14",
-    "vite-bundle-visualizer": "^1.2.1"
+    "vite-bundle-visualizer": "^1.2.1",
+    "vitest": "^4.1.9"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "4.54.0"
