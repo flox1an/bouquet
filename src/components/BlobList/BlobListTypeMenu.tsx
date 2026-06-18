@@ -1,9 +1,9 @@
-import { List, Image, Music, Film, FileText } from 'lucide-react';
+import { List, Image, Music, Film, FileText, GitBranch } from 'lucide-react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export type ListMode = 'gallery' | 'list' | 'audio' | 'video' | 'docs';
+export type ListMode = 'gallery' | 'list' | 'audio' | 'video' | 'docs' | 'relationships';
 
 type BlobListTypeMenuProps = {
   setMode: React.Dispatch<React.SetStateAction<ListMode>>;
@@ -38,6 +38,7 @@ const BlobListTypeMenu = ({ mode, setMode, hasImages, hasAudio, hasDocs, hasVide
     { id: 'audio' as ListMode, icon: Music, label: 'Music', enabled: hasAudio },
     { id: 'video' as ListMode, icon: Film, label: 'Video', enabled: hasVideo },
     { id: 'docs' as ListMode, icon: FileText, label: 'PDF documents', enabled: hasDocs },
+    { id: 'relationships' as ListMode, icon: GitBranch, label: 'Relationships', enabled: true },
   ];
 
   return (

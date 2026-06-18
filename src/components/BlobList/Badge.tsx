@@ -22,7 +22,7 @@ const Badge = ({ ev }: { ev: NostrEvent }) => {
       relays: [],
     } as EventPointer)
     return (
-      <a target="_blank" href={`https://filestr.vercel.app/e/${nevent}`}>
+      <a target="_blank" rel="noreferrer" href={`https://njump.me/${nevent}`}>
         <ShadcnBadge className="mr-2">filemeta</ShadcnBadge>
       </a>
     )
