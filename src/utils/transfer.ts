@@ -14,6 +14,8 @@ export interface TransferOptions {
   maxRetries?: number;
   allowMirror?: boolean;
   onMirrorUnsupported?: () => void;
+  /** Known sha256 of the source blob, used for the mirror auth `x` tag. */
+  sourceSha256?: string;
 }
 
 class SourceBlobNotFoundError extends Error {
@@ -90,6 +92,7 @@ export const transferBlob = async (
     maxRetries = 2,
     allowMirror = true,
     onMirrorUnsupported,
+    sourceSha256,
   } = options;
 
   console.log({ sourceUrl, targetServer });
@@ -129,7 +132,8 @@ export const transferBlob = async (
     if (targetServer.type == 'blossom' && allowMirror) {
       try {
         onPhaseChange?.('mirroring');
-        const mirrorFn = () => mirrordBlossomBlob(targetServer.url, sourceUrl, signEventTemplate, signal);
+        const mirrorFn = () =>
+          mirrordBlossomBlob(targetServer.url, sourceUrl, signEventTemplate, signal, sourceSha256);
         const blob = await withTimeout(
           retryWithBackoff(mirrorFn, maxRetries, signal),
           timeout,

@@ -185,9 +185,15 @@ export const mirrordBlossomBlob = async (
   targetServer: string,
   sourceUrl: string,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sha256?: string
 ) => {
-  const hash = extractHashFromUrl(sourceUrl);
+  // Prefer the caller-provided hash. Extracting it from the URL is unreliable
+  // for non-Blossom sources (e.g. NIP-96 CDN URLs like
+  // https://cdn.example/<pubkey>/<sha256>.png contain two 64-hex segments, and
+  // the regex would grab the pubkey). The server verifies the downloaded bytes
+  // against the auth event's `x` tag, so an incorrect hash yields a 403.
+  const hash = sha256 || extractHashFromUrl(sourceUrl);
   console.log({ sourceUrl, hash });
   if (!hash) throw 'The soureUrl does not contain a blossom hash.';
 
