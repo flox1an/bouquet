@@ -50,7 +50,20 @@ export async function fetchBlossomList(
       options.until = until;
     }
 
-    const blobs = await listBlobs(serverUrl, pubkey!, options);
+    let blobs: BlobDescriptor[];
+    try {
+      blobs = await listBlobs(serverUrl, pubkey!, options);
+    } catch (err) {
+      // The list endpoint is optional in Blossom (BUD-02). Some servers disable
+      // it (e.g. responding 404 with "List endpoint is disabled on this server")
+      // while still supporting upload/download/mirror. Treat that as "no listable
+      // blobs" instead of a connection error so the server stays usable.
+      if ((err as { status?: number })?.status === 404) {
+        hasMore = false;
+        break;
+      }
+      throw err;
+    }
 
     // Stop if we got no results
     if (blobs.length === 0) {
