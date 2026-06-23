@@ -157,13 +157,17 @@ export const Transfer = () => {
         }));
 
         await transferBlob(
-          `${serverInfo[sourceServer].url}/${b.sha256}`,
+          // Use the blob descriptor's real URL. Reconstructing it as
+          // `<server>/<sha256>` only works for Blossom servers; NIP-96 sources
+          // (where the file lives under a different host/path) would 404.
+          b.url || `${serverInfo[sourceServer].url}/${b.sha256}`,
           serverInfo[targetServer],
           signEventTemplate,
           {
             signal: controller.signal,
             timeout: 120000,
             maxRetries: 2,
+            sourceSha256: b.sha256,
             allowMirror: mirrorSupport[targetServer] !== false,
             onMirrorUnsupported: () => {
               setMirrorSupport(ms => ({ ...ms, [targetServer]: false }));
