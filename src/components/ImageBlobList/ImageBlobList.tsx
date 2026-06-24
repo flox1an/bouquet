@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { formatFileSize, formatDate } from '../../utils/utils';
+import { getProxyUrl } from '../../utils/imageProxy';
 import { Clipboard } from 'lucide-react';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { HandleSelectBlobType } from '../BlobList/useBlobSelection';
@@ -42,7 +43,7 @@ const ImageBlobList = ({ images, handleSelectBlob, selectedBlobs }: ImageBlobLis
               <div
                 className="bg-center bg-no-repeat bg-contain cursor-pointer inline-block w-[90vw] md:w-[200px] h-[200px]"
                 style={{
-                  backgroundImage: `url(https://images.slidestr.net/insecure/f:webp/rs:fill:300/plain/${blob.url})`,
+                  backgroundImage: `url(${getProxyUrl(blob.url, 300)})`,
                 }}
               ></div>
             </a>
