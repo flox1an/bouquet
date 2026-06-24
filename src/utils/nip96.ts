@@ -86,7 +86,20 @@ export async function fetchNip96List(
   onProgress?: (progressEvent: AxiosProgressEvent) => void
 ) {
   const count = 100; // Page size
-  const baseUrl = server.nip96?.api_url || server.url;
+  // The NIP-96 list endpoint lives at the server's api_url (e.g. cdn.nostrcheck.me),
+  // which is not necessarily the server.url the user added (e.g. nostrcheck.me).
+  // The api_url comes from /.well-known/nostr/nip96.json; if it hasn't been loaded
+  // into the server object yet (race with the config query), fetch it here so we
+  // never hit the wrong host — which returns the HTML homepage and 0 files.
+  let apiUrl = server.nip96?.api_url;
+  if (!apiUrl) {
+    try {
+      apiUrl = (await fetchNip96ServerConfig(server.url)).api_url;
+    } catch {
+      // fall back to server.url below
+    }
+  }
+  const baseUrl = apiUrl || server.url;
   let allFiles: Nip96BlobDescriptor[] = [];
   let page = 0;
   let hasMore = true;
