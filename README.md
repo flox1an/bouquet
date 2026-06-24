@@ -56,6 +56,30 @@ Preview production build locally:
 npm run preview
 ```
 
+## Configuration
+
+### Image proxy
+
+Thumbnails are generated through an image proxy. By default the public
+[slidestr](https://images.slidestr.net) proxy is used. To use your own proxy,
+set the `VITE_IMAGE_PROXY` environment variable (e.g. in a `.env` file) to a URL
+template:
+
+```bash
+# .env
+VITE_IMAGE_PROXY=https://my-proxy.example.com/insecure/f:webp/rs:fill:{size}/plain/{url}
+```
+
+Supported placeholders:
+
+- `{url}` raw source image URL
+- `{encodedUrl}` URL-encoded source image URL
+- `{size}` requested thumbnail size in pixels
+
+If neither `{url}` nor `{encodedUrl}` is present, the source URL is appended to
+the end of the template. Set `VITE_IMAGE_PROXY=` (empty) to load images directly
+without any proxy.
+
 ## Scripts
 
 - `npm run dev` start Vite dev server

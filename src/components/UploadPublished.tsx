@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { FileEventData } from './FileEventEditor/FileEventEditor';
 import type { NostrEvent } from 'nostr-tools';
 import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../utils/useFileMetaEvents';
+import { getProxyUrl } from '../utils/imageProxy';
 import { nip19 } from 'nostr-tools';
 import { Link } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -78,7 +79,7 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
           <img
             width={128}
             height={128}
-            src={`https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${data.thumbnail}`}
+            src={getProxyUrl(data.thumbnail, 600)}
             className="w-full"
           />
         </div>
