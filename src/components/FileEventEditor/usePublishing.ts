@@ -7,7 +7,7 @@ import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL 
 import { ReadonlyAccount } from 'applesauce-accounts/accounts';
 
 export const usePublishing = () => {
-  const { user } = useNostr();
+  const { user, publishSignedEvent } = useNostr();
 
   const signAndPublish = async (event: Omit<NostrEvent, 'id' | 'sig'>): Promise<NostrEvent> => {
     const activeAccount = accountManager.active;
@@ -16,9 +16,9 @@ export const usePublishing = () => {
     }
 
     const signedEvent = await activeAccount.signer.signEvent(event);
-    
-    // Note: Event publishing is commented out in the original code
-    // await relayPool.publish(DEFAULT_RELAYS, signedEvent);
+    if (!import.meta.env.VITE_DISABLE_EVENT_PUBLISH) {
+      await publishSignedEvent(signedEvent);
+    }
     return signedEvent;
   };
 

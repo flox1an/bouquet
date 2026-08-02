@@ -65,6 +65,12 @@ npm run preview
 - `npm run format` run Prettier on `src/`
 - `npm run analyze` inspect bundle composition
 
+## Environment Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `VITE_DISABLE_EVENT_PUBLISH` | unset | Set to `1` to skip broadcasting file/audio/video Nostr events (kind 1063/31137/34235/34236) to relays. Events are still signed; useful for local testing without polluting your feed. |
+
 ## Release Notes
 
 - `nsite-cli` was removed from dependencies and scripts.
