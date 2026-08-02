@@ -10,7 +10,6 @@ import { filter, mergeMap, race, throwError, timer } from 'rxjs';
 
 // Default relays
 export const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
   'wss://relay.nostr.band',
   'wss://relay.snort.social',
   'wss://nos.lol',
