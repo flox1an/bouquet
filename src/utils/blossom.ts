@@ -54,7 +54,6 @@ export async function fetchBlossomList(
 
     // Stop if we got no results
     if (blobs.length === 0) {
-      hasMore = false;
       break;
     }
 
@@ -63,7 +62,6 @@ export async function fetchBlossomList(
 
     // Stop if all blobs in this batch were duplicates
     if (newBlobs.length === 0) {
-      hasMore = false;
       break;
     }
 
@@ -74,7 +72,6 @@ export async function fetchBlossomList(
     // If this batch is smaller than the previous one, we're likely at the end
     // Also stop if we got very few results (likely the last page)
     if (newBlobs.length < 10 || (previousBatchSize > 0 && newBlobs.length < previousBatchSize * 0.5)) {
-      hasMore = false;
       break;
     }
 

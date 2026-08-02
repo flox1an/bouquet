@@ -103,7 +103,6 @@ export async function fetchNip96List(
     const list = response.data as Nip96ListResponse;
     
     if (list.files.length === 0) {
-      hasMore = false;
       break;
     }
     

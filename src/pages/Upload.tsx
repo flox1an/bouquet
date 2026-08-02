@@ -333,14 +333,11 @@ function Upload() {
     const servers = fileEventData.url.map(u => extractDomain(u));
 
     // upload selected thumbnail to the same blossom servers as the video
-    let uploadedThumbnails: BlobDescriptor[] = [];
     if (fileEventData.selectedThumbnail) {
-      uploadedThumbnails = (
+      const uploadedThumbnails = (
         await Promise.all(
           servers.map(s => {
             if (s && fileEventData.selectedThumbnail) {
-              console.log(s);
-              console.log(serverInfo);
               return transferBlob(fileEventData.selectedThumbnail, serverInfo[s], signEventTemplate);
             }
           })

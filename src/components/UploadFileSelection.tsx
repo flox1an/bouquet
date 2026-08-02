@@ -109,7 +109,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
     }
   };
 
-  const sizeOfFilesToUpload = useMemo(() => files.reduce((acc, file) => (acc += file.size), 0), [files]);
+  const sizeOfFilesToUpload = useMemo(() => files.reduce((acc, file) => acc + file.size, 0), [files]);
   const imagesAreUploaded = useMemo(() => files.some(file => file.type.startsWith('image/')), [files]);
   const serversEnabledCount = useMemo(() => Object.values(transfers).filter(t => t.enabled).length, [transfers]);
 
