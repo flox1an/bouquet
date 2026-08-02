@@ -14,6 +14,7 @@ export interface TransferOptions {
   maxRetries?: number;
   allowMirror?: boolean;
   onMirrorUnsupported?: () => void;
+  onCompleted?: (blob: BlobDescriptor, method: 'mirror' | 'upload') => void | Promise<void>;
 }
 
 class SourceBlobNotFoundError extends Error {
@@ -90,6 +91,7 @@ export const transferBlob = async (
     maxRetries = 2,
     allowMirror = true,
     onMirrorUnsupported,
+    onCompleted,
   } = options;
 
   
@@ -124,6 +126,7 @@ export const transferBlob = async (
       signal
     );
     onPhaseChange?.('completed');
+    await onCompleted?.(result, 'upload');
     return result;
   } else {
     if (targetServer.type == 'blossom' && allowMirror) {
@@ -141,6 +144,7 @@ export const transferBlob = async (
           lengthComputable: true,
         });
         onPhaseChange?.('completed');
+        await onCompleted?.(blob, 'mirror');
         return blob;
       } catch (e: any) {
         if (signal?.aborted || e.message?.includes('cancelled')) {
@@ -177,6 +181,7 @@ export const transferBlob = async (
       signal
     );
     onPhaseChange?.('completed');
+    await onCompleted?.(uploadResult, 'upload');
     return uploadResult;
   }
 };

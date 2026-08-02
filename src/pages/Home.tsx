@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { createDeleteAuth } from 'blossom-client-sdk/auth';
@@ -14,15 +14,24 @@ import { Button } from '@/components/ui/button';
 import { RefreshCw, Settings, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import { getCatalog } from '../catalog/catalog';
+import { syncAuthoredEventsFromRelays } from '../catalog/catalogNostr';
+import { useCatalogStatus } from '../catalog/useCatalogStatus';
 
 function Home() {
   const [selectedServer, setSelectedServer] = useState<string | undefined>();
   const [isServerListDialogOpen, setIsDialogOpen] = useState(false);
   const { serverInfo, distribution } = useServerInfo();
   const { storeUserServers } = useUserServers();
-  const { signEventTemplate } = useNostr();
+  const { user, signEventTemplate, relaysReady } = useNostr();
+  const catalogStatus = useCatalogStatus(user?.pubkey);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!user?.pubkey || !relaysReady) return;
+    void syncAuthoredEventsFromRelays(getCatalog(), user.pubkey, user.relayUrls).catch(() => undefined);
+  }, [relaysReady, user?.pubkey, user?.relayUrls]);
 
   const deleteBlob = useMutation({
     mutationFn: async ({ server, hash }: { server: Server; hash: string }) => {
@@ -124,6 +133,13 @@ function Home() {
           </Button>
         </div>
       </div>
+
+      {catalogStatus && (
+        <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+          Catalog: {catalogStatus.knownHashes.toLocaleString()} known hashes;{' '}
+          {catalogStatus.serverLists.filter(list => list.state === 'complete').length} of {catalogStatus.serverLists.length} server lists complete.
+        </div>
+      )}
 
       <ServerListPopup
         isOpen={isServerListDialogOpen}

@@ -27,10 +27,11 @@ import UploadPublished from '../components/UploadPublished';
 import { Info } from 'lucide-react';
 import UploadOnboarding from '../components/UploadOboarding';
 import { toast } from '@/hooks/use-toast';
+import { getCatalog } from '../catalog/catalog';
 
 function Upload() {
   const { servers, serversLoading } = useUserServers();
-  const { signEventTemplate } = useNostr();
+  const { user, signEventTemplate } = useNostr();
   const { serverInfo } = useServerInfo();
   const queryClient = useQueryClient();
   const location = useLocation();
@@ -202,6 +203,9 @@ function Upload() {
             size: newBlob.size || fileDimensions[file.name].size, // fallback for nip96 servers that don't return size
             m: newBlob.type,
           };
+          if (user?.pubkey) {
+            void getCatalog().ingestUpload(user.pubkey, { url: server.url, type: server.type }, newBlob).catch(() => undefined);
+          }
         } catch (e) {
           const axiosError = e as AxiosError;
           console.error(e);
@@ -302,7 +306,14 @@ function Upload() {
         await Promise.all(
           servers.map(s => {
             if (s && fileEventData.selectedThumbnail) {
-              return transferBlob(fileEventData.selectedThumbnail, serverInfo[s], signEventTemplate);
+              return transferBlob(fileEventData.selectedThumbnail, serverInfo[s], signEventTemplate, {
+                onCompleted: (blob, method) => {
+                  if (!user?.pubkey) return;
+                  return getCatalog()
+                    .ingestUpload(user.pubkey, { url: serverInfo[s].url, type: serverInfo[s].type }, blob, method === 'mirror')
+                    .catch(() => undefined);
+                },
+              });
             }
           })
         )

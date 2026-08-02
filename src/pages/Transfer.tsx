@@ -23,6 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { getCatalog } from '../catalog/catalog';
 
 type TransferError = {
   name?: string;
@@ -91,7 +92,7 @@ export const Transfer = () => {
   const navigate = useNavigate();
   const { serverInfo } = useServerInfo();
   const [transferTarget, setTransferTarget] = useState<string | undefined>();
-  const { signEventTemplate } = useNostr();
+  const { user, signEventTemplate } = useNostr();
   const queryClient = useQueryClient();
   const [started, setStarted] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
@@ -187,6 +188,12 @@ export const Transfer = () => {
                   rate: progressEvent.rate || 0,
                 },
               }));
+            },
+            onCompleted: (blob, method) => {
+              if (!user?.pubkey) return;
+              return getCatalog()
+                .ingestUpload(user.pubkey, { url: serverInfo[targetServer].url, type: serverInfo[targetServer].type }, blob, method === 'mirror')
+                .catch(() => undefined);
             },
           }
         );

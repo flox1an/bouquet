@@ -28,10 +28,18 @@ export function extractHashFromUrl(url: string) {
   }
 }
 
+export type BlossomListProgress = {
+  blobs: BlobDescriptor[];
+  cursor?: string;
+  state: 'pending' | 'complete' | 'failed';
+  error?: string;
+};
+
 export async function fetchBlossomList(
   serverUrl: string,
   pubkey: string,
-  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
+  signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
+  onProgress?: (progress: BlossomListProgress) => Promise<void> | void
 ): Promise<BlobDescriptor[]> {
   const listAuthEvent = await createListAuth(signEventTemplate);
 
@@ -44,50 +52,60 @@ export async function fetchBlossomList(
   const seenHashes = new Set<string>();
   let previousBatchSize = 0;
 
-  while (hasMore) {
-    const options: any = { auth: listAuthEvent };
-    if (until !== undefined) {
-      options.until = until;
+  try {
+    while (hasMore) {
+      const options = until === undefined ? { auth: listAuthEvent } : { auth: listAuthEvent, until };
+
+      const blobs = await listBlobs(serverUrl, pubkey!, options);
+
+      // Stop if we got no results
+      if (blobs.length === 0) {
+        break;
+      }
+
+      // Filter out any duplicates (shouldn't happen but be safe)
+      const newBlobs = blobs.filter(b => !seenHashes.has(b.sha256));
+
+      // Stop if all blobs in this batch were duplicates
+      if (newBlobs.length === 0) {
+        break;
+      }
+
+      // Add new blobs to our collection
+      newBlobs.forEach(b => seenHashes.add(b.sha256));
+      allBlobs = [...allBlobs, ...newBlobs];
+
+      // If this batch is smaller than the previous one, we're likely at the end
+      // Also stop if we got very few results (likely the last page)
+      if (newBlobs.length < 10 || (previousBatchSize > 0 && newBlobs.length < previousBatchSize * 0.5)) {
+        break;
+      }
+
+      previousBatchSize = newBlobs.length;
+
+      // Find the oldest blob in this batch to use as 'until' for next page
+      const oldestUpload = Math.min(...newBlobs.map(b => b.uploaded || 0));
+
+      // Stop if we got invalid timestamps
+      if (oldestUpload === 0 || (until !== undefined && oldestUpload >= until)) {
+        hasMore = false;
+      } else {
+        // Set 'until' to just before the oldest timestamp to get the next page
+        until = oldestUpload;
+        await onProgress?.({ blobs: allBlobs, cursor: String(until), state: 'pending' });
+      }
     }
-
-    const blobs = await listBlobs(serverUrl, pubkey!, options);
-
-    // Stop if we got no results
-    if (blobs.length === 0) {
-      break;
-    }
-
-    // Filter out any duplicates (shouldn't happen but be safe)
-    const newBlobs = blobs.filter(b => !seenHashes.has(b.sha256));
-
-    // Stop if all blobs in this batch were duplicates
-    if (newBlobs.length === 0) {
-      break;
-    }
-
-    // Add new blobs to our collection
-    newBlobs.forEach(b => seenHashes.add(b.sha256));
-    allBlobs = [...allBlobs, ...newBlobs];
-
-    // If this batch is smaller than the previous one, we're likely at the end
-    // Also stop if we got very few results (likely the last page)
-    if (newBlobs.length < 10 || (previousBatchSize > 0 && newBlobs.length < previousBatchSize * 0.5)) {
-      break;
-    }
-
-    previousBatchSize = newBlobs.length;
-
-    // Find the oldest blob in this batch to use as 'until' for next page
-    const oldestUpload = Math.min(...newBlobs.map(b => b.uploaded || 0));
-
-    // Stop if we got invalid timestamps
-    if (oldestUpload === 0 || (until !== undefined && oldestUpload >= until)) {
-      hasMore = false;
-    } else {
-      // Set 'until' to just before the oldest timestamp to get the next page
-      until = oldestUpload;
-    }
+  } catch (error) {
+    await onProgress?.({
+      blobs: allBlobs,
+      cursor: until === undefined ? undefined : String(until),
+      state: 'failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
+
+  await onProgress?.({ blobs: allBlobs, state: 'complete' });
 
   // fallback to deprecated created attibute for servers that are not using 'uploaded' yet
   return allBlobs.map(b => ({ ...b, uploaded: b.uploaded || dayjs().unix() }));

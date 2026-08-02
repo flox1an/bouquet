@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { useNostr } from '../utils/nostr';
@@ -6,6 +6,7 @@ import { nip19 } from 'nostr-tools';
 import { Server, useUserServers } from './useUserServers';
 import { fetchBlossomList } from './blossom';
 import { fetchNip96List } from './nip96';
+import { getCatalog } from '../catalog/catalog';
 
 export interface ServerInfo extends Server {
   virtual: boolean;
@@ -56,7 +57,15 @@ export const useServerInfo = () => {
           return []; // nostr.build does not support list atm
         }
         if (server.type === 'blossom') {
-          return fetchBlossomList(server.url, pubkey!, signEventTemplate);
+          return fetchBlossomList(server.url, pubkey!, signEventTemplate, progress =>
+            getCatalog().ingestServerList(pubkey!, {
+              server: { url: server.url, type: server.type },
+              blobs: progress.blobs,
+              cursor: progress.cursor,
+              state: progress.state,
+              error: progress.error,
+            })
+          );
         } else if (server.type === 'nip96') {
           return fetchNip96List(server, signEventTemplate);
         }
@@ -68,6 +77,44 @@ export const useServerInfo = () => {
       refetchOnWindowFocus: false,
     })),
   });
+
+  const catalogSyncKey = useMemo(
+    () =>
+      JSON.stringify({
+        pubkey,
+        lists: servers.map((server, index) => ({
+          server,
+          error: blobs[index].error instanceof Error ? blobs[index].error.message : undefined,
+          isError: blobs[index].isError,
+          blobs: blobs[index].data?.map(blob => [blob.sha256, blob.size, blob.type]),
+        })),
+      }),
+    [blobs, pubkey, servers]
+  );
+  const ingestedCatalogSyncKey = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!pubkey || ingestedCatalogSyncKey.current === catalogSyncKey) return;
+    ingestedCatalogSyncKey.current = catalogSyncKey;
+    void Promise.all(
+      servers.map((server, index) => {
+        const result = blobs[index];
+        const state = server.name === 'nostr.build'
+          ? 'unsupported'
+          : result.isError
+            ? 'failed'
+            : result.data
+              ? 'complete'
+              : 'pending';
+        return getCatalog().ingestServerList(pubkey, {
+          server: { url: server.url, type: server.type },
+          blobs: result.data,
+          state,
+          error: result.error instanceof Error ? result.error.message : undefined,
+        });
+      })
+    );
+  }, [blobs, catalogSyncKey, pubkey, servers]);
 
   const setMirrorSupported = (serverName: string, supported: boolean) => {
     setFeatures(f => ({ ...f, [serverName]: { ...f[serverName], mirror: supported } }));
