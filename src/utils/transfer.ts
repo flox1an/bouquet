@@ -92,7 +92,7 @@ export const transferBlob = async (
     onMirrorUnsupported,
   } = options;
 
-  console.log({ sourceUrl, targetServer });
+  
 
   if (signal?.aborted) {
     throw new Error('Transfer cancelled');
@@ -151,7 +151,7 @@ export const transferBlob = async (
         if (status === 400 || status === 404 || status === 405 || status === 501) {
           onMirrorUnsupported?.();
         }
-        console.log('Mirror failed. Using download + upload instead.', e.message);
+        
       }
     }
 

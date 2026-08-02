@@ -89,12 +89,12 @@ const FileEventEditor = ({
         fileEventData.publishedThumbnail
       )
     ) {
-      console.log('getting id3 cover image', fileEventData.x, fileEventData.url[0], fileEventData.originalFile);
+      
       fetchId3Tag(fileEventData.x, fileEventData.url[0], fileEventData.originalFile).then(res => {
         if (!res) return;
 
         const { id3 } = res;
-        console.log(res.coverFull);
+        
         setFileEventData({
           ...fileEventData,
           artist: id3.artist,

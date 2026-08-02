@@ -185,7 +185,7 @@ export const mirrordBlossomBlob = async (
   signal?: AbortSignal
 ) => {
   const hash = extractHashFromUrl(sourceUrl);
-  console.log({ sourceUrl, hash });
+  
   if (!hash) throw 'The soureUrl does not contain a blossom hash.';
 
   const mirrorAuth = await createMirrorAuth(signEventTemplate, hash);

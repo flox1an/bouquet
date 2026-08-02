@@ -16,7 +16,7 @@ export const usePublishing = () => {
     }
 
     const signedEvent = await activeAccount.signer.signEvent(event);
-    console.log(signedEvent);
+    
     // Note: Event publishing is commented out in the original code
     // await relayPool.publish(DEFAULT_RELAYS, signedEvent);
     return signedEvent;

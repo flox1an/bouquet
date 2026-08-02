@@ -70,7 +70,7 @@ const getEventDataByKind = (event: NostrEvent): EventVisModel | undefined => {
 
 const FileEvent = ({ event }: { event: NostrEvent }) => {
   const data = useMemo(() => getEventDataByKind(event), [event]);
-  console.log(data);
+  
   return (
     data && (
       <div className="flex flex-row gap-4 items-center">

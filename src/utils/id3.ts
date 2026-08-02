@@ -184,10 +184,10 @@ export const fetchId3Tag = async (
       }
     }
 
-    console.log(blobHash, blobUrl, tagResult);
+    
 
     await saveID3TagToDB(db, blobHash, tagResult);
     return { id3: tagResult, coverFull: imageBlobUrl };
   }
-  console.log('No ID3 tag found for ' + blobHash);
+  
 };

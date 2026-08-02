@@ -185,7 +185,7 @@ export async function uploadNip96File(
   }
 
   const result = response.data as Nip96UploadResult;
-  console.log(result);
+  
 
   const x = getValueByTag(result.nip94_event?.tags, 'x') || getValueByTag(result.nip94_event?.tags, 'ox');
 

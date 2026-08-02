@@ -56,7 +56,7 @@ export const useUserServers = (): {
     };
 
     const signedBlossom = await activeAccount.signer.signEvent(blossomEvent);
-    console.log(signedBlossom);
+    
     const relays = mergeRelays(user?.relayUrls);
     await relayPool.publish(relays, signedBlossom);
 
@@ -71,7 +71,7 @@ export const useUserServers = (): {
     };
 
     const signedNip96 = await activeAccount.signer.signEvent(nip96Event);
-    console.log(signedNip96);
+    
     await relayPool.publish(relays, signedNip96);
   };
 

@@ -110,10 +110,10 @@ function UserRelayLoader({
       hasLoadedRef.current = true;
 
       if (relayUrls.length > 0) {
-        console.log('📡 Loaded user relays from NIP-65:', relayUrls);
+        
         onRelaysLoaded(relayUrls);
       } else {
-        console.log('📡 No relays found in 10002 event, using defaults');
+        
         onRelaysReady();
       }
     }
@@ -125,7 +125,7 @@ function UserRelayLoader({
 
     const timeout = setTimeout(() => {
       if (!relayListEvent.isSuccess && !hasLoadedRef.current) {
-        console.log('📡 10002 event timeout - proceeding with default relays');
+        
         hasLoadedRef.current = true;
         onRelaysReady();
       }
@@ -170,7 +170,7 @@ export const NostrProvider = ({ children }: { children: React.ReactElement }) =>
   );
 
   const handleRelaysLoaded = useCallback((relays: string[]) => {
-    console.log('📡 User relays loaded from NIP-65:', relays);
+    
     setUser(prev => {
       if (!prev) return prev;
       // Only update if relays have actually changed

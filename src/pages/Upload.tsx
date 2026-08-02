@@ -170,13 +170,13 @@ function Upload() {
           // Check if blob already exists on Blossom servers
           if (server.type == 'blossom') {
             const fileHash = await calculateFileHash(file);
-            console.log(`Calculated hash for ${file.name}: ${fileHash}`);
+            
 
             // Check if blob exists using HEAD request
             const existingBlob = await checkBlobExists(serverUrl, fileHash);
 
             if (existingBlob) {
-              console.log(`Blob already exists on ${server.name}, skipping upload`);
+              
               newBlob = existingBlob;
               // Mark as transferred immediately since we're skipping upload
               serverTransferred += file.size;
@@ -186,9 +186,7 @@ function Upload() {
               }));
             } else {
               // Blob doesn't exist, proceed with upload
-              const authStartTime = Date.now();
               const uploadAuth = await createUploadAuth(signEventTemplate, file);
-              console.log(`Created auth event in ${Date.now() - authStartTime} ms`, uploadAuth);
 
               const progressHandler = (progressEvent: AxiosProgressEvent) => {
                 setTransfers(ut => ({
@@ -202,7 +200,6 @@ function Upload() {
               };
 
               newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressHandler);
-              console.log('newBlob', newBlob);
               serverTransferred += file.size;
               setTransfers(ut => ({
                 ...ut,
@@ -366,7 +363,7 @@ function Upload() {
             );
           } else {
             // self hosting failed
-            console.log('self hosting failed');
+            
             const publishedEvent = await publishFileEvent(fe);
             setFileEventsToPublish(prev =>
               prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
@@ -374,7 +371,7 @@ function Upload() {
           }
         } else {
           // data thumbnail already defined
-          console.log('data thumbnail already defined');
+          
           const publishedEvent = await publishFileEvent(fe);
           setFileEventsToPublish(prev =>
             prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
@@ -396,7 +393,7 @@ function Upload() {
             );
           } else {
             // self hosting failed
-            console.log('self hosting failed');
+            
             const publishedEvent = await publishAudioEvent(fe);
             setFileEventsToPublish(prev =>
               prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
@@ -404,7 +401,7 @@ function Upload() {
           }
         } else {
           // data thumbnail already defined
-          console.log('data thumbnail already defined');
+          
           const publishedEvent = await publishAudioEvent(fe);
           setFileEventsToPublish(prev =>
             prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
@@ -433,7 +430,7 @@ function Upload() {
             );
           } else {
             // self hosting failed
-            console.log('self hosting failed');
+            
             const publishedEvent = await publishVideoEvent(fe);
             setFileEventsToPublish(prev =>
               prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
@@ -441,7 +438,7 @@ function Upload() {
           }
         } else {
           // data thumbnail already defined
-          console.log('data thumbnail already defined');
+          
           const publishedEvent = await publishVideoEvent(fe);
           setFileEventsToPublish(prev =>
             prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))

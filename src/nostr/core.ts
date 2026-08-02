@@ -40,7 +40,7 @@ export function mergeRelays(userRelays: string[] = []): string[] {
   }
 
   const merged = Array.from(relaySet);
-  console.log('🔗 Merged relays:', { userRelays, defaultRelays: DEFAULT_RELAYS, merged });
+  
   return merged;
 }
 
@@ -106,5 +106,5 @@ export function connectToRelays(relays: string[] = DEFAULT_RELAYS) {
   for (const url of relays) {
     relayPool.relay(url);
   }
-  console.log('Connecting to relays:', relays);
+  
 }

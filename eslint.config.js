@@ -29,6 +29,7 @@ export default [
       ...js.configs.recommended.rules,
       ...tseslint.configs.recommended.rules,
       'no-undef': 'off',
+      'no-extra-semi': 'error',
       'no-empty': 'warn',
       'no-redeclare': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
