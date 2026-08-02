@@ -11,27 +11,6 @@ import Upload from './pages/Upload.tsx';
 import Check from './pages/Check.tsx';
 import { GlobalProvider } from './GlobalState.tsx';
 
-/**
- * Creates an Indexed DB persister
- * @see https://react-query.tanstack.com/plugins/persistQueryClient#building-a-persistor
- * @see https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API
- */
-/*
-export function createIDBPersister(idbValidKey: IDBValidKey = 'reactQuery') {
-  return {
-    persistClient: async (client: PersistedClient) => {
-      set(idbValidKey, client);
-    },
-    restoreClient: async () => {
-      return await get<PersistedClient>(idbValidKey);
-    },
-    removeClient: async () => {
-      await del(idbValidKey);
-    },
-  } as Persister;
-}
-*/
-
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route element={<Layout />}>
@@ -44,8 +23,6 @@ const router = createBrowserRouter(
     </Route>
   )
 );
-
-// nst persister = createIDBPersister();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,19 +40,6 @@ const ReactQueryDevtools = import.meta.env.DEV
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {/* 
-    <PersistQueryClientProvider
-      persistOptions={{
-        persister,
-        dehydrateOptions: {
-          shouldDehydrateQuery: () => true, //query.state.status === 'success',
-        },
-        hydrateOptions: {
-          shouldhHhydrateQuery: () => true,
-        },
-      }}
-      client={queryClient}
-    >*/}
     <QueryClientProvider client={queryClient}>
       <NostrProvider>
         <GlobalProvider>
