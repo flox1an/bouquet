@@ -7,6 +7,8 @@ import { Server, useUserServers } from './useUserServers';
 import { fetchBlossomList } from './blossom';
 import { fetchNip96List } from './nip96';
 import { getCatalog } from '../catalog/catalog';
+import { fetchHlsPlaylist } from '../catalog/enrichmentFetch';
+import { isPlaylistCandidate } from './blobRelationshipGraph';
 
 export interface ServerInfo extends Server {
   virtual: boolean;
@@ -113,6 +115,18 @@ export const useServerInfo = () => {
           error: result.error instanceof Error ? result.error.message : undefined,
         });
       })
+    );
+  }, [blobs, catalogSyncKey, pubkey, servers]);
+
+  useEffect(() => {
+    if (!pubkey) return;
+    const playlistRoots = servers.flatMap((server, index) =>
+      (blobs[index].data ?? [])
+        .filter(isPlaylistCandidate)
+        .map(blob => ({ blob, server }))
+    );
+    void Promise.all(
+      playlistRoots.map(({ blob }) => getCatalog().enrichHls(pubkey, blob.sha256, fetchHlsPlaylist).catch(() => undefined))
     );
   }, [blobs, catalogSyncKey, pubkey, servers]);
 

@@ -81,4 +81,56 @@ describe('user blob catalog', () => {
     expect(status.knownHashes).toBe(2);
     expect(status.relaySyncs).toEqual([expect.objectContaining({ state: 'complete', received: 501 })]);
   });
+
+  it('limits reverse lookup expansion to media companions with a persisted root evidence chain', async () => {
+    const store = new MemoryCatalogStore();
+    const catalog = new Catalog(store);
+    await catalog.ingestServerList(pubkey, { server: { url: 'https://seed.example', type: 'blossom' }, blobs: [blob(hashA)], state: 'complete' });
+    let requests = 0;
+    await catalog.syncReverseLookups(pubkey, 'wss://relay.example', async hashes => {
+      requests += 1;
+      expect(hashes).toEqual([hashA]);
+      return [event('reverse-event', 100, [['x', hashA], ['thumb', `https://media.example/${hashB}`], ['url', `https://media.example/${hashC}`]])];
+    });
+    await catalog.syncReverseLookups(pubkey, 'wss://relay.example', async hashes => {
+      requests += 1;
+      expect(hashes).toEqual([hashB]);
+      return [];
+    });
+
+    const status = await catalog.getCatalogStatus(pubkey);
+    expect(requests).toBe(2);
+    expect(status.knownHashes).toBe(2);
+    expect(status.derivedSeeds).toBe(1);
+  });
+
+  it('persists bounded HLS descendants and prefix metadata facts', async () => {
+    const store = new MemoryCatalogStore();
+    const catalog = new Catalog(store);
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://cdn.example', type: 'blossom' },
+      blobs: [{ ...blob(hashA), url: 'https://cdn.example/master.m3u8', type: 'application/vnd.apple.mpegurl' }],
+      state: 'complete',
+    });
+    await catalog.enrichHls(pubkey, hashA, async url => {
+      if (url.endsWith('master.m3u8')) return '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nvariant.m3u8';
+      return `#EXTM3U\n#EXTINF:4,\nhttps://cdn.example/${hashB}.ts`;
+    });
+    const png = new Uint8Array(24);
+    png.set([0x89, 0x50, 0x4e, 0x47], 0);
+    new DataView(png.buffer).setUint32(16, 640);
+    await catalog.ingestId3(hashC, { title: 'Track', artist: 'Artist' });
+    new DataView(png.buffer).setUint32(20, 480);
+    await catalog.enrichBlobPrefix(hashC, `https://cdn.example/${hashC}.png`, async () => ({ bytes: png.buffer, size: 24, truncated: false }));
+
+    const relationships = await store.getAll<{ type: string }>('blob_relationship');
+    const facts = await store.getAll<{ field: string; value: number | string }>('metadata_fact');
+    expect(relationships).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'playlist' }), expect.objectContaining({ type: 'segment' })]));
+    expect(facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'width', value: 640 }),
+      expect.objectContaining({ field: 'height', value: 480 }),
+      expect.objectContaining({ field: 'title', value: 'Track' }),
+    ]));
+    expect((await catalog.getCatalogStatus(pubkey)).knownHashes).toBe(2);
+  });
 });

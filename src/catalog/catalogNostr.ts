@@ -17,3 +17,16 @@ export async function syncAuthoredEventsFromRelays(catalog: Catalog, pubkey: str
     }
   }
 }
+
+export async function syncReverseLookupsFromRelays(catalog: Catalog, pubkey: string, relayUrls: string[]) {
+  for (const relayUrl of mergeRelays(relayUrls)) {
+    try {
+      await catalog.syncReverseLookups(pubkey, relayUrl, async hashes => {
+        const filter: Filter = { '#x': hashes, kinds: [...CATALOG_EVENT_KINDS], limit: 500 };
+        return firstValueFrom(relayPool.request([relayUrl], [filter]).pipe(toArray()));
+      });
+    } catch {
+      // The catalog records the per-relay error and continues with the remaining relays.
+    }
+  }
+}

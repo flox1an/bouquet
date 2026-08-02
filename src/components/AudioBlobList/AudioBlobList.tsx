@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Pagination, usePagination } from '@/components/ui/pagination';
 import { Button } from '@/components/ui/button';
 
+import { getCatalog } from '../../catalog/catalog';
 type AudioBlobListProps = {
   audioFiles: BlobDescriptor[];
   handleSelectBlob: HandleSelectBlobType;
@@ -49,6 +50,7 @@ const AudioBlobList = ({ audioFiles, handleSelectBlob, selectedBlobs }: AudioBlo
         } catch {
           // ignore
         }
+        if (id3Tag) void getCatalog().ingestId3(af.sha256, id3Tag.id3);
         return { ...af, id3: id3Tag?.id3 } as AudioBlob;
       },
       staleTime: 1000 * 60 * 5,

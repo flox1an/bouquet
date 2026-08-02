@@ -15,7 +15,7 @@ import { RefreshCw, Settings, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { getCatalog } from '../catalog/catalog';
-import { syncAuthoredEventsFromRelays } from '../catalog/catalogNostr';
+import { syncAuthoredEventsFromRelays, syncReverseLookupsFromRelays } from '../catalog/catalogNostr';
 import { useCatalogStatus } from '../catalog/useCatalogStatus';
 
 function Home() {
@@ -30,8 +30,13 @@ function Home() {
 
   useEffect(() => {
     if (!user?.pubkey || !relaysReady) return;
-    void syncAuthoredEventsFromRelays(getCatalog(), user.pubkey, user.relayUrls).catch(() => undefined);
+    void syncAuthoredEventsFromRelays(getCatalog(), user.pubkey, user.relayUrls);
   }, [relaysReady, user?.pubkey, user?.relayUrls]);
+
+  useEffect(() => {
+    if (!user?.pubkey || !relaysReady || catalogStatus === undefined) return;
+    void syncReverseLookupsFromRelays(getCatalog(), user.pubkey, user.relayUrls);
+  }, [catalogStatus, relaysReady, user?.pubkey, user?.relayUrls]);
 
   const deleteBlob = useMutation({
     mutationFn: async ({ server, hash }: { server: Server; hash: string }) => {
