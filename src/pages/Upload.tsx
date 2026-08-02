@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BlobDescriptor, SignedEvent } from 'blossom-client-sdk';
-import { createUploadAuth, encodeAuthorizationHeader } from 'blossom-client-sdk/auth';
+import { BlobDescriptor } from 'blossom-client-sdk';
+import { createUploadAuth } from 'blossom-client-sdk/auth';
 import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
 import { useQueryClient } from '@tanstack/react-query';
 import { removeExifData } from '../utils/exif';
-import axios, { AxiosError, AxiosProgressEvent } from 'axios';
+import type { AxiosError, AxiosProgressEvent } from 'axios';
 import FileEventEditor, { FileEventData } from '../components/FileEventEditor/FileEventEditor';
 import pLimit from 'p-limit';
 import { Server, useUserServers } from '../utils/useUserServers';
@@ -17,6 +17,7 @@ import { uploadNip96File } from '../utils/nip96';
 import { extractDomain } from '../utils/utils';
 import { transferBlob } from '../utils/transfer';
 import { calculateFileHash, checkBlobExists } from '../utils/blossom';
+import { formatUploadError, uploadBlob } from '../utils/upload';
 import { usePublishing } from '../components/FileEventEditor/usePublishing';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { NostrEvent } from 'nostr-tools';
@@ -47,19 +48,6 @@ function Upload() {
 
   // Get pre-selected server from navigation state
   const preSelectedServer = (location.state as { preSelectedServer?: Server })?.preSelectedServer;
-
-  const formatUploadError = (error: AxiosError): string => {
-    const status = error.response?.status;
-    const response = error.response?.data as { message?: string } | undefined;
-    const responseMessage = response?.message;
-
-    if (status === 403) return `Forbidden (403)${responseMessage ? `: ${responseMessage}` : ''}`;
-    if (status === 401) return `Unauthorized (401)${responseMessage ? `: ${responseMessage}` : ''}`;
-    if (status === 404) return `Not found (404)${responseMessage ? `: ${responseMessage}` : ''}`;
-    if (status && status >= 500) return `Server error (${status})${responseMessage ? `: ${responseMessage}` : ''}`;
-
-    return responseMessage ? `${error.message}: ${responseMessage}` : error.message;
-  };
 
   async function getListOfFilesToUpload() {
     const filesToUpload: File[] = [];
@@ -123,27 +111,6 @@ function Upload() {
       fileDimensions[file.name] = data;
     }
     return fileDimensions;
-  }
-
-  async function uploadBlob(
-    server: string,
-    file: File,
-    auth?: SignedEvent,
-    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void,
-    signal?: AbortSignal
-  ) {
-    const headers = {
-      Accept: 'application/json',
-      'Content-Type': file.type,
-    };
-
-    const res = await axios.put<BlobDescriptor>(`${server}/upload`, file, {
-      headers: auth ? { ...headers, authorization: encodeAuthorizationHeader(auth) } : headers,
-      onUploadProgress,
-      signal,
-    });
-
-    return res.data;
   }
 
   const upload = async () => {
@@ -345,106 +312,34 @@ function Upload() {
     }
   };
 
+  const publishOne = async (
+    fe: FileEventData,
+    publishFn: (data: FileEventData) => Promise<NostrEvent>,
+    persistThumbnailToState: boolean
+  ) => {
+    let dataToPublish: FileEventData = fe;
+    let statePatch: Partial<FileEventData> = {};
+
+    if (!fe.publishedThumbnail) {
+      const selfHosted = await publishSelectedThumbnailToAllOwnServers(fe);
+      if (selfHosted) {
+        const patch = { publishedThumbnail: selfHosted.url, thumbnails: [selfHosted.url] };
+        dataToPublish = { ...fe, ...patch };
+        if (persistThumbnailToState) statePatch = patch;
+      }
+    }
+
+    const publishedEvent = await publishFn(dataToPublish);
+    setFileEventsToPublish(prev =>
+      prev.map(f => (f.x === fe.x ? { ...f, ...statePatch, events: [...f.events, publishedEvent] } : f))
+    );
+  };
+
   const publishAll = async () => {
-    //const publishedEvents: FileEventData[] = [];
     fileEventsToPublish.forEach(async fe => {
-      if (fe.publish.file) {
-        if (!fe.publishedThumbnail) {
-          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
-          if (selfHostedThumbnail) {
-            const newData: FileEventData = {
-              ...fe,
-              publishedThumbnail: selfHostedThumbnail.url,
-              thumbnails: [selfHostedThumbnail.url],
-            };
-            const publishedEvent = await publishFileEvent(newData);
-            setFileEventsToPublish(prev =>
-              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-            );
-          } else {
-            // self hosting failed
-            
-            const publishedEvent = await publishFileEvent(fe);
-            setFileEventsToPublish(prev =>
-              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-            );
-          }
-        } else {
-          // data thumbnail already defined
-          
-          const publishedEvent = await publishFileEvent(fe);
-          setFileEventsToPublish(prev =>
-            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-          );
-        }
-      }
-      if (fe.publish.audio) {
-        if (!fe.publishedThumbnail) {
-          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
-          if (selfHostedThumbnail) {
-            const newData: FileEventData = {
-              ...fe,
-              publishedThumbnail: selfHostedThumbnail.url,
-              thumbnails: [selfHostedThumbnail.url],
-            };
-            const publishedEvent = await publishAudioEvent(newData);
-            setFileEventsToPublish(prev =>
-              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-            );
-          } else {
-            // self hosting failed
-            
-            const publishedEvent = await publishAudioEvent(fe);
-            setFileEventsToPublish(prev =>
-              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-            );
-          }
-        } else {
-          // data thumbnail already defined
-          
-          const publishedEvent = await publishAudioEvent(fe);
-          setFileEventsToPublish(prev =>
-            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-          );
-        }
-      }
-      if (fe.publish.video) {
-        if (!fe.publishedThumbnail) {
-          const selfHostedThumbnail = await publishSelectedThumbnailToAllOwnServers(fe);
-          if (selfHostedThumbnail) {
-            const newData: Partial<FileEventData> = {
-              publishedThumbnail: selfHostedThumbnail.url,
-              thumbnails: [selfHostedThumbnail.url],
-            };
-            const publishedEvent = await publishVideoEvent({ ...fe, ...newData });
-            setFileEventsToPublish(prev =>
-              prev.map(f =>
-                f.x === fe.x
-                  ? {
-                      ...f,
-                      ...newData,
-                      events: [...f.events, publishedEvent],
-                    }
-                  : f
-              )
-            );
-          } else {
-            // self hosting failed
-            
-            const publishedEvent = await publishVideoEvent(fe);
-            setFileEventsToPublish(prev =>
-              prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-            );
-          }
-        } else {
-          // data thumbnail already defined
-          
-          const publishedEvent = await publishVideoEvent(fe);
-          setFileEventsToPublish(prev =>
-            prev.map(f => (f.x === fe.x ? { ...f, events: [...f.events, publishedEvent] } : f))
-          );
-        }
-      }
+      if (fe.publish.file) await publishOne(fe, publishFileEvent, false);
+      if (fe.publish.audio) await publishOne(fe, publishAudioEvent, false);
+      if (fe.publish.video) await publishOne(fe, publishVideoEvent, true);
     });
     setUploadStep(3);
   };
