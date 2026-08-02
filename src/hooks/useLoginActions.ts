@@ -14,6 +14,7 @@ import {
   removeAccountFromStorage,
   clearAllAccounts,
 } from '../nostr/accountPersistence';
+import { usePasswordPrompt } from '../components/PasswordPromptProvider';
 
 export class ExtensionMissingError extends Error {
   constructor() {
@@ -24,6 +25,7 @@ export class ExtensionMissingError extends Error {
 
 export function useLoginActions() {
   const accountManager = useAccountManager();
+  const { promptPassword } = usePasswordPrompt();
 
   const extension = async (): Promise<void> => {
     // Check if window.nostr exists (NIP-07 spec)
@@ -75,7 +77,11 @@ export function useLoginActions() {
     let hexPrivkey: string;
 
     if (key.startsWith('ncryptsec')) {
-      const password = prompt('Enter your private key password');
+      const password = await promptPassword({
+        title: 'Encrypted private key',
+        description: 'Enter the password to decrypt your ncryptsec key.',
+        confirmLabel: 'Decrypt',
+      });
       if (password === null) {
         throw new Error('Password is required for encrypted keys');
       }

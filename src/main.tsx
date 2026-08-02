@@ -7,6 +7,7 @@ import { Navigate, Route, RouterProvider, createBrowserRouter, createRoutesFromE
 import { Layout } from './components/Layout/Layout.tsx';
 import { GlobalProvider } from './GlobalState.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PasswordPromptProvider } from './components/PasswordPromptProvider';
 
 const Home = React.lazy(() => import('./pages/Home.tsx'));
 const Transfer = React.lazy(() => import('./pages/Transfer.tsx').then(m => ({ default: m.Transfer })));
@@ -43,6 +44,7 @@ const ReactQueryDevtools = import.meta.env.DEV
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
+      <PasswordPromptProvider>
       <QueryClientProvider client={queryClient}>
         <NostrProvider>
           <GlobalProvider>
@@ -55,6 +57,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           </React.Suspense>
         )}
       </QueryClientProvider>
+      </PasswordPromptProvider>
     </ErrorBoundary>
   </React.StrictMode>
 );
