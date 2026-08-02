@@ -5,7 +5,8 @@ import AudioPlayer from "../AudioPlayer"
 import { useGlobalContext } from "../../GlobalState"
 import { useCurrentUser } from "../../hooks/useCurrentUser"
 import Login from "./Login"
-import { useEffect, useRef } from "react"
+import { Suspense, useEffect, useRef } from "react"
+import { Loader2 } from "lucide-react"
 import useLocalStorageState from "../../utils/useLocalStorageState"
 
 export const Layout = () => {
@@ -37,7 +38,19 @@ export const Layout = () => {
     <div className="min-h-screen flex flex-col">
       <TopNav />
       <main className={`flex-1 container py-4 md:py-5 ${hasAudioPlayer ? 'pb-24' : ''}`}>
-        {user ? <Outlet /> : <Login />}
+        {user ? (
+          <Suspense
+            fallback={
+              <div className="flex min-h-[60vh] items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
+        ) : (
+          <Login />
+        )}
       </main>
       {hasAudioPlayer && (
         <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t shadow-lg z-50">
