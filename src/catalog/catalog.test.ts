@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { BlobDescriptor } from 'blossom-client-sdk';
 import type { NostrEvent } from 'nostr-tools';
 import { Catalog, MemoryCatalogStore } from './catalog';
+import { eventKindLabel, fallbackEventTitle } from './eventKinds';
+import { extractTimelineEventMetadata } from './timelineMetadata';
 import {
   buildReplicaOps,
   getAssetReplicaMap,
@@ -30,6 +32,26 @@ function event(id: string, createdAt: number, tags: string[][], content = '', ki
 }
 
 describe('user blob catalog', () => {
+  it('labels event kinds and creates humane fallback titles', () => {
+    expect(eventKindLabel(1)).toBe('Note');
+    expect(eventKindLabel(20)).toBe('Picture');
+    expect(eventKindLabel(1063)).toBe('File');
+    expect(eventKindLabel(undefined)).toBe('Unlinked file');
+    expect(eventKindLabel(999)).toBe('Kind 999');
+    expect(fallbackEventTitle(1)).toBe('Untitled note');
+    expect(fallbackEventTitle(20)).toBe('Untitled picture');
+    expect(fallbackEventTitle(undefined)).toBe('Unlinked file');
+    expect(fallbackEventTitle(999)).toBe('Untitled kind 999');
+  });
+
+  it('marks event titles as fallback only when title and usable content are absent', () => {
+    const titled = extractTimelineEventMetadata(event('titled', 1, [['title', 'A title']]));
+    const bare = extractTimelineEventMetadata(event('bare', 1, [], '', 20));
+
+    expect(titled).toMatchObject({ title: 'A title', titleIsFallback: false });
+    expect(bare).toMatchObject({ title: 'Untitled picture', titleIsFallback: true });
+    expect(bare.title.startsWith('Nostr event')).toBe(false);
+  });
   it('projects legacy and current nsite manifests from path-tagged files', async () => {
     const catalog = new Catalog(new MemoryCatalogStore());
     const manifests = [

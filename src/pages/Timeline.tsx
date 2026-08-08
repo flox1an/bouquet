@@ -192,7 +192,7 @@ export default function Timeline() {
     const filtered = items.filter(
       item =>
         (!eventOnly || item.eventId !== undefined) &&
-        (!descriptiveOnly || !item.displayTitle.startsWith('Nostr event ')) &&
+        (!descriptiveOnly || !item.displayTitleIsFallback) &&
         (typeFilter === 'all' ||
           (typeFilter === 'media' ? item.displayType !== 'unknown' : item.displayType === typeFilter)) &&
         (availabilityFilter.length === 0 || availabilityFilter.includes(item.availabilityState)) &&

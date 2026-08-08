@@ -7,6 +7,7 @@ import { TimelineThumbnail } from '../TimelineThumbnail';
 import { AudioTimelinePreview } from '../AudioTimelinePreview';
 import { formatDate, formatFileSize } from '../../utils/utils';
 import { AVAILABILITY_LABEL, TYPE_ICON, type TimelineItem } from './browseConstants';
+import { eventKindLabel } from '../../catalog/eventKinds';
 
 type BrowseListRowProps = {
   item: TimelineItem;
@@ -31,7 +32,19 @@ export function BrowseListRow({
 }: BrowseListRowProps) {
   const Icon = TYPE_ICON[item.displayType];
   const dateLabel =
-    item.displayDateSource === 'event' ? 'Published' : item.displayDateSource === 'blob-uploaded' ? 'Uploaded' : 'Discovered';
+    item.displayDateSource === 'event'
+      ? 'Published'
+      : item.displayDateSource === 'blob-uploaded'
+        ? 'Uploaded'
+        : 'Discovered';
+  const availabilityClass =
+    item.availabilityState === 'complete'
+      ? 'bg-primary'
+      : item.availabilityState === 'partial'
+        ? 'bg-yellow-500'
+        : item.availabilityState === 'unavailable'
+          ? 'bg-destructive'
+          : 'bg-muted-foreground';
   const [detail, setDetail] = useState<TimelineAssetDetail>();
   const rootRef = useRef<HTMLDivElement>(null);
   const hasRequested = useRef(false);
@@ -58,7 +71,11 @@ export function BrowseListRow({
   }, [item.assetId, pubkey]);
 
   return (
-    <div ref={rootRef} data-asset-id={item.assetId} className="border bg-card p-3 shadow-[3px_3px_0_hsl(var(--border))]">
+    <div
+      ref={rootRef}
+      data-asset-id={item.assetId}
+      className="border bg-card p-3 shadow-[3px_3px_0_hsl(var(--border))]"
+    >
       <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_minmax(18rem,0.9fr)]">
         <Checkbox
           checked={selected}
@@ -90,21 +107,39 @@ export function BrowseListRow({
               <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-primary bg-primary/10">
                 <Icon className="h-4 w-4" />
               </div>
-              <div className="text-right font-mono text-[10px] uppercase text-muted-foreground">
-                <p>{item.displayType}</p>
-                <p>{AVAILABILITY_LABEL[item.availabilityState]}</p>
+              <div className="flex items-center gap-1.5">
+                <span
+                  role="img"
+                  className={`h-2 w-2 shrink-0 border border-foreground/30 ${availabilityClass}`}
+                  title={AVAILABILITY_LABEL[item.availabilityState]}
+                  aria-label={AVAILABILITY_LABEL[item.availabilityState]}
+                />
+                <span
+                  className={`border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
+                    item.eventId ? 'border-primary text-foreground' : 'border-muted-foreground/50 text-muted-foreground'
+                  }`}
+                >
+                  {eventKindLabel(item.eventKind)}
+                </span>
               </div>
             </div>
-            <h2 className="mt-2 truncate text-sm font-semibold">{item.displayTitle}</h2>
-            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-              {dateLabel} {formatDate(item.displayDate)} · {item.replicaCount} replica{item.replicaCount === 1 ? '' : 's'}
+            <h2
+              className={`mt-2 truncate text-sm font-semibold ${
+                item.displayTitleIsFallback ? 'italic text-muted-foreground' : ''
+              }`}
+            >
+              {item.displayTitle}
+            </h2>
+            {item.displaySubtitle && (
+              <p className="mt-1 line-clamp-2 text-xs text-foreground/80">{item.displaySubtitle}</p>
+            )}
+            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+              {dateLabel} {formatDate(item.displayDate)} · {item.blobCount} file{item.blobCount === 1 ? '' : 's'} ·{' '}
+              {formatFileSize(item.totalBlobSize)}
+              {item.unknownBlobSizeCount > 0 && ` · ${item.unknownBlobSizeCount} size unknown`} · {item.replicaCount}{' '}
+              replica
+              {item.replicaCount === 1 ? '' : 's'}
             </p>
-            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-              {item.blobCount} blob{item.blobCount === 1 ? '' : 's'} · {formatFileSize(item.totalBlobSize)}
-              {item.unknownBlobSizeCount > 0 && ` · ${item.unknownBlobSizeCount} size unknown`}
-            </p>
-            {item.displaySubtitle && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.displaySubtitle}</p>}
-            {!item.eventId && <p className="mt-1 text-[11px] text-muted-foreground">No linked Nostr event</p>}
           </div>
         </Link>
         <BlobSummary detail={detail} fallback={item} />
@@ -152,7 +187,9 @@ function BlobSummary({ detail, fallback }: { detail?: TimelineAssetDetail; fallb
         ))}
       </ul>
       {remaining > 0 && (
-        <p className="mt-2 font-mono text-[11px] text-muted-foreground">+{remaining} related blob{remaining === 1 ? '' : 's'}</p>
+        <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+          +{remaining} related blob{remaining === 1 ? '' : 's'}
+        </p>
       )}
     </div>
   );

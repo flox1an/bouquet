@@ -24,6 +24,7 @@ import { TimelineThumbnail } from '../components/TimelineThumbnail';
 import { useNostr } from '../utils/nostr';
 import { formatDate, formatFileSize } from '../utils/utils';
 import { probeNativeUrl } from '../catalog/availabilityFetch';
+import { eventKindLabel } from '../catalog/eventKinds';
 
 const TYPE_ICON = {
   image: Image,
@@ -31,20 +32,6 @@ const TYPE_ICON = {
   audio: Music2,
   document: FileText,
   unknown: FileText,
-};
-
-const KIND_LABELS: Record<number, string> = {
-  1: 'Note',
-  20: 'Image',
-  21: 'Video',
-  5128: 'Nsite snapshot',
-  15128: 'Nsite root',
-  35128: 'Named nsite',
-  22: 'Short Video',
-  1063: 'File Metadata',
-  31337: 'Audio Track',
-  34235: 'Video',
-  34236: 'Short Video',
 };
 
 const AVAILABILITY_LABEL = {
@@ -242,19 +229,28 @@ export default function TimelineAssetDetail() {
       : projection.displayDateSource === 'blob-uploaded'
         ? 'Uploaded'
         : 'Discovered';
-  const nip19Code = projection.eventId
-    ? (() => {
-        if (projection.eventAddress?.startsWith('naddr1') || projection.eventAddress?.startsWith('nevent1'))
-          return projection.eventAddress;
-        try {
-          return projection.eventAuthor && projection.eventKind
-            ? nip19.neventEncode({ id: projection.eventId, kind: projection.eventKind, author: projection.eventAuthor })
-            : projection.eventAddress;
-        } catch {
-          return projection.eventAddress ?? projection.eventId;
-        }
-      })()
-    : undefined;
+  const eventIdentifier = (() => {
+    try {
+      if (projection.eventAddress?.startsWith('naddr1') || projection.eventAddress?.startsWith('nevent1'))
+        return projection.eventAddress;
+      if (!projection.eventId || !projection.eventAuthor || projection.eventKind === undefined) return undefined;
+      return nip19.neventEncode({
+        id: projection.eventId,
+        kind: projection.eventKind,
+        author: projection.eventAuthor,
+      });
+    } catch {
+      return undefined;
+    }
+  })();
+  const authorNpub = (() => {
+    try {
+      return projection.eventAuthor ? nip19.npubEncode(projection.eventAuthor) : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+  const shortAuthor = authorNpub ? `${authorNpub.slice(0, 12)}…${authorNpub.slice(-6)}` : undefined;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8">
@@ -263,7 +259,7 @@ export default function TimelineAssetDetail() {
         Back to timeline
       </Button>
       <header className="border-b-2 border-primary pb-5">
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Asset details</p>
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Nostr event</p>
         <div className="mt-3 flex flex-col gap-6 md:flex-row md:items-start">
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
@@ -272,7 +268,16 @@ export default function TimelineAssetDetail() {
               </div>
               <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h1 className="truncate text-3xl font-black tracking-tight">{projection.displayTitle}</h1>
+                  <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                    {eventKindLabel(projection.eventKind)}
+                  </p>
+                  <h1
+                    className={`truncate text-3xl font-black tracking-tight ${
+                      projection.displayTitleIsFallback ? 'text-muted-foreground' : ''
+                    }`}
+                  >
+                    {projection.displayTitle}
+                  </h1>
                   <p className="mt-1 font-mono text-xs text-muted-foreground">
                     {dateLabel} {formatDate(projection.displayDate)} ·{' '}
                     {AVAILABILITY_LABEL[projection.availabilityState]}
@@ -295,42 +300,52 @@ export default function TimelineAssetDetail() {
                 )}
               </div>
             </div>
-            {projection.displaySubtitle && (
-              <>
-                <p className={`mt-4 max-w-2xl text-sm text-muted-foreground ${descExpanded ? '' : 'line-clamp-2'}`}>
-                  {projection.displaySubtitle}
-                </p>
-                <button
-                  onClick={() => setDescExpanded(v => !v)}
-                  className="mt-1 text-xs text-primary underline-offset-4 hover:underline"
-                >
-                  {descExpanded ? 'Show less' : 'Show more'}
-                </button>
-              </>
-            )}
-            <dl className="mt-5 grid gap-3 sm:grid-cols-4">
-              {projection.eventKind !== undefined && (
-                <DetailStat
-                  label="Kind"
-                  value={`${projection.eventKind} · ${KIND_LABELS[projection.eventKind] ?? 'Unknown'}`}
-                />
-              )}
-              <DetailStat label="Attached blobs" value={`${projection.blobCount}`} />
-              <DetailStat label="Total size" value={formatFileSize(projection.totalBlobSize)} />
-              <DetailStat label="Available replicas" value={`${projection.replicaCount}`} />
-            </dl>
-            {projection.unknownBlobSizeCount > 0 && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                Size is unknown for {projection.unknownBlobSizeCount} attached blob
-                {projection.unknownBlobSizeCount === 1 ? '' : 's'}.
-              </p>
-            )}
             {projection.eventId ? (
-              <p className="mt-4 font-mono text-xs text-muted-foreground">
-                Kind {projection.eventKind ?? '?'} — {nip19Code ?? projection.eventId}
-              </p>
+              <>
+                {projection.displaySubtitle && (
+                  <>
+                    <p className={`mt-5 max-w-2xl text-base leading-7 ${descExpanded ? '' : 'line-clamp-3'}`}>
+                      {projection.displaySubtitle}
+                    </p>
+                    <button
+                      onClick={() => setDescExpanded(v => !v)}
+                      className="mt-1 text-xs text-primary underline-offset-4 hover:underline"
+                    >
+                      {descExpanded ? 'Show less' : 'Show more'}
+                    </button>
+                  </>
+                )}
+                <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-xs text-muted-foreground">
+                  {shortAuthor && authorNpub && (
+                    <button
+                      type="button"
+                      title={`Copy ${authorNpub}`}
+                      onClick={() => void navigator.clipboard.writeText(authorNpub).catch(() => undefined)}
+                      className="select-all underline-offset-4 hover:text-foreground hover:underline"
+                    >
+                      AUTHOR · {shortAuthor}
+                    </button>
+                  )}
+                  {eventIdentifier && (
+                    <a
+                      href={`https://njump.me/${eventIdentifier}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 uppercase text-primary underline-offset-4 hover:underline"
+                    >
+                      Open elsewhere <ExternalLink className="h-3 w-3" aria-label="Opens in a new tab" />
+                    </a>
+                  )}
+                </div>
+              </>
             ) : (
-              <p className="mt-4 text-sm text-muted-foreground">No linked Nostr event</p>
+              <div className="mt-5 max-w-2xl border bg-muted/30 p-4 shadow-[3px_3px_0_hsl(var(--border))]">
+                <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Unlinked file</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  This file is in your local catalog but is not linked to a Nostr event. Its storage and availability
+                  details remain available below.
+                </p>
+              </div>
             )}
             {blobs.length >= 10 && !availableChecked && (
               <Button
@@ -338,7 +353,7 @@ export default function TimelineAssetDetail() {
                 variant="outline"
                 disabled={checkingAvailability}
                 onClick={() => void checkAvailability()}
-                className="mt-4"
+                className="mt-5"
               >
                 {checkingAvailability ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}Check availability (
                 {blobs.length} blobs)
@@ -359,13 +374,26 @@ export default function TimelineAssetDetail() {
       <section className="mt-8" aria-labelledby="attached-blobs-heading">
         <div className="flex items-end justify-between gap-4 border-b pb-3">
           <div>
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Asset contents</p>
+            <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">
+              Supporting technical detail
+            </p>
             <h2 id="attached-blobs-heading" className="mt-1 text-2xl font-bold">
-              Attached blobs
+              Blob details
             </h2>
           </div>
           <p className="font-mono text-xs text-muted-foreground">{blobs.length} total</p>
         </div>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+          <DetailStat label="Attached blobs" value={`${projection.blobCount}`} />
+          <DetailStat label="Total size" value={formatFileSize(projection.totalBlobSize)} />
+          <DetailStat label="Available replicas" value={`${projection.replicaCount}`} />
+        </dl>
+        {projection.unknownBlobSizeCount > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Size is unknown for {projection.unknownBlobSizeCount} attached blob
+            {projection.unknownBlobSizeCount === 1 ? '' : 's'}.
+          </p>
+        )}
         <ul className="mt-4 space-y-3">
           {blobs.map(blob => (
             <li

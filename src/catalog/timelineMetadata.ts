@@ -1,4 +1,5 @@
 import type { NostrEvent } from 'nostr-tools';
+import { fallbackEventTitle } from './eventKinds';
 
 export type TimelineEventMetadata = {
   author: string;
@@ -7,6 +8,7 @@ export type TimelineEventMetadata = {
   kind: number;
   createdAt: number;
   title: string;
+  titleIsFallback: boolean;
   subtitle?: string;
   searchText: string;
 };
@@ -37,7 +39,10 @@ function conciseContent(content: string): string | undefined {
 
 export function extractTimelineEventMetadata(event: NostrEvent): TimelineEventMetadata {
   const imeta = imetaValues(event);
-  const title = firstTagValue(event, TITLE_TAGS) ?? conciseContent(event.content) ?? `Nostr event ${event.id.slice(0, 8)}`;
+  const titleTag = firstTagValue(event, TITLE_TAGS);
+  const contentTitle = conciseContent(event.content);
+  const titleIsFallback = !titleTag && !contentTitle;
+  const title = titleTag ?? contentTitle ?? fallbackEventTitle(event.kind);
   const subtitle = firstTagValue(event, SUMMARY_TAGS) ?? (title !== event.content.trim() ? conciseContent(event.content) : undefined);
   const searchableTags = event.tags
     .filter(tag => [...TITLE_TAGS, ...SUMMARY_TAGS, 'imeta'].includes(tag[0]))
@@ -54,6 +59,7 @@ export function extractTimelineEventMetadata(event: NostrEvent): TimelineEventMe
     author: event.pubkey,
     dTag: event.tags.find(tag => tag[0] === 'd')?.[1],
     title,
+    titleIsFallback,
     subtitle,
     searchText,
   };

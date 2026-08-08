@@ -77,6 +77,7 @@ export type TimelineProjection = {
   eventAddress?: string;
   displayType: Asset['assetType'];
   displayTitle: string;
+  displayTitleIsFallback: boolean;
   displaySubtitle?: string;
   searchText: string;
   displayDate: number;
@@ -471,6 +472,7 @@ export async function projectCatalogAssets(
         eventAuthor: event.author,
         eventAddress,
         title,
+        titleIsFallback: !audioMetadata?.title && event.titleIsFallback,
         subtitle,
         searchText: `${event.searchText} ${title} ${subtitle ?? ''}`.toLocaleLowerCase(),
         dateSource: 'event',
@@ -528,9 +530,11 @@ export async function projectCatalogAssets(
       ? 'blob-uploaded'
       : 'first-seen';
     const audioMetadata = type === 'audio' ? audioMetadataFor(sha256, audioFactsByHash) : undefined;
+    const fileName = fileNameFromUrl(urlsByHash.get(sha256)?.[0]?.url);
+    const titleIsFallback = !audioMetadata?.title && !fileName;
     const title =
       audioMetadata?.title ??
-      fileNameFromUrl(urlsByHash.get(sha256)?.[0]?.url) ??
+      fileName ??
       (type === 'unknown' ? `Unclassified blob ${sha256.slice(0, 8)}` : `${type[0].toUpperCase()}${type.slice(1)}`);
     const subtitle = audioMetadata ? audioSubtitle(audioMetadata) : undefined;
     await writeProjection(
@@ -544,6 +548,7 @@ export async function projectCatalogAssets(
       locations,
       {
         title,
+        titleIsFallback,
         subtitle,
         searchText: `${title} ${subtitle ?? ''} ${sha256} ${blob?.verifiedMimeType ?? ''}`.toLocaleLowerCase(),
         dateSource: displayDateSource,
@@ -659,6 +664,7 @@ async function writeProjection(
     eventAuthor?: string;
     eventAddress?: string;
     title: string;
+    titleIsFallback: boolean;
     subtitle?: string;
     searchText: string;
     dateSource: TimelineProjection['displayDateSource'];
@@ -680,6 +686,7 @@ async function writeProjection(
     eventAddress: display.eventAddress,
     displayType,
     displayTitle: display.title,
+    displayTitleIsFallback: display.titleIsFallback,
     displaySubtitle: display.subtitle,
     searchText: display.searchText,
     displayDate,
