@@ -64,7 +64,11 @@ with a real key before announcing a release.
 - [ ] A file referenced by an event shows the SAME title in Browse and in Sync
 - [ ] Visiting / lands on Browse, and a brand-new account is offered a server
       rather than an empty screen
-- [ ] Uncheck a server during onboarding and confirm it is NOT saved
+- [ ] Uncheck a server during onboarding and confirm it is NOT saved, and that
+      clicking directly ON the checkbox toggles it (not only the row)
+- [ ] Paste an nsec and press Enter; confirm it logs in without touching the button
+- [ ] Start a delete and a mirror from Browse and confirm each row names the
+      media rather than showing only a hash
 - [ ] Log out from a phone-width window
 - [ ] Force a failure (stop a server mid-run) and confirm the dialog reports it
       and still lets you close
