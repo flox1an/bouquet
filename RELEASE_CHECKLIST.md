@@ -68,6 +68,12 @@ with a real key before announcing a release.
 - [ ] Log out from a phone-width window
 - [ ] Force a failure (stop a server mid-run) and confirm the dialog reports it
       and still lets you close
+- [ ] After a partly failed upload, confirm your files are STILL SELECTED and a
+      second attempt works without picking them again
+- [ ] After a partly failed sync, use "Retry failed transfers" and confirm it
+      sends only the failures and keeps the record of what already succeeded
+- [ ] Break the catalog read (e.g. deny IndexedDB) and confirm Browse offers
+      "Try again" rather than telling you to come back later
 
 ## Current Known Items
 
