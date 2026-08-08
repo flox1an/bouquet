@@ -14,7 +14,8 @@ import { formatFileSize, formatDate } from '../../utils/utils';
 import { useServerInfo } from '../../utils/useServerInfo';
 import Badge from './Badge';
 import useFileMetaEventsByHash from '../../utils/useFileMetaEvents';
-import { eventKindLabel, fallbackEventTitle } from '../../catalog/eventKinds';
+import { eventKindLabel } from '../../catalog/eventKinds';
+import { extractTimelineEventMetadata } from '../../catalog/timelineMetadata';
 import './BlobList.css';
 import { useBlobSelection } from './useBlobSelection';
 import MimeTypeIcon from '../MimeTypeIcon';
@@ -181,17 +182,10 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                         );
                       }
 
-                      const tagValue = (name: string) => event.tags.find(tag => tag[0] === name)?.[1]?.trim();
-                      const contentTitle = event.content
-                        .split('\n')
-                        .map(line => line.trim())
-                        .find(Boolean);
-                      const eventTitle =
-                        tagValue('title') ||
-                        tagValue('alt') ||
-                        tagValue('name') ||
-                        contentTitle ||
-                        fallbackEventTitle(event.kind);
+                      // One source of truth for titles, so a file cannot be named one thing in
+                      // Browse and another here. This helper also treats `alt` as a summary
+                      // rather than a title, which a local reimplementation got wrong.
+                      const { title: eventTitle } = extractTimelineEventMetadata(event);
 
                       return (
                         <div className="flex min-w-0 flex-col gap-1">
