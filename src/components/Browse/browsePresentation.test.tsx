@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { createElement as h } from 'react';
 import { BrowseSelectionBar } from './BrowseSelectionBar';
 import { BrowseListRow } from './BrowseListRow';
+import { BrowseMediaGrid } from './BrowseMediaGrid';
+import { groupByMonth } from '../TimelineNavigation';
 import type { TimelineItem } from './browseConstants';
 
 const item = (over: Partial<TimelineItem> = {}): TimelineItem =>
@@ -88,5 +90,41 @@ describe('browse presentation smoke', () => {
     expect(html).toContain('Delete');
     // must not advertise actions as mere previews any more
     expect(html).not.toContain('Plan mirror');
+  });
+
+  it('places each item under its own month heading', () => {
+    // Guards a refactor: grouping used to be recomputed per month by rescanning
+    // every item. Same output, one pass - so pin the output.
+    const jan = new Date('2024-01-15T12:00:00Z').getTime();
+    const mar = new Date('2024-03-02T12:00:00Z').getTime();
+    const items = [
+      item({ assetId: 'a1', displayTitle: 'January picture', displayDate: jan }),
+      item({ assetId: 'a2', displayTitle: 'March picture', displayDate: mar }),
+    ];
+    const html = render(
+      h(BrowseMediaGrid, {
+        monthGroups: groupByMonth(items),
+        filteredItems: items,
+        toFor: (id: string) => `/browse/${id}`,
+        selectedAssetIds: {},
+        onSelect: () => {},
+        onOpen: () => {},
+        audioMetadataVersion: {},
+        onAudioVisible: () => {},
+        onPlayAudio: () => {},
+        onAction: () => {},
+      })
+    );
+    expect(html).toContain('January picture');
+    expect(html).toContain('March picture');
+    const janHeading = html.indexOf('Jan 2024');
+    const marHeading = html.indexOf('Mar 2024');
+    expect(janHeading).toBeGreaterThan(-1);
+    expect(marHeading).toBeGreaterThan(-1);
+    // Newest month first, and each title must follow its own heading.
+    expect(marHeading).toBeLessThan(janHeading);
+    expect(html.indexOf('March picture')).toBeGreaterThan(marHeading);
+    expect(html.indexOf('March picture')).toBeLessThan(janHeading);
+    expect(html.indexOf('January picture')).toBeGreaterThan(janHeading);
   });
 });
