@@ -90,6 +90,7 @@ export default function Timeline() {
   const [serverAssetIds, setServerAssetIds] = useState<Set<string>>();
   const [hashMatchAssetIds, setHashMatchAssetIds] = useState<Set<string>>();
   const [catalogVersion, setCatalogVersion] = useState(0);
+  const [lookupError, setLookupError] = useState<string>();
   const [activeMonth, setActiveMonth] = useState<string>();
   const [bulkAction, setBulkAction] = useState<CatalogAction>();
   const [cardAction, setCardAction] = useState<{ action: CatalogAction; item: TimelineItem }>();
@@ -104,11 +105,16 @@ export default function Timeline() {
     let active = true;
     const catalog = getCatalog();
 
-    void queryCatalogTimeline(catalog, user.pubkey).then(cached => {
-      if (!active || cached.length === 0) return;
-      setItems(cached);
-      setProjectionState('complete');
-    });
+    void queryCatalogTimeline(catalog, user.pubkey)
+      .then(cached => {
+        if (!active || cached.length === 0) return;
+        setItems(cached);
+        setProjectionState('complete');
+      })
+      .catch(() => {
+        // The full projection below is the real source; a failed cache read only
+        // costs a slower first paint, so it must not surface as an error.
+      });
 
     let timer: number | undefined;
     const runProjection = () => {
@@ -165,9 +171,19 @@ export default function Timeline() {
       return;
     }
     let active = true;
-    void queryCatalogTimeline(getCatalog(), user.pubkey, { serverId }).then(result => {
-      if (active) setServerAssetIds(new Set(result.map(item => item.assetId)));
-    });
+    void queryCatalogTimeline(getCatalog(), user.pubkey, { serverId })
+      .then(result => {
+        if (!active) return;
+        setServerAssetIds(new Set(result.map(item => item.assetId)));
+        setLookupError(undefined);
+      })
+      .catch(() => {
+        // Leaving the set empty would filter everything out and read as
+        // "you have nothing here", which is a wrong answer stated confidently.
+        if (!active) return;
+        setServerAssetIds(undefined);
+        setLookupError('The server filter could not be applied, so every asset is shown.');
+      });
     return () => {
       active = false;
     };
@@ -181,9 +197,17 @@ export default function Timeline() {
       return;
     }
     let active = true;
-    void queryCatalogTimeline(getCatalog(), user.pubkey, { search: hashTerms.join(' ') }).then(result => {
-      if (active) setHashMatchAssetIds(new Set(result.map(item => item.assetId)));
-    });
+    void queryCatalogTimeline(getCatalog(), user.pubkey, { search: hashTerms.join(' ') })
+      .then(result => {
+        if (!active) return;
+        setHashMatchAssetIds(new Set(result.map(item => item.assetId)));
+        setLookupError(undefined);
+      })
+      .catch(() => {
+        if (!active) return;
+        setHashMatchAssetIds(undefined);
+        setLookupError('The hash search could not be run, so results may be incomplete.');
+      });
     return () => {
       active = false;
     };
@@ -407,6 +431,15 @@ export default function Timeline() {
         onSave={handleSaveServers}
         initialServers={Object.values(serverInfo).filter(s => !s.virtual)}
       />
+
+      {lookupError && (
+        <p
+          className="mb-4 border border-destructive bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="status"
+        >
+          {lookupError}
+        </p>
+      )}
 
       <BrowseSelectionBar
         selectedItems={selectedItems}

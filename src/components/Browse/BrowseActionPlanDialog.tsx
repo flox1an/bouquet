@@ -69,7 +69,8 @@ export function BrowseActionPlanDialog({
 }: BrowseActionPlanDialogProps) {
   const queryClient = useQueryClient();
   const [plans, setPlans] = useState<AssetPlan[]>();
-  const [phase, setPhase] = useState<'planning' | 'reviewing' | 'running' | 'complete'>('planning');
+  const [phase, setPhase] = useState<'planning' | 'reviewing' | 'running' | 'complete' | 'failed'>('planning');
+  const [failureMessage, setFailureMessage] = useState<string>();
   const [rows, setRows] = useState<Row[]>([]);
   const [chosenServerName, setChosenServerName] = useState<string>();
   const [mirrorSupport, setMirrorSupport] = useState<Record<string, boolean>>({});
@@ -80,6 +81,7 @@ export function BrowseActionPlanDialog({
   useEffect(() => {
     if (!open) return;
     setPhase('planning');
+    setFailureMessage(undefined);
     setPlans(undefined);
     setRows([]);
     setChosenServerName(undefined);
@@ -96,14 +98,21 @@ export function BrowseActionPlanDialog({
           targets: result.targets,
         };
       })
-    ).then(async result => {
-      setPlans(result);
-      const allowed = result.filter(plan => plan.allowed);
-      const maps = await Promise.all(allowed.map(plan => getAssetReplicaMap(getCatalog(), pubkey, plan.item.assetId)));
-      setReplicaMaps(maps);
-      if (action === 'sync') setSyncGapCount(maps.flatMap(map => buildReplicaOps(map)).length);
-      setPhase('reviewing');
-    });
+    )
+      .then(async result => {
+        setPlans(result);
+        const allowed = result.filter(plan => plan.allowed);
+        const maps = await Promise.all(
+          allowed.map(plan => getAssetReplicaMap(getCatalog(), pubkey, plan.item.assetId))
+        );
+        setReplicaMaps(maps);
+        if (action === 'sync') setSyncGapCount(maps.flatMap(map => buildReplicaOps(map)).length);
+        setPhase('reviewing');
+      })
+      .catch(error => {
+        setFailureMessage(errorMessage(error));
+        setPhase('failed');
+      });
   }, [open, assets, action, pubkey]);
 
   if (!open) return null;
@@ -170,63 +179,79 @@ export function BrowseActionPlanDialog({
         }
       }
     };
-    void Promise.all(Array.from({ length: CONCURRENCY }, worker)).then(complete);
+    void Promise.all(Array.from({ length: CONCURRENCY }, worker))
+      .then(complete)
+      .catch(error => {
+        setFailureMessage(errorMessage(error));
+        setPhase('failed');
+      });
   };
 
   const runTransfer = async () => {
-    const destinationServerId = action === 'mirror' && destination ? normalizeServerUrl(destination.url) : undefined;
-    const operationGroups = await Promise.all(
-      allowedPlans.map(async plan =>
-        buildReplicaOps(await getAssetReplicaMap(getCatalog(), pubkey, plan.item.assetId), destinationServerId)
-      )
-    );
-    const ops = operationGroups.flat() as ReplicaOp[];
-    setRows(
-      ops.map(op => ({
-        key: `${op.sha256}:${op.targetServerId}`,
-        label: `${op.sha256} → ${op.targetBaseUrl}`,
-        state: 'pending',
-      }))
-    );
-    setPhase('running');
-    let nextIndex = 0;
-    const transferredHashes = new Set<string>();
-    const worker = async () => {
-      while (true) {
-        if (cancelledRef.current) return;
-        const i = nextIndex++;
-        if (i >= ops.length) return;
-        const op = ops[i];
-        const key = `${op.sha256}:${op.targetServerId}`;
-        const target = Object.values(serverInfo).find(server => normalizeServerUrl(server.url) === op.targetServerId);
-        if (!target) {
-          updateRow(key, { state: 'error', message: 'Destination server is no longer available.' });
-          continue;
+    let transfersRan = false;
+    try {
+      const destinationServerId = action === 'mirror' && destination ? normalizeServerUrl(destination.url) : undefined;
+      const operationGroups = await Promise.all(
+        allowedPlans.map(async plan =>
+          buildReplicaOps(await getAssetReplicaMap(getCatalog(), pubkey, plan.item.assetId), destinationServerId)
+        )
+      );
+      const ops = operationGroups.flat() as ReplicaOp[];
+      setRows(
+        ops.map(op => ({
+          key: `${op.sha256}:${op.targetServerId}`,
+          label: `${op.sha256} → ${op.targetBaseUrl}`,
+          state: 'pending',
+        }))
+      );
+      setPhase('running');
+      transfersRan = true;
+      let nextIndex = 0;
+      const transferredHashes = new Set<string>();
+      const worker = async () => {
+        while (true) {
+          if (cancelledRef.current) return;
+          const i = nextIndex++;
+          if (i >= ops.length) return;
+          const op = ops[i];
+          const key = `${op.sha256}:${op.targetServerId}`;
+          const target = Object.values(serverInfo).find(server => normalizeServerUrl(server.url) === op.targetServerId);
+          if (!target) {
+            updateRow(key, { state: 'error', message: 'Destination server is no longer available.' });
+            continue;
+          }
+          updateRow(key, { state: 'running', message: undefined });
+          try {
+            const descriptor = await transferBlob(`${op.sourceBaseUrl}/${op.sha256}`, target, signEventTemplate, {
+              allowMirror: mirrorSupport[op.targetServerId] !== false,
+              onMirrorUnsupported: () => setMirrorSupport(current => ({ ...current, [op.targetServerId]: false })),
+              onPhaseChange: transferPhase => updateRow(key, { phase: transferPhase }),
+              onProgress: event => updateRow(key, { loaded: event.loaded, total: event.total }),
+            });
+            await getCatalog().ingestUpload(pubkey, { url: target.url, type: target.type }, descriptor, true);
+            transferredHashes.add(op.sha256);
+            updateRow(key, { state: 'done', phase: 'completed' });
+          } catch (error) {
+            updateRow(key, { state: 'error', message: errorMessage(error), phase: 'error' });
+          }
         }
-        updateRow(key, { state: 'running', message: undefined });
-        try {
-          const descriptor = await transferBlob(`${op.sourceBaseUrl}/${op.sha256}`, target, signEventTemplate, {
-            allowMirror: mirrorSupport[op.targetServerId] !== false,
-            onMirrorUnsupported: () => setMirrorSupport(current => ({ ...current, [op.targetServerId]: false })),
-            onPhaseChange: transferPhase => updateRow(key, { phase: transferPhase }),
-            onProgress: event => updateRow(key, { loaded: event.loaded, total: event.total }),
-          });
-          await getCatalog().ingestUpload(pubkey, { url: target.url, type: target.type }, descriptor, true);
-          transferredHashes.add(op.sha256);
-          updateRow(key, { state: 'done', phase: 'completed' });
-        } catch (error) {
-          updateRow(key, { state: 'error', message: errorMessage(error), phase: 'error' });
-        }
+      };
+      await Promise.all(Array.from({ length: TRANSFER_CONCURRENCY }, worker));
+      // Blobs that made it across before a cancel are really there, so record them either
+      // way. Without this the catalog keeps reporting them as missing on the destination.
+      if (transferredHashes.size > 0) {
+        await refreshReplicaAvailability(getCatalog(), pubkey, probeReplica, 100, [...transferredHashes]);
+        await projectCatalogAssets(getCatalog(), pubkey, { force: true });
       }
-    };
-    await Promise.all(Array.from({ length: TRANSFER_CONCURRENCY }, worker));
-    // Blobs that made it across before a cancel are really there, so record them either
-    // way. Without this the catalog keeps reporting them as missing on the destination.
-    if (transferredHashes.size > 0) {
-      await refreshReplicaAvailability(getCatalog(), pubkey, probeReplica, 100, [...transferredHashes]);
-      await projectCatalogAssets(getCatalog(), pubkey, { force: true });
+      if (!cancelledRef.current) complete();
+    } catch (error) {
+      setFailureMessage(
+        transfersRan
+          ? `Transfers completed, but the local catalog view may be stale until the next refresh: ${errorMessage(error)}`
+          : errorMessage(error)
+      );
+      setPhase('failed');
     }
-    if (!cancelledRef.current) complete();
   };
 
   const done = rows.filter(row => row.state === 'done' || row.state === 'error').length;
@@ -262,11 +287,18 @@ export function BrowseActionPlanDialog({
             {phase === 'running' &&
               `${action === 'delete' ? 'Deleting' : 'Transferring'} ${action === 'delete' ? `up to ${CONCURRENCY}` : `up to ${TRANSFER_CONCURRENCY}`} blobs concurrently…`}
             {phase === 'complete' && `${succeeded} succeeded, ${failed} failed.`}
+            {phase === 'failed' && failureMessage}
           </DialogPrimitive.Description>
           {phase === 'planning' && (
             <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Planning…
+            </div>
+          )}
+          {phase === 'failed' && (
+            <div className="mt-6 flex items-start gap-2 rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="break-words">{failureMessage}</p>
             </div>
           )}
           {plans && phase === 'reviewing' && (
@@ -382,7 +414,7 @@ export function BrowseActionPlanDialog({
                 Cancel
               </Button>
             )}
-            {phase === 'complete' && (
+            {(phase === 'complete' || phase === 'failed') && (
               <Button size="sm" onClick={onClose}>
                 Close
               </Button>
