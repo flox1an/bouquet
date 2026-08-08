@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useGlobalContext } from '../GlobalState';
-import { Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
+import { Music2, Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import { Button } from '@/components/ui/button';
@@ -86,19 +86,21 @@ const AudioPlayer: React.FC = () => {
         <audio ref={audioRef} />
 
         {/* Track info - left side */}
-        {currentSong.id3 && (
-          <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
-            <img
-              className="w-10 h-10 rounded-md shadow-sm"
-              src={currentSong.id3.cover}
-              alt={currentSong.id3.title}
-            />
-            <div className="flex flex-col min-w-0 hidden sm:flex">
-              <span className="text-sm font-medium truncate">{currentSong.id3.title}</span>
-              <span className="text-xs text-muted-foreground truncate">{currentSong.id3.artist}</span>
-            </div>
+        <div className="flex items-center gap-3 min-w-0 shrink-0">
+          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md shadow-sm">
+            {currentSong.id3?.cover ? (
+              <img className="h-full w-full object-cover" src={currentSong.id3.cover} alt={currentSong.id3.title ?? ''} />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-primary/10"><Music2 className="h-5 w-5 text-primary" /></div>
+            )}
           </div>
-        )}
+          {currentSong.id3 && (
+            <div className="flex min-w-0 flex-col max-sm:hidden">
+              <span className="truncate text-sm font-medium">{currentSong.id3.title}</span>
+              <span className="truncate text-xs text-muted-foreground">{currentSong.id3.artist}</span>
+            </div>
+          )}
+        </div>
 
         {/* Playback controls - center */}
         <div className="flex-1 flex flex-col items-center gap-1 max-w-xl mx-auto">

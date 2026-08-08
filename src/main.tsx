@@ -3,29 +3,45 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NostrProvider } from './utils/nostr.tsx';
-import { Navigate, Route, RouterProvider, createBrowserRouter, createRoutesFromElements } from 'react-router-dom';
+import {
+  Navigate,
+  Route,
+  RouterProvider,
+  createBrowserRouter,
+  createRoutesFromElements,
+  useParams,
+} from 'react-router-dom';
 import { Layout } from './components/Layout/Layout.tsx';
 import { GlobalProvider } from './GlobalState.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PasswordPromptProvider } from './components/PasswordPromptProvider';
 
-const Home = React.lazy(() => import('./pages/Home.tsx'));
 const Transfer = React.lazy(() => import('./pages/Transfer.tsx').then(m => ({ default: m.Transfer })));
 const Upload = React.lazy(() => import('./pages/Upload.tsx'));
 const Check = React.lazy(() => import('./pages/Check.tsx'));
+const Timeline = React.lazy(() => import('./pages/Timeline.tsx'));
+const TimelineAssetDetail = React.lazy(() => import('./pages/TimelineAssetDetail.tsx'));
 
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route element={<Layout />}>
       <Route path="/" element={<Navigate to="/upload" replace />} />
-      <Route path="/browse" element={<Home />} />
+      <Route path="/browse" element={<Timeline />} />
+      <Route path="/browse/:assetId" element={<TimelineAssetDetail />} />
       <Route path="/transfer/:source" element={<Transfer />} />
       <Route path="/sync" element={<Transfer />} />
       <Route path="/upload" element={<Upload />} />
+      <Route path="/timeline" element={<Navigate to="/browse" replace />} />
+      <Route path="/timeline/:assetId" element={<RedirectToBrowseAsset />} />
       <Route path="/check/:source" element={<Check />} />
     </Route>
   )
 );
+
+function RedirectToBrowseAsset() {
+  const { assetId } = useParams<{ assetId: string }>();
+  return <Navigate to={`/browse/${assetId}`} replace />;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

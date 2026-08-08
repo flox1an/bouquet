@@ -18,6 +18,10 @@ const navItems = [
   { to: '/sync', label: 'Sync', icon: RefreshCw },
 ];
 
+function isNavItemActive(pathname: string, to: string): boolean {
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
 export function TopNav() {
   const location = useLocation();
   const { logout } = useCurrentUser();
@@ -39,7 +43,7 @@ export function TopNav() {
               to={item.to}
               className={cn(
                 'transition-colors hover:text-foreground/80',
-                location.pathname === item.to ? 'text-foreground' : 'text-foreground/60'
+                isNavItemActive(location.pathname, item.to) ? 'text-foreground' : 'text-foreground/60'
               )}
             >
               {item.label}
@@ -92,7 +96,7 @@ function MobileNav() {
             to={item.to}
             className={cn(
               'flex items-center space-x-2 px-2 py-2 rounded-md transition-colors',
-              location.pathname === item.to ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+              isNavItemActive(location.pathname, item.to) ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
             )}
           >
             <item.icon className="h-5 w-5" />
