@@ -104,6 +104,9 @@ Known limitations
 - **The media grid is not virtualized.** The list view is. Catalog operations are
   linear (~10µs per asset; 50k assets project in about half a second), so the
   limit is DOM size in grid mode with a very large catalog, not the index.
+- **Deleting files does not delete the Nostr events.** Bouquet issues no NIP-09
+  deletion request. Posts referencing deleted files will show missing media, and
+  both delete dialogs say so before you confirm.
 - **Sync lists one event per file.** Where a file is referenced by several
   events, the list shows the first and does not yet let you page through the
   rest. Browse shows the full picture for that asset.

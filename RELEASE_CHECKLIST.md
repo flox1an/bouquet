@@ -69,6 +69,9 @@ with a real key before announcing a release.
 - [ ] Paste an nsec and press Enter; confirm it logs in without touching the button
 - [ ] Start a delete and a mirror from Browse and confirm each row names the
       media rather than showing only a hash
+- [ ] On Sync, select files and press the trash button: confirm NOTHING is
+      deleted until you confirm, and that cancelling keeps your selection
+- [ ] Confirm both delete dialogs state that the Nostr events are not removed
 - [ ] Log out from a phone-width window
 - [ ] Force a failure (stop a server mid-run) and confirm the dialog reports it
       and still lets you close
