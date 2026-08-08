@@ -108,21 +108,31 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
               <Button
                 size="sm"
                 variant="destructive"
-                className="h-7"
+                /* 28px is a hard target on a phone, and this one deletes files. */
+                className="h-9 min-w-9"
                 onClick={handleDeleteSelected}
-                title="Delete selected blobs"
+                aria-label={`Delete ${selectedCount} selected file${selectedCount === 1 ? '' : 's'}`}
+                title="Delete selected files"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4" />
               </Button>
             )}
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSelectedBlobs({})}>
-              <X className="h-3.5 w-3.5 text-muted-foreground" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 p-0"
+              onClick={() => setSelectedBlobs({})}
+              aria-label="Clear selection"
+            >
+              <X className="h-4 w-4 text-muted-foreground" />
             </Button>
           </div>
         )}
       </div>
 
-      <div className="rounded-md border">
+      {/* Safety net: even with the secondary columns hidden, a long title must
+          scroll the table rather than the whole page. */}
+      <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -134,9 +144,15 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                 />
               </TableHead>
               <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Event</TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Uses</TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Size</TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date</TableHead>
+              <TableHead className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:table-cell">
+                Uses
+              </TableHead>
+              <TableHead className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:table-cell">
+                Size
+              </TableHead>
+              <TableHead className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:table-cell">
+                Date
+              </TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
@@ -209,8 +225,13 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                         </div>
                       );
                     })()}
+                    {/* Size and date are their own columns from sm up; on a phone
+                        they ride along here rather than disappearing. */}
+                    <p className="mt-1 font-mono text-[10px] text-muted-foreground sm:hidden">
+                      {formatFileSize(blob.size)} · {formatDate(blob.uploaded)}
+                    </p>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <div className="flex items-center gap-1">
                       <Badges blob={blob} fileMetaEventsByHash={fileMetaEventsByHash} />
                       {distribution[blob.sha256]?.servers.length === 1 && (
@@ -220,17 +241,18 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm tabular-nums text-muted-foreground">
+                  <TableCell className="hidden text-sm tabular-nums text-muted-foreground sm:table-cell">
                     {formatFileSize(blob.size)}
                   </TableCell>
-                  <TableCell className="text-sm tabular-nums text-muted-foreground">
+                  <TableCell className="hidden text-sm tabular-nums text-muted-foreground sm:table-cell">
                     {formatDate(blob.uploaded)}
                   </TableCell>
                   <TableCell className="px-2">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 w-7 p-0"
+                      className="h-9 w-9 p-0"
+                      aria-label="Copy link to this file"
                       title="Copy link to clipboard"
                       onClick={e => {
                         e.preventDefault();

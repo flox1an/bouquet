@@ -204,7 +204,7 @@ export default function TimelineAssetDetail() {
     return (
       <DetailMessage
         title="Loading asset details"
-        detail="Reading the local catalog and blob relationships."
+        detail="Reading your local catalog and how this media fits together."
         onBack={returnToTimeline}
         loading
       />
@@ -384,7 +384,7 @@ export default function TimelineAssetDetail() {
               Supporting technical detail
             </p>
             <h2 id="attached-blobs-heading" className="mt-1 text-2xl font-bold">
-              Blob details
+              File details
             </h2>
           </div>
           <p className="font-mono text-xs text-muted-foreground">{blobs.length} total</p>

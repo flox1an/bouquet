@@ -66,7 +66,7 @@ export function BrowseToolbar({
           <Input
             value={search}
             onChange={event => onSearchChange(event.target.value)}
-            placeholder="Search titles, descriptions, event metadata, or a blob hash"
+            placeholder="Search titles, descriptions, event metadata, or a file hash"
             className="pl-9"
             aria-label="Search assets"
           />
@@ -108,7 +108,10 @@ export function BrowseToolbar({
 
         {displayMode === 'list' && (
           <div className="flex shrink-0 items-center gap-1">
-            <Select value={sort.field} onValueChange={value => onSortChange({ ...sort, field: value as TimelineSortField })}>
+            <Select
+              value={sort.field}
+              onValueChange={value => onSortChange({ ...sort, field: value as TimelineSortField })}
+            >
               <SelectTrigger className="w-36" aria-label="Sort by">
                 <SelectValue />
               </SelectTrigger>

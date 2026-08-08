@@ -609,7 +609,7 @@ function ProjectionNotice({ knownHashes }: { knownHashes: number }) {
         <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
         <div>
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Indexing local media</p>
-          <h2 className="mt-1 text-xl font-bold">Building the first projection</h2>
+          <h2 className="mt-1 text-xl font-bold">Building your media list</h2>
         </div>
       </div>
       <p className="mt-4 text-sm text-muted-foreground">
@@ -619,7 +619,7 @@ function ProjectionNotice({ knownHashes }: { knownHashes: number }) {
       <div
         className="mt-5 h-2 overflow-hidden border bg-muted"
         role="progressbar"
-        aria-label="Building media projection"
+        aria-label="Updating your media list"
         aria-valuetext="In progress"
       >
         <div className="h-full w-2/3 bg-primary animate-pulse motion-reduce:animate-none" />

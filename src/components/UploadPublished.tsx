@@ -148,9 +148,9 @@ const UploadPublished: React.FC<{ fileEventsToPublish: PublishResult[] }> = ({ f
           ))}
         </div>
       )}
-      <div className="bg-muted rounded-xl p-4 gap-4 flex flex-row justify-center">
+      <div className="bg-muted rounded-xl p-4 gap-4 flex flex-row flex-wrap justify-center">
         <Button
-          className="w-40"
+          className="w-full max-w-40 sm:w-40"
           onClick={() => {
             navigate('/browse');
           }}

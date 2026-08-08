@@ -475,10 +475,10 @@ function Upload() {
                   </a>
                 </div>
               )}
-              <div className="bg-muted rounded-xl p-4 text-muted-foreground gap-4 flex flex-row justify-center">
+              <div className="bg-muted rounded-xl p-4 text-muted-foreground gap-4 flex flex-row flex-wrap justify-center">
                 <Button
                   variant={publishCount === 0 ? 'default' : 'secondary'}
-                  className="w-40"
+                  className="w-full max-w-40 sm:w-40"
                   onClick={() => {
                     navigate('/browse');
                   }}
@@ -486,7 +486,7 @@ function Upload() {
                   Skip publishing
                 </Button>
                 {publishCount > 0 && (
-                  <Button className="w-40" disabled={uploadBusy} onClick={() => publishAll()}>
+                  <Button className="w-full max-w-40 sm:w-40" disabled={uploadBusy} onClick={() => publishAll()}>
                     {uploadBusy ? 'Publishing…' : `Publish (${publishCount} event${publishCount > 1 ? 's' : ''})`}
                   </Button>
                 )}
