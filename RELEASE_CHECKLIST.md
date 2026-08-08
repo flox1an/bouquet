@@ -72,6 +72,8 @@ with a real key before announcing a release.
 - [ ] On Sync, select files and press the trash button: confirm NOTHING is
       deleted until you confirm, and that cancelling keeps your selection
 - [ ] Confirm both delete dialogs state that the Nostr events are not removed
+- [ ] Read the interface for leftover protocol words: nothing a user sees should
+      say blob, asset or replica; counts should read "1 file", "2 copies"
 - [ ] Log out from a phone-width window
 - [ ] Force a failure (stop a server mid-run) and confirm the dialog reports it
       and still lets you close
