@@ -62,8 +62,14 @@ export default function UploadOnboarding() {
             className="flex flex-row items-start gap-3 my-2 p-4 bg-muted rounded-md cursor-pointer"
             onClick={() => handleCheckboxChange(index)}
           >
-            <div className="flex justify-center items-center pt-1">
-              <Checkbox checked={checkedState[index]} onCheckedChange={() => handleCheckboxChange(index)} />
+            {/* The row itself toggles, so the checkbox must not also bubble into it:
+                two toggles per click cancel out and the box appears dead. */}
+            <div className="flex justify-center items-center pt-1" onClick={event => event.stopPropagation()}>
+              <Checkbox
+                checked={checkedState[index]}
+                onCheckedChange={() => handleCheckboxChange(index)}
+                aria-label={`Use ${server.name}`}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <span className="flex items-center gap-2">
