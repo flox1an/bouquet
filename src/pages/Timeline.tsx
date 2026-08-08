@@ -566,10 +566,27 @@ export default function Timeline() {
         </div>
       )}
       {items.length > 0 && filteredItems.length === 0 && (
-        <EmptyState
-          title="No matching media"
-          detail="Try another media type, search term, or clear the server and availability filters."
-        />
+        <div>
+          <EmptyState
+            title="No matching media"
+            detail={`None of your ${items.length} items match the current filters.`}
+          />
+          {/* Describing how to clear filters and not offering it is the trap this
+              page kept falling into: the user has to undo each control by hand. */}
+          <Button
+            className="mt-4"
+            onClick={() => {
+              setSearch('');
+              setTypeFilter('all');
+              setAvailabilityFilter([]);
+              setSelectedServerName(undefined);
+              setEventOnly(false);
+              setDescriptiveOnly(false);
+            }}
+          >
+            Clear all filters
+          </Button>
+        </div>
       )}
     </main>
   );
