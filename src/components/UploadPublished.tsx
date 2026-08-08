@@ -7,8 +7,6 @@ import { Link } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle } from 'lucide-react';
 
 type EventVisModel = {
   id: string;
@@ -70,7 +68,7 @@ const getEventDataByKind = (event: NostrEvent): EventVisModel | undefined => {
 
 const FileEvent = ({ event }: { event: NostrEvent }) => {
   const data = useMemo(() => getEventDataByKind(event), [event]);
-  
+
   return (
     data && (
       <div className="flex flex-row gap-4 items-center">
@@ -95,7 +93,11 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
           </div>
         </div>
         <div className="w-24">
-          <a className="text-primary hover:underline flex flex-row gap-2 items-center" target="_blank" href={`https://njump.me/${data.nevent}`}>
+          <a
+            className="text-primary hover:underline flex flex-row gap-2 items-center"
+            target="_blank"
+            href={`https://njump.me/${data.nevent}`}
+          >
             <Link className="w-5 h-5" />
             <Badge>{data.type}</Badge>
           </a>
@@ -105,23 +107,46 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
   );
 };
 
-const UploadPublished: React.FC<{ fileEventsToPublish: FileEventData[] }> = ({ fileEventsToPublish }) => {
+type PublishResult = FileEventData & { publishErrors?: string[] };
+
+const UploadPublished: React.FC<{ fileEventsToPublish: PublishResult[] }> = ({ fileEventsToPublish }) => {
   const navigate = useNavigate();
 
   const allEvents = useMemo(() => fileEventsToPublish.flatMap(fe => fe.events), [fileEventsToPublish]);
+  const failedFiles = useMemo(
+    () => fileEventsToPublish.filter(fe => fe.publishErrors && fe.publishErrors.length > 0),
+    [fileEventsToPublish]
+  );
+  const everyPublishFailed = allEvents.length === 0 && failedFiles.length > 0;
 
   return (
     <div className="flex flex-col gap-4 ">
-      <h2 className="text-2xl font-bold">Published events</h2>
-      <Alert variant="warning">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>Events are not published yet. Still under development.</AlertDescription>
-      </Alert>
-      <div className="flex flex-col gap-4 w-full bg-muted rounded-xl p-4">
-        {allEvents.map(event => (
-          <FileEvent event={event} />
-        ))}
-      </div>
+      <h2 className="text-2xl font-bold">{everyPublishFailed ? 'Publishing failed' : 'Publishing results'}</h2>
+      {allEvents.length > 0 && (
+        <div className="flex flex-col gap-4 w-full bg-muted rounded-xl p-4">
+          <div className="font-mono text-xs uppercase text-muted-foreground">Published events</div>
+          {allEvents.map(event => (
+            <FileEvent key={event.id} event={event} />
+          ))}
+        </div>
+      )}
+      {failedFiles.length > 0 && (
+        <div className="flex flex-col gap-3 w-full border-2 border-destructive bg-muted rounded-xl p-4 shadow-[4px_4px_0_0_hsl(var(--destructive))]">
+          <div className="font-mono text-xs uppercase text-destructive">
+            {everyPublishFailed ? 'No events were published' : 'Some events failed to publish'}
+          </div>
+          {failedFiles.map(fe => (
+            <div key={fe.x} className="border-t-2 border-destructive pt-3 text-sm">
+              <div className="font-mono text-xs uppercase">{fe.originalFile.name}</div>
+              {fe.publishErrors?.map(error => (
+                <div key={error} className="mt-1 break-words text-destructive">
+                  {error}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="bg-muted rounded-xl p-4 gap-4 flex flex-row justify-center">
         <Button
           className="w-40"

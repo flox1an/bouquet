@@ -18,7 +18,6 @@ import { PasswordPromptProvider } from './components/PasswordPromptProvider';
 
 const Transfer = React.lazy(() => import('./pages/Transfer.tsx').then(m => ({ default: m.Transfer })));
 const Upload = React.lazy(() => import('./pages/Upload.tsx'));
-const Check = React.lazy(() => import('./pages/Check.tsx'));
 const Timeline = React.lazy(() => import('./pages/Timeline.tsx'));
 const TimelineAssetDetail = React.lazy(() => import('./pages/TimelineAssetDetail.tsx'));
 
@@ -33,7 +32,6 @@ const router = createBrowserRouter(
       <Route path="/upload" element={<Upload />} />
       <Route path="/timeline" element={<Navigate to="/browse" replace />} />
       <Route path="/timeline/:assetId" element={<RedirectToBrowseAsset />} />
-      <Route path="/check/:source" element={<Check />} />
     </Route>
   )
 );
@@ -52,27 +50,25 @@ const queryClient = new QueryClient({
 });
 
 const ReactQueryDevtools = import.meta.env.DEV
-  ? React.lazy(() =>
-      import('@tanstack/react-query-devtools').then(module => ({ default: module.ReactQueryDevtools }))
-    )
+  ? React.lazy(() => import('@tanstack/react-query-devtools').then(module => ({ default: module.ReactQueryDevtools })))
   : null;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <PasswordPromptProvider>
-      <QueryClientProvider client={queryClient}>
-        <NostrProvider>
-          <GlobalProvider>
-            <RouterProvider router={router} />
-          </GlobalProvider>
-        </NostrProvider>
-        {ReactQueryDevtools && (
-          <React.Suspense fallback={null}>
-            <ReactQueryDevtools initialIsOpen={false} />
-          </React.Suspense>
-        )}
-      </QueryClientProvider>
+        <QueryClientProvider client={queryClient}>
+          <NostrProvider>
+            <GlobalProvider>
+              <RouterProvider router={router} />
+            </GlobalProvider>
+          </NostrProvider>
+          {ReactQueryDevtools && (
+            <React.Suspense fallback={null}>
+              <ReactQueryDevtools initialIsOpen={false} />
+            </React.Suspense>
+          )}
+        </QueryClientProvider>
       </PasswordPromptProvider>
     </ErrorBoundary>
   </React.StrictMode>

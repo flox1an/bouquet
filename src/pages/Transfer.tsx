@@ -1,12 +1,4 @@
-import {
-  ArrowDownSquare,
-  ArrowUpSquare,
-  CheckCircle2,
-  FileText,
-  AlertTriangle,
-  X,
-  Loader2,
-} from 'lucide-react';
+import { ArrowDownSquare, ArrowUpSquare, CheckCircle2, FileText, AlertTriangle, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Steps } from '@/components/ui/steps';
 import { ServerSelect } from '../components/ServerList/ServerSelect';
@@ -24,6 +16,8 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getCatalog } from '../catalog/catalog';
+import ServerListPopup from '../components/ServerListPopup';
+import { useUserServers, type Server } from '../utils/useUserServers';
 
 type TransferError = {
   name?: string;
@@ -50,15 +44,7 @@ type TransferStatus = {
 
 const getPercent = (value: number, max: number) => (max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0);
 
-const SyncMeter = ({
-  label,
-  value,
-  max,
-}: {
-  label: string;
-  value: number;
-  max: number;
-}) => {
+const SyncMeter = ({ label, value, max }: { label: string; value: number; max: number }) => {
   const percent = getPercent(value, max);
   return (
     <div className="space-y-2">
@@ -91,6 +77,8 @@ export const Transfer = () => {
   const [transferSource, setTransferSource] = useState(source);
   const navigate = useNavigate();
   const { serverInfo } = useServerInfo();
+  const { storeUserServers } = useUserServers();
+  const [isServerListDialogOpen, setIsServerListDialogOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState<string | undefined>();
   const { user, signEventTemplate } = useNostr();
   const queryClient = useQueryClient();
@@ -110,8 +98,11 @@ export const Transfer = () => {
 
   const transferJobs = useMemo(() => {
     if (transferSource && transferTarget) {
-      const sourceBlobs = serverInfo[transferSource].blobs;
-      const targetBlobs = serverInfo[transferTarget].blobs;
+      const sourceServer = serverInfo[transferSource];
+      const targetServer = serverInfo[transferTarget];
+      if (!sourceServer || !targetServer) return [];
+      const sourceBlobs = sourceServer.blobs;
+      const targetBlobs = targetServer.blobs;
       return sourceBlobs?.filter(src => targetBlobs?.find(tgt => tgt.sha256 == src.sha256) == undefined) || [];
     }
     return [];
@@ -123,14 +114,12 @@ export const Transfer = () => {
     const targetBlobs = targetServer.blobs;
     if (!sourceBlobs) return undefined;
 
-    const missingCount = sourceBlobs.filter(
-      src => !targetBlobs?.find(tgt => tgt.sha256 === src.sha256)
-    ).length;
+    const missingCount = sourceBlobs.filter(src => !targetBlobs?.find(tgt => tgt.sha256 === src.sha256)).length;
 
     if (missingCount === 0) {
-      return 'No objects to transfer';
+      return 'No files to transfer';
     }
-    return `${missingCount} object${missingCount > 1 ? 's' : ''} to transfer`;
+    return `${missingCount} file${missingCount > 1 ? 's' : ''} to transfer`;
   };
 
   const performTransfer = async (sourceServer: string, targetServer: string, blobs: BlobDescriptor[]) => {
@@ -157,46 +146,46 @@ export const Transfer = () => {
           },
         }));
 
-        await transferBlob(
-          `${serverInfo[sourceServer].url}/${b.sha256}`,
-          serverInfo[targetServer],
-          signEventTemplate,
-          {
-            signal: controller.signal,
-            timeout: 120000,
-            maxRetries: 2,
-            allowMirror: mirrorSupport[targetServer] !== false,
-            onMirrorUnsupported: () => {
-              setMirrorSupport(ms => ({ ...ms, [targetServer]: false }));
-            },
-            onPhaseChange: (phase) => {
-              setTransferLog(ts => ({
-                ...ts,
-                [b.sha256]: {
-                  ...ts[b.sha256],
-                  phase,
-                },
-              }));
-            },
-            onProgress: (progressEvent) => {
-              setTransferLog(ts => ({
-                ...ts,
-                [b.sha256]: {
-                  ...ts[b.sha256],
-                  uploaded: progressEvent.loaded,
-                  downloaded: progressEvent.loaded,
-                  rate: progressEvent.rate || 0,
-                },
-              }));
-            },
-            onCompleted: (blob, method) => {
-              if (!user?.pubkey) return;
-              return getCatalog()
-                .ingestUpload(user.pubkey, { url: serverInfo[targetServer].url, type: serverInfo[targetServer].type }, blob, method === 'mirror')
-                .catch(() => undefined);
-            },
-          }
-        );
+        await transferBlob(`${serverInfo[sourceServer].url}/${b.sha256}`, serverInfo[targetServer], signEventTemplate, {
+          signal: controller.signal,
+          timeout: 120000,
+          maxRetries: 2,
+          allowMirror: mirrorSupport[targetServer] !== false,
+          onMirrorUnsupported: () => {
+            setMirrorSupport(ms => ({ ...ms, [targetServer]: false }));
+          },
+          onPhaseChange: phase => {
+            setTransferLog(ts => ({
+              ...ts,
+              [b.sha256]: {
+                ...ts[b.sha256],
+                phase,
+              },
+            }));
+          },
+          onProgress: progressEvent => {
+            setTransferLog(ts => ({
+              ...ts,
+              [b.sha256]: {
+                ...ts[b.sha256],
+                uploaded: progressEvent.loaded,
+                downloaded: progressEvent.loaded,
+                rate: progressEvent.rate || 0,
+              },
+            }));
+          },
+          onCompleted: (blob, method) => {
+            if (!user?.pubkey) return;
+            return getCatalog()
+              .ingestUpload(
+                user.pubkey,
+                { url: serverInfo[targetServer].url, type: serverInfo[targetServer].type },
+                blob,
+                method === 'mirror'
+              )
+              .catch(() => undefined);
+          },
+        });
 
         setTransferLog(ts => ({
           ...ts,
@@ -281,11 +270,7 @@ export const Transfer = () => {
   const currentTransferStep = transferSource ? (transferTarget ? 2 : 1) : 0;
   const transferSteps = (
     <Steps
-      steps={[
-        { label: 'Choose source' },
-        { label: 'Choose target' },
-        { label: 'Sync blobs' },
-      ]}
+      steps={[{ label: 'Choose source' }, { label: 'Choose target' }, { label: 'Sync files' }]}
       currentStep={currentTransferStep}
     />
   );
@@ -300,62 +285,104 @@ export const Transfer = () => {
     .filter(s => !s.virtual)
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  const hasConfiguredServers = sourceServers.length > 0;
+  const hasValidTarget = targetServers.length > 0;
+  const hasStaleSource = Boolean(transferSource && !serverInfo[transferSource]);
+
+  const handleSaveServers = async (newServers: Server[]) => {
+    await storeUserServers(newServers);
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-[80em] flex-col gap-4 py-1">
       <div className="-mt-0.5">{transferSteps}</div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
+      {!hasConfiguredServers ? (
         <Card className="shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ArrowUpSquare className="h-4 w-4" />
-              Source Server
-            </CardTitle>
-            <CardDescription className="truncate">
-              {transferSource ? serverInfo[transferSource]?.url : 'Choose a source server'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ServerSelect
-              servers={sourceServers}
-              selectedServer={transferSource}
-              onServerChange={setTransferSource}
-              placeholder="Choose a source server"
-              disabled={started}
-            />
+          <CardContent className="flex min-h-40 flex-col items-center justify-center gap-3 p-8 text-center">
+            <AlertTriangle className="h-7 w-7" />
+            <div>
+              <p className="font-semibold">No media servers configured yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add a Blossom server to choose a source and sync your media files.
+              </p>
+            </div>
+            <Button onClick={() => setIsServerListDialogOpen(true)}>Manage servers</Button>
           </CardContent>
         </Card>
-
-        <Card className="shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ArrowDownSquare className="h-4 w-4" />
-              Target Server
-            </CardTitle>
-            <CardDescription className="truncate">
-              {transferTarget ? serverInfo[transferTarget]?.url : 'Choose a target server'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ServerSelect
-              servers={targetServers}
-              selectedServer={transferTarget}
-              onServerChange={setTransferTarget}
-              placeholder="Select target server"
-              disabled={started || !transferSource}
-              getPreviewText={getTransferPreview}
-            />
-          </CardContent>
-        </Card>
-
-        <div className="flex items-start justify-end">
-          {transferSource && (
-            <Button variant="ghost" size="sm" onClick={() => closeTransferMode()}>
-              <X className="h-4 w-4" />
-            </Button>
+      ) : (
+        <>
+          {hasStaleSource && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>This source server is no longer configured</AlertTitle>
+              <AlertDescription>
+                Choose a currently configured source server below, or manage your servers.
+              </AlertDescription>
+            </Alert>
           )}
-        </div>
-      </div>
+          <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ArrowUpSquare className="h-4 w-4" />
+                  Source Server
+                </CardTitle>
+                <CardDescription className="truncate">
+                  {transferSource ? serverInfo[transferSource]?.url : 'Choose a source server'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ServerSelect
+                  servers={sourceServers}
+                  selectedServer={hasStaleSource ? undefined : transferSource}
+                  onServerChange={setTransferSource}
+                  placeholder="Choose a source server"
+                  disabled={started}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ArrowDownSquare className="h-4 w-4" />
+                  Target Server
+                </CardTitle>
+                <CardDescription className="truncate">
+                  {transferTarget ? serverInfo[transferTarget]?.url : 'Choose a target server'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ServerSelect
+                  servers={targetServers}
+                  selectedServer={transferTarget}
+                  onServerChange={setTransferTarget}
+                  placeholder="Select target server"
+                  disabled={started || !transferSource || hasStaleSource || !hasValidTarget}
+                  getPreviewText={getTransferPreview}
+                />
+                {!hasValidTarget && (
+                  <div className="mt-3 border-t pt-3 text-sm text-muted-foreground">
+                    Sync needs a second Blossom server as its target.{' '}
+                    <Button variant="link" className="h-auto p-0" onClick={() => setIsServerListDialogOpen(true)}>
+                      Manage servers
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="flex items-start justify-end">
+              {transferSource && (
+                <Button variant="ghost" size="sm" onClick={() => closeTransferMode()}>
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {transferTarget && transferJobs && transferJobs.length > 0 ? (
         <>
@@ -371,7 +398,8 @@ export const Transfer = () => {
                   Sync Summary
                 </CardTitle>
                 <CardDescription>
-                  {transferJobs.length} object{transferJobs.length > 1 ? 's' : ''} missing on {serverInfo[transferTarget]?.name}
+                  {transferJobs.length} media file{transferJobs.length > 1 ? 's' : ''} missing on{' '}
+                  {serverInfo[transferTarget]?.name}
                 </CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -385,7 +413,9 @@ export const Transfer = () => {
                   </Badge>
                 )}
                 {!started ? (
-                  <Button onClick={() => transferSource && performTransfer(transferSource, transferTarget, transferJobs)}>
+                  <Button
+                    onClick={() => transferSource && performTransfer(transferSource, transferTarget, transferJobs)}
+                  >
                     <ArrowUpSquare className="mr-1 h-4 w-4" />
                     Start sync
                   </Button>
@@ -413,18 +443,25 @@ export const Transfer = () => {
               {started && currentTransfer && (
                 <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
                   <Badge variant="outline">{currentTransfer.phase || 'starting'}</Badge>
-                  <span className="font-mono text-xs text-muted-foreground">{currentTransfer.sha256.slice(0, 24)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    Transferring media file <span className="font-mono">{currentTransfer.sha256.slice(0, 24)}</span>
+                  </span>
                 </div>
               )}
 
               {transferErrors.length > 0 && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>{transferErrors.length} transfer error{transferErrors.length > 1 ? 's' : ''}</AlertTitle>
+                  <AlertTitle>
+                    {transferErrors.length} transfer error{transferErrors.length > 1 ? 's' : ''}
+                  </AlertTitle>
                   <AlertDescription>
                     <div className="mt-2 grid w-full gap-2">
                       {transferErrors.map(t => (
-                        <div key={t.sha256} className="grid gap-2 rounded-md border border-destructive/20 bg-background/60 p-2 text-xs md:grid-cols-[1fr_auto_auto]">
+                        <div
+                          key={t.sha256}
+                          className="grid gap-2 rounded-md border border-destructive/20 bg-background/60 p-2 text-xs md:grid-cols-[1fr_auto_auto]"
+                        >
                           <span className="flex min-w-0 items-center gap-2 font-mono">
                             <FileText className="h-3.5 w-3.5 shrink-0" />
                             <span className="truncate">{t.sha256}</span>
@@ -448,7 +485,7 @@ export const Transfer = () => {
             {transferTarget ? (
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
-                No missing objects to transfer.
+                No missing files to transfer.
               </div>
             ) : transferSource ? (
               <>Select a target server above.</>
@@ -458,6 +495,13 @@ export const Transfer = () => {
           </CardContent>
         </Card>
       )}
+
+      <ServerListPopup
+        isOpen={isServerListDialogOpen}
+        onClose={() => setIsServerListDialogOpen(false)}
+        onSave={handleSaveServers}
+        initialServers={Object.values(serverInfo).filter(s => !s.virtual)}
+      />
     </div>
   );
 };

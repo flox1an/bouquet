@@ -41,7 +41,7 @@ function Upload() {
   const [uploadBusy, setUploadBusy] = useState(false);
   const limit = pLimit(3);
   const [preparing, setPreparing] = useState(false);
-  const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventData[]>([]);
+  const [fileEventsToPublish, setFileEventsToPublish] = useState<(FileEventData & { publishErrors?: string[] })[]>([]);
   const [imageResize, setImageResize] = useState(0);
   const [uploadStep, setUploadStep] = useState(0);
   const { publishFileEvent, publishAudioEvent, publishVideoEvent } = usePublishing();
@@ -138,13 +138,11 @@ function Upload() {
           // Check if blob already exists on Blossom servers
           if (server.type == 'blossom') {
             const fileHash = await calculateFileHash(file);
-            
 
             // Check if blob exists using HEAD request
             const existingBlob = await checkBlobExists(serverUrl, fileHash);
 
             if (existingBlob) {
-              
               newBlob = existingBlob;
               // Mark as transferred immediately since we're skipping upload
               serverTransferred += file.size;
@@ -204,7 +202,9 @@ function Upload() {
             m: newBlob.type,
           };
           if (user?.pubkey) {
-            void getCatalog().ingestUpload(user.pubkey, { url: server.url, type: server.type }, newBlob).catch(() => undefined);
+            void getCatalog()
+              .ingestUpload(user.pubkey, { url: server.url, type: server.type }, newBlob)
+              .catch(() => undefined);
           }
         } catch (e) {
           const axiosError = e as AxiosError;
@@ -310,7 +310,12 @@ function Upload() {
                 onCompleted: (blob, method) => {
                   if (!user?.pubkey) return;
                   return getCatalog()
-                    .ingestUpload(user.pubkey, { url: serverInfo[s].url, type: serverInfo[s].type }, blob, method === 'mirror')
+                    .ingestUpload(
+                      user.pubkey,
+                      { url: serverInfo[s].url, type: serverInfo[s].type },
+                      blob,
+                      method === 'mirror'
+                    )
                     .catch(() => undefined);
                 },
               });
@@ -347,12 +352,40 @@ function Upload() {
   };
 
   const publishAll = async () => {
-    fileEventsToPublish.forEach(async fe => {
-      if (fe.publish.file) await publishOne(fe, publishFileEvent, false);
-      if (fe.publish.audio) await publishOne(fe, publishAudioEvent, false);
-      if (fe.publish.video) await publishOne(fe, publishVideoEvent, true);
-    });
-    setUploadStep(3);
+    setUploadBusy(true);
+
+    const publishJobs = fileEventsToPublish.flatMap(fe => [
+      ...(fe.publish.file ? [{ fe, label: 'File event', publish: () => publishOne(fe, publishFileEvent, false) }] : []),
+      ...(fe.publish.audio
+        ? [{ fe, label: 'Audio event', publish: () => publishOne(fe, publishAudioEvent, false) }]
+        : []),
+      ...(fe.publish.video
+        ? [{ fe, label: 'Video event', publish: () => publishOne(fe, publishVideoEvent, true) }]
+        : []),
+    ]);
+
+    try {
+      const results = await Promise.allSettled(publishJobs.map(job => job.publish()));
+      const errorsByFile = new Map<string, string[]>();
+
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const { fe, label } = publishJobs[index];
+          const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          errorsByFile.set(fe.x, [...(errorsByFile.get(fe.x) ?? []), `${label}: ${message}`]);
+        }
+      });
+
+      if (errorsByFile.size > 0) {
+        setFileEventsToPublish(prev =>
+          prev.map(fe => (errorsByFile.has(fe.x) ? { ...fe, publishErrors: errorsByFile.get(fe.x) } : fe))
+        );
+      }
+
+      setUploadStep(3);
+    } finally {
+      setUploadBusy(false);
+    }
   };
 
   const audioCount = useMemo(() => fileEventsToPublish.filter(fe => fe.publish.audio).length, [fileEventsToPublish]);
@@ -435,8 +468,8 @@ function Upload() {
                   Skip publishing
                 </Button>
                 {publishCount > 0 && (
-                  <Button className="w-40" onClick={() => publishAll()}>
-                    Publish ({publishCount} event{publishCount > 1 ? 's' : ''})
+                  <Button className="w-40" disabled={uploadBusy} onClick={() => publishAll()}>
+                    {uploadBusy ? 'Publishing…' : `Publish (${publishCount} event${publishCount > 1 ? 's' : ''})`}
                   </Button>
                 )}
               </div>
