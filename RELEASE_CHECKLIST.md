@@ -41,8 +41,32 @@
 - [ ] Production environment variables/config validated
 - [ ] Post-deploy smoke test completed
 
+## 7. Smoke Test That Only a Signed-In User Can Run
+
+These cannot be verified from the codebase alone. Run them against real servers
+with a real key before announcing a release.
+
+- [ ] Sign in, confirm Browse lists your assets with no server selected
+- [ ] An HLS video appears as exactly one entry, segments only in its detail view
+- [ ] Search a sha256 prefix (8+ chars) and find the owning asset
+- [ ] Mirror one asset to a second server; confirm the plan count matches what is
+      actually missing, and that the replica count increases afterwards without a
+      manual reload
+- [ ] Cancel a mirror mid-run, re-run it, and confirm completed blobs are skipped
+- [ ] Sync an asset and confirm every blob lands on every configured server
+- [ ] Delete an asset and confirm removal from every server that reported it,
+      with per-server errors shown if any server refuses
+- [ ] Confirm delete is blocked, with a visible reason, on an asset whose graph
+      is incomplete
+- [ ] Open an event's njump link and confirm it resolves to the real post
+
 ## Current Known Items
 
-- Lint warnings still exist, mainly around hook dependencies and migration leftovers.
-- Build warns about large chunks; this is currently accepted for the present usage profile.
+- Lint warnings still exist (0 errors, 29 warnings), mainly hook dependencies.
+- Build warns about a ~1.0 MB main chunk (~330 kB gzipped); accepted for the
+  present usage profile, with routes already lazy-loaded.
+- Mirror and sync target Blossom servers; NIP-96 destinations are only reached
+  through the upload fallback.
+- A cancelled transfer run has no persisted job state; re-running the action is
+  the resume path and skips completed blobs.
 
