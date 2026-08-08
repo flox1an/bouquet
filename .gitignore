@@ -24,9 +24,14 @@ dist-ssr
 *.sw?
 .vercel
 
-package-lock.json
 bun.lockb
 .nsite/
 .codegpt
 .worktrees/
 .env*.local
+
+# Local scratch media and sample event data used for manual testing;
+# kept on disk, never committed
+*.mp4
+*.llc
+audio.txt
