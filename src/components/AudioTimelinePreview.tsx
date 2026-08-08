@@ -22,9 +22,11 @@ export function AudioTimelinePreview({
   useEffect(() => {
     if (!item.primaryBlobSha256) return;
     let active = true;
-    void getCachedId3Tag(item.primaryBlobSha256).then(tag => {
-      if (active) setMetadata(tag);
-    });
+    void getCachedId3Tag(item.primaryBlobSha256)
+      .then(tag => {
+        if (active) setMetadata(tag);
+      })
+      .catch(() => undefined); // Missing ID3 tags are normal; the card reads fine without them.
     return () => {
       active = false;
     };
@@ -37,11 +39,14 @@ export function AudioTimelinePreview({
       load();
       return;
     }
-    const observer = new IntersectionObserver(entries => {
-      if (!entries[0]?.isIntersecting) return;
-      load();
-      observer.disconnect();
-    }, { rootMargin: '300px 0px' });
+    const observer = new IntersectionObserver(
+      entries => {
+        if (!entries[0]?.isIntersecting) return;
+        load();
+        observer.disconnect();
+      },
+      { rootMargin: '300px 0px' }
+    );
     const preview = previewRef.current;
     if (preview) observer.observe(preview);
     return () => observer.disconnect();
@@ -55,7 +60,11 @@ export function AudioTimelinePreview({
         className="h-full w-full object-cover"
         loading="lazy"
       />
-      {!metadata?.cover && <div className="absolute inset-0 flex items-center justify-center bg-background/35"><Music2 className="h-6 w-6 text-primary" aria-hidden="true" /></div>}
+      {!metadata?.cover && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/35">
+          <Music2 className="h-6 w-6 text-primary" aria-hidden="true" />
+        </div>
+      )}
     </div>
   );
 }

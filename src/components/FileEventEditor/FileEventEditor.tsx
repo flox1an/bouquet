@@ -13,13 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export type FileEventData = {
   originalFile: File;
@@ -89,22 +83,23 @@ const FileEventEditor = ({
         fileEventData.publishedThumbnail
       )
     ) {
-      
-      fetchId3Tag(fileEventData.x, fileEventData.url[0], fileEventData.originalFile).then(res => {
-        if (!res) return;
+      fetchId3Tag(fileEventData.x, fileEventData.url[0], fileEventData.originalFile)
+        .then(res => {
+          if (!res) return;
 
-        const { id3 } = res;
-        
-        setFileEventData({
-          ...fileEventData,
-          artist: id3.artist,
-          album: id3.album,
-          title: id3.title,
-          year: id3.year,
-          thumbnails: res.coverFull ? [res.coverFull] : [],
-          selectedThumbnail: res.coverFull,
-        });
-      });
+          const { id3 } = res;
+
+          setFileEventData({
+            ...fileEventData,
+            artist: id3.artist,
+            album: id3.album,
+            title: id3.title,
+            year: id3.year,
+            thumbnails: res.coverFull ? [res.coverFull] : [],
+            selectedThumbnail: res.coverFull,
+          });
+        })
+        .catch(() => undefined); // Audio without readable tags is still publishable.
     }
   }, [fileEventData]);
 
@@ -139,7 +134,7 @@ const FileEventEditor = ({
                 <Switch
                   id="publish-file"
                   checked={fileEventData.publish.file}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={checked =>
                     setFileEventData({
                       ...fileEventData,
                       publish: { ...fileEventData.publish, file: checked },
@@ -157,7 +152,7 @@ const FileEventEditor = ({
                 <Switch
                   id="publish-video"
                   checked={fileEventData.publish.video}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={checked =>
                     setFileEventData({
                       ...fileEventData,
                       publish: { ...fileEventData.publish, video: checked },
@@ -175,7 +170,7 @@ const FileEventEditor = ({
                 <Switch
                   id="publish-audio"
                   checked={fileEventData.publish.audio}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={checked =>
                     setFileEventData({
                       ...fileEventData,
                       publish: { ...fileEventData.publish, audio: checked },
@@ -294,7 +289,7 @@ const FileEventEditor = ({
                 <div className="flex flex-wrap gap-2">
                   <Select
                     value={fileEventData.genre || ''}
-                    onValueChange={(value) => setFileEventData({ ...fileEventData, genre: value, subgenre: '' })}
+                    onValueChange={value => setFileEventData({ ...fileEventData, genre: value, subgenre: '' })}
                   >
                     <SelectTrigger className="w-[180px]">
                       <SelectValue placeholder="Select genre" />
@@ -314,7 +309,7 @@ const FileEventEditor = ({
                       !allGenres[fileEventData.genre] ||
                       allGenres[fileEventData.genre].length === 0
                     }
-                    onValueChange={(value) => setFileEventData({ ...fileEventData, subgenre: value })}
+                    onValueChange={value => setFileEventData({ ...fileEventData, subgenre: value })}
                   >
                     <SelectTrigger className="w-[180px]">
                       <SelectValue placeholder="Sub-genre" />

@@ -57,9 +57,11 @@ export function BrowseListRow({
         for (const entry of entries) {
           if (entry.isIntersecting && !hasRequested.current) {
             hasRequested.current = true;
-            void getCatalogTimelineAsset(getCatalog(), pubkey, item.assetId).then(result => {
-              if (result) setDetail(result);
-            });
+            void getCatalogTimelineAsset(getCatalog(), pubkey, item.assetId)
+              .then(result => {
+                if (result) setDetail(result);
+              })
+              .catch(() => undefined); // Row already renders from the projection.
             observer.disconnect();
           }
         }

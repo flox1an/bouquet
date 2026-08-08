@@ -12,9 +12,14 @@ export function useCatalogStatus(pubkey: string | undefined) {
     }
     let cancelled = false;
     const refresh = () => {
-      getCatalog().getCatalogStatus(pubkey).then(nextStatus => {
-        if (!cancelled) setStatus(nextStatus);
-      });
+      getCatalog()
+        .getCatalogStatus(pubkey)
+        .then(nextStatus => {
+          if (!cancelled) setStatus(nextStatus);
+        })
+        .catch(error => {
+          console.error('Could not read catalog status', error);
+        });
     };
     refresh();
     window.addEventListener('bouquet-catalog-changed', refresh);

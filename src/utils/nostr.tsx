@@ -56,13 +56,20 @@ function AccountRestoreInit({ onRestore }: { onRestore: (pubkey: string) => void
 
   useEffect(() => {
     if (!restored) {
-      restoreAccountsToManager(accountManager).then(() => {
-        setRestored(true);
-        const active = accountManager.active;
-        if (active) {
-          onRestore(active.pubkey);
-        }
-      });
+      restoreAccountsToManager(accountManager)
+        .then(() => {
+          setRestored(true);
+          const active = accountManager.active;
+          if (active) {
+            onRestore(active.pubkey);
+          }
+        })
+        .catch(error => {
+          // A rejection here presents a signed-in user as signed out. Mark the
+          // attempt done so it cannot loop, and leave a trace worth reporting.
+          console.error('Could not restore saved accounts', error);
+          setRestored(true);
+        });
     }
   }, [restored, onRestore]);
 
@@ -110,10 +117,8 @@ function UserRelayLoader({
       hasLoadedRef.current = true;
 
       if (relayUrls.length > 0) {
-        
         onRelaysLoaded(relayUrls);
       } else {
-        
         onRelaysReady();
       }
     }
@@ -125,7 +130,6 @@ function UserRelayLoader({
 
     const timeout = setTimeout(() => {
       if (!relayListEvent.isSuccess && !hasLoadedRef.current) {
-        
         hasLoadedRef.current = true;
         onRelaysReady();
       }
@@ -170,7 +174,6 @@ export const NostrProvider = ({ children }: { children: React.ReactElement }) =>
   );
 
   const handleRelaysLoaded = useCallback((relays: string[]) => {
-    
     setUser(prev => {
       if (!prev) return prev;
       // Only update if relays have actually changed
@@ -234,11 +237,7 @@ export const NostrProvider = ({ children }: { children: React.ReactElement }) =>
         <NostrContext.Provider value={value}>
           <AccountRestoreInit onRestore={handleAccountRestore} />
           <BatchedProfileLoaderInit />
-          <UserRelayLoader
-            user={user}
-            onRelaysLoaded={handleRelaysLoaded}
-            onRelaysReady={() => setRelaysReady(true)}
-          />
+          <UserRelayLoader user={user} onRelaysLoaded={handleRelaysLoaded} onRelaysReady={() => setRelaysReady(true)} />
           {children}
         </NostrContext.Provider>
       </EventStoreProvider>

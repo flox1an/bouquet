@@ -99,9 +99,11 @@ export default function TimelineAssetDetail() {
     setCheckingAvailability(false);
     setAvailableChecked(true);
     if (assetId)
-      getCatalogTimelineAsset(getCatalog(), user.pubkey, assetId).then(result => {
-        if (result) setDetail(result);
-      });
+      getCatalogTimelineAsset(getCatalog(), user.pubkey, assetId)
+        .then(result => {
+          if (result) setDetail(result);
+        })
+        .catch(() => undefined);
   }, [user?.pubkey, assetId, detail?.blobs]);
 
   useEffect(() => {
@@ -165,9 +167,11 @@ export default function TimelineAssetDetail() {
               setCheckingAvailability(false);
               setAvailableChecked(true);
               if (assetId)
-                getCatalogTimelineAsset(getCatalog(), user.pubkey, assetId).then(r => {
-                  if (r && active) setDetail(r);
-                });
+                getCatalogTimelineAsset(getCatalog(), user.pubkey, assetId)
+                  .then(r => {
+                    if (r && active) setDetail(r);
+                  })
+                  .catch(() => undefined);
             })
             .catch(() => {
               if (active) setCheckingAvailability(false);

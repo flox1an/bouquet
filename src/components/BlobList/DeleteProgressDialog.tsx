@@ -19,12 +19,14 @@ type Props = {
 
 const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
   const [fileStates, setFileStates] = useState<FileState[]>([]);
+  const [finished, setFinished] = useState(false);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
     if (!open || blobs.length === 0) return;
 
     cancelledRef.current = false;
+    setFinished(false);
     setFileStates(blobs.map(() => 'pending'));
 
     // Shared index counter — safe in JS single-threaded event loop
@@ -48,13 +50,24 @@ const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
       }
     };
 
-    Promise.all(Array.from({ length: CONCURRENCY }, worker)).then(() => {
-      if (cancelledRef.current) {
-        setFileStates(prev => prev.map(s => (s === 'pending' ? 'cancelled' : s)));
-      } else {
-        setTimeout(() => onClose(), 600);
-      }
-    });
+    Promise.all(Array.from({ length: CONCURRENCY }, worker))
+      .then(() => {
+        setFinished(true);
+        if (cancelledRef.current) {
+          setFileStates(prev => prev.map(s => (s === 'pending' ? 'cancelled' : s)));
+          return;
+        }
+        // Only slip away silently when there is nothing the user needs to read.
+        setFileStates(prev => {
+          if (!prev.some(s => s === 'error')) setTimeout(() => onClose(), 600);
+          return prev;
+        });
+      })
+      .catch(() => {
+        // Without this the dialog blocks escape and outside-click forever.
+        setFinished(true);
+        setFileStates(prev => prev.map(s => (s === 'pending' || s === 'deleting' ? 'error' : s)));
+      });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -67,7 +80,7 @@ const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
   const done = fileStates.filter(s => s === 'done').length;
   const total = blobs.length;
   const progress = total > 0 ? Math.round((done / total) * 100) : 0;
-  const isComplete = done === total && total > 0;
+  const errorCount = fileStates.filter(s => s === 'error').length;
 
   return (
     <DialogPrimitive.Root open={open}>
@@ -75,15 +88,19 @@ const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-          onInteractOutside={e => e.preventDefault()}
-          onEscapeKeyDown={e => e.preventDefault()}
+          onInteractOutside={e => !finished && e.preventDefault()}
+          onEscapeKeyDown={e => !finished && e.preventDefault()}
         >
           <DialogPrimitive.Title className="text-lg font-semibold">
-            {isComplete ? 'Deletion complete' : `Deleting ${total} file${total !== 1 ? 's' : ''}`}
+            {finished
+              ? errorCount > 0
+                ? 'Deletion finished with errors'
+                : 'Deletion complete'
+              : `Deleting ${total} file${total !== 1 ? 's' : ''}`}
           </DialogPrimitive.Title>
           <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">
-            {isComplete
-              ? `${done} file${done !== 1 ? 's' : ''} deleted successfully.`
+            {finished
+              ? `${done} of ${total} file${total !== 1 ? 's' : ''} deleted.`
               : `Deleting up to ${CONCURRENCY} files concurrently…`}
           </DialogPrimitive.Description>
 
@@ -115,9 +132,7 @@ const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
                     {state === 'done' && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
                     {state === 'error' && <XCircle className="h-3.5 w-3.5 text-destructive" />}
                     {state === 'deleting' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {(state === 'pending' || state === 'cancelled') && (
-                      <Trash2 className="h-3.5 w-3.5 opacity-30" />
-                    )}
+                    {(state === 'pending' || state === 'cancelled') && <Trash2 className="h-3.5 w-3.5 opacity-30" />}
                   </span>
                   <span className="flex-1 truncate">{label}</span>
                   {ext && <span className="ml-auto text-muted-foreground/60">{ext}</span>}
@@ -126,9 +141,18 @@ const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
             })}
           </ul>
 
+          {finished && errorCount > 0 && (
+            <p
+              className="mt-4 border border-destructive bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              role="status"
+            >
+              {errorCount} of {total} could not be deleted. They are still on their servers.
+            </p>
+          )}
+
           <div className="mt-6 flex justify-end">
-            <Button variant="outline" size="sm" onClick={handleCancel} disabled={isComplete}>
-              Cancel
+            <Button variant="outline" size="sm" onClick={handleCancel}>
+              {finished ? 'Close' : 'Cancel'}
             </Button>
           </div>
         </DialogPrimitive.Content>
