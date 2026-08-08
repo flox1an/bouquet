@@ -468,7 +468,7 @@ function Upload() {
                 <div className="text-sm text-muted-foreground flex flex-row gap-2 items-center pl-4">
                   <Info className="h-5 w-5 text-blue-500" />
                   Audio events are not widely supported yet. Currently they are only used by{' '}
-                  <a className="link link-primary" href="https://stemstr.app/" target="_blank">
+                  <a className="link link-primary" href="https://stemstr.app/" target="_blank" rel="noreferrer">
                     stemstr.app
                   </a>
                 </div>

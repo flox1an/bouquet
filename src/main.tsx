@@ -24,7 +24,9 @@ const TimelineAssetDetail = React.lazy(() => import('./pages/TimelineAssetDetail
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route element={<Layout />}>
-      <Route path="/" element={<Navigate to="/upload" replace />} />
+      {/* Home is the media catalog. Opening on an upload form asks the user to
+          add more before they have seen what they already have. */}
+      <Route path="/" element={<Navigate to="/browse" replace />} />
       <Route path="/browse" element={<Timeline />} />
       <Route path="/browse/:assetId" element={<TimelineAssetDetail />} />
       <Route path="/transfer/:source" element={<Transfer />} />

@@ -96,6 +96,7 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
           <a
             className="text-primary hover:underline flex flex-row gap-2 items-center"
             target="_blank"
+            rel="noreferrer"
             href={`https://njump.me/${data.nevent}`}
           >
             <Link className="w-5 h-5" />

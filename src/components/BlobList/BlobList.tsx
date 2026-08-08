@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { Clipboard, AlertTriangle, Trash2, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import {
+  Clipboard,
+  AlertTriangle,
+  Trash2,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from 'lucide-react';
 import { formatFileSize, formatDate } from '../../utils/utils';
 import { useServerInfo } from '../../utils/useServerInfo';
 import Badge from './Badge';
 import useFileMetaEventsByHash from '../../utils/useFileMetaEvents';
+import { eventKindLabel, fallbackEventTitle } from '../../catalog/eventKinds';
 import './BlobList.css';
 import { useBlobSelection } from './useBlobSelection';
 import MimeTypeIcon from '../MimeTypeIcon';
@@ -121,7 +131,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                   aria-label="Select all on page"
                 />
               </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Hash</TableHead>
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Event</TableHead>
               <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Uses</TableHead>
               <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Size</TableHead>
               <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date</TableHead>
@@ -148,10 +158,62 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                       <MimeTypeIcon type={blob.type} />
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <a className="font-mono text-xs text-primary hover:underline" href={blob.url} target="_blank">
-                      {blob.sha256 ? blob.sha256.slice(0, 15) : blob.url.slice(blob.url.length - 15)}
-                    </a>
+                  <TableCell className="max-w-[180px] sm:max-w-[320px]">
+                    {(() => {
+                      const event = fileMetaEventsByHash[blob.sha256]?.[0];
+                      const hash = blob.sha256 ? blob.sha256.slice(0, 15) : blob.url.slice(blob.url.length - 15);
+
+                      if (!event) {
+                        return (
+                          <div className="flex min-w-0 flex-col gap-1">
+                            <span className="font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              No event
+                            </span>
+                            <a
+                              className="w-fit font-mono text-xs text-primary hover:underline"
+                              href={blob.url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {hash}
+                            </a>
+                          </div>
+                        );
+                      }
+
+                      const tagValue = (name: string) => event.tags.find(tag => tag[0] === name)?.[1]?.trim();
+                      const contentTitle = event.content
+                        .split('\n')
+                        .map(line => line.trim())
+                        .find(Boolean);
+                      const eventTitle =
+                        tagValue('title') ||
+                        tagValue('alt') ||
+                        tagValue('name') ||
+                        contentTitle ||
+                        fallbackEventTitle(event.kind);
+
+                      return (
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate text-sm font-medium" title={eventTitle}>
+                              {eventTitle}
+                            </span>
+                            <span className="shrink-0 border border-border px-1 font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              {eventKindLabel(event.kind)}
+                            </span>
+                          </div>
+                          <a
+                            className="w-fit font-mono text-[10px] text-muted-foreground hover:text-primary hover:underline"
+                            href={blob.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {hash}
+                          </a>
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
@@ -163,8 +225,12 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm tabular-nums text-muted-foreground">{formatFileSize(blob.size)}</TableCell>
-                  <TableCell className="text-sm tabular-nums text-muted-foreground">{formatDate(blob.uploaded)}</TableCell>
+                  <TableCell className="text-sm tabular-nums text-muted-foreground">
+                    {formatFileSize(blob.size)}
+                  </TableCell>
+                  <TableCell className="text-sm tabular-nums text-muted-foreground">
+                    {formatDate(blob.uploaded)}
+                  </TableCell>
                   <TableCell className="px-2">
                     <Button
                       variant="ghost"
@@ -278,7 +344,13 @@ const Badges = ({
 }) => {
   const events = fileMetaEventsByHash[blob.sha256];
   if (!events) return null;
-  return <>{events.map(ev => <Badge ev={ev} key={ev.id} />)}</>;
+  return (
+    <>
+      {events.map(ev => (
+        <Badge ev={ev} key={ev.id} />
+      ))}
+    </>
+  );
 };
 
 export default BlobList;
