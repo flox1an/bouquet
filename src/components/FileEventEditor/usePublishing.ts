@@ -1,7 +1,7 @@
 import type { NostrEvent } from 'nostr-tools';
 import dayjs from 'dayjs';
 import { FileEventData } from './FileEventEditor';
-import { uniq } from 'lodash';
+const uniq = <T>(values: T[]): T[] => [...new Set(values)];
 import { useNostr, accountManager } from '../../utils/nostr';
 import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../../utils/useFileMetaEvents';
 import { ReadonlyAccount } from 'applesauce-accounts/accounts';

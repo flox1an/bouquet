@@ -1,4 +1,5 @@
-import { groupBy, mapValues } from 'lodash';
+// Grouping two-column rows into a map is a few lines; importing lodash for it
+// pulled the whole library into the main bundle.
 
 // https://raw.githubusercontent.com/wavlake/genre-list/main/list.csv
 const wavlakeGenres = [
@@ -325,7 +326,8 @@ const wavlakeGenres = [
   ['World', 'Zydeco'],
 ];
 
-export const allGenres = mapValues(
-  groupBy(wavlakeGenres, g => g[0]),
-  v => v.flatMap(x => x[1]).filter(x => !!x)
-);
+export const allGenres = wavlakeGenres.reduce<Record<string, string[]>>((groups, [group, genre]) => {
+  if (!genre) return groups;
+  (groups[group] ??= []).push(genre);
+  return groups;
+}, {});
