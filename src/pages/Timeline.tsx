@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 import { getCatalog, normalizeServerUrl } from '../catalog/catalog';
 import {
   projectCatalogAssets,
@@ -348,7 +349,16 @@ export default function Timeline() {
       <main className="mx-auto flex min-h-[55vh] max-w-2xl flex-col justify-center px-6">
         <EmptyState
           title="Your catalog is waiting for its first source"
-          detail="Add a media server or publish an event, then return here as discovery finishes."
+          detail="Add a media server, or publish an event, and your media appears here as discovery finishes."
+        />
+        <div className="mt-6">
+          <Button onClick={() => setIsServerListDialogOpen(true)}>Add a media server</Button>
+        </div>
+        <ServerListPopup
+          isOpen={isServerListDialogOpen}
+          onClose={() => setIsServerListDialogOpen(false)}
+          onSave={handleSaveServers}
+          initialServers={Object.values(serverInfo).filter(s => !s.virtual)}
         />
       </main>
     );
