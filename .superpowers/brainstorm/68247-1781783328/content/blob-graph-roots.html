@@ -1,0 +1,51 @@
+<h2>Blob ownership graph: first decision</h2>
+<p class="subtitle">Goal: infer what each Blossom blob belongs to, without hosting a separate database.</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Observed inputs</div>
+    <div class="mockup-body">
+      <div class="mock-nav">Current user profile → relays → authored events</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+        <div class="placeholder">Nostr video events<br><small>kind 21 / 22 / 34235 / 34236</small></div>
+        <div class="placeholder">File metadata / posts<br><small>kind 1063 / 20 / 1 / audio</small></div>
+      </div>
+      <div style="margin:12px 0;text-align:center;color:#888;">extract urls + x hashes</div>
+      <div class="placeholder">Blossom blobs on selected server</div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Proposed display unit</div>
+    <div class="mockup-body">
+      <div class="placeholder" style="border-color:#7c3aed;">Root: Nostr video event</div>
+      <div style="margin-left:28px;margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+        <div class="placeholder">MP4 variant blob</div>
+        <div class="placeholder">Thumbnail / poster / grid blob</div>
+        <div class="placeholder" style="border-color:#2563eb;">HLS master playlist blob</div>
+        <div style="margin-left:28px;display:flex;flex-direction:column;gap:8px;">
+          <div class="placeholder">Variant playlist blob</div>
+          <div style="margin-left:28px;" class="placeholder">Init + segment blobs</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;color:#888;font-size:13px;">Actions select/delete/mirror/sync the whole subtree or selected nodes.</div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="event-root" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content"><h3>Root is the Nostr event</h3><p>If a blob is referenced by an event, group it under that event. Playlists are children.</p></div>
+  </div>
+  <div class="option" data-choice="playlist-root" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content"><h3>Root can be event or playlist</h3><p>If no event explains a playlist, show the playlist itself as a root with parsed descendants.</p></div>
+  </div>
+  <div class="option" data-choice="blob-root" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content"><h3>Root is every blob</h3><p>Keep blob rows primary, add expandable “known relationships” beneath each row.</p></div>
+  </div>
+</div>
+
+<p class="subtitle"><strong>Recommendation:</strong> B. It handles unknown/orphan HLS blobs without losing the event-first model for known Nostr videos.</p>

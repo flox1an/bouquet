@@ -7,13 +7,7 @@ import { useServerInfo } from '../utils/useServerInfo';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type ResizeOptionType = {
   name: string;
@@ -180,16 +174,16 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
                 checked={imageResize > 0}
                 onCheckedChange={() => setImageResize(irs => (irs > 0 ? 0 : 1))}
               />
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <label htmlFor="resizeOption" className="cursor-pointer select-none">
                   Resize Image
                 </label>
                 <Select
                   disabled={uploadBusy || imageResize == 0}
                   value={String(imageResize)}
-                  onValueChange={(value) => setImageResize(Number(value))}
+                  onValueChange={value => setImageResize(Number(value))}
                 >
-                  <SelectTrigger className="w-[200px] h-8">
+                  <SelectTrigger className="h-8 w-full max-w-full sm:w-[200px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -212,10 +206,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
         </div>
       )}
       <div className="flex flex-row gap-2 justify-center md:justify-start">
-        <Button
-          onClick={() => upload()}
-          disabled={serversEnabledCount < 1 || uploadBusy || files.length == 0}
-        >
+        <Button onClick={() => upload()} disabled={serversEnabledCount < 1 || uploadBusy || files.length == 0}>
           <Upload className="w-4 h-4 mr-1" />
           Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
           {formatFileSize(sizeOfFilesToUpload)}
@@ -223,6 +214,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
         <Button
           variant="secondary"
           size="icon"
+          aria-label="Clear selected files"
           disabled={uploadBusy || files.length == 0}
           onClick={() => {
             clearTransfers();

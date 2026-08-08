@@ -1,0 +1,33 @@
+<h2>Unknown / unassigned bucket</h2>
+<p class="subtitle">Accepted: roots can be Nostr events or playlists. Now define what belongs in “Unknown”.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Browse by relationships</div>
+  <div class="mockup-body">
+    <div class="placeholder" style="border-color:#7c3aed;">Nostr Video Event · “My clip” · 18 blobs</div>
+    <div class="placeholder" style="border-color:#2563eb;">Playlist Root · master.m3u8 · 142 blobs</div>
+    <div class="placeholder" style="border-color:#b45309;">Unknown / Unassigned · 57 blobs</div>
+    <div style="margin-left:28px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
+      <div class="placeholder">known MIME only</div>
+      <div class="placeholder">hash only</div>
+      <div class="placeholder">candidate playlist segment</div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="strict-unknown" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content"><h3>Strict Unknown</h3><p>Only blobs with no discovered event reference and no parsed playlist parent.</p></div>
+  </div>
+  <div class="option" data-choice="diagnostic-unknown" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content"><h3>Diagnostic Unknown</h3><p>Also includes weak candidates: segment-looking blobs, playlist MIME mismatches, URL-only refs without hash match.</p></div>
+  </div>
+  <div class="option" data-choice="multiple-buckets" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content"><h3>Separate buckets</h3><p>Split into Unreferenced, Ambiguous, Parse Failed, and External-only.</p></div>
+  </div>
+</div>
+
+<p class="subtitle"><strong>Recommendation:</strong> C internally, but collapsed under one “Unknown / Needs analysis” section in the UI. This keeps operations safe.</p>

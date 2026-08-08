@@ -1,0 +1,30 @@
+<h2>Which Nostr events explain blobs?</h2>
+<p class="subtitle">A confirmed: client-side typed graph index. Next: event fetch scope.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Candidate event sources</div>
+  <div class="mockup-body">
+    <div class="placeholder" style="border-color:#16a34a;">Current user authored events<br><small>authors: [active pubkey]</small></div>
+    <div style="text-align:center;margin:8px;color:#888;">+</div>
+    <div class="placeholder" style="border-color:#2563eb;">Seen / contributed variant events<br><small>optional later: events that tag/root/reference user videos</small></div>
+    <div style="text-align:center;margin:8px;color:#888;">→ extract hashes + URLs → match server blobs</div>
+    <div class="placeholder">Blob graph index</div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="author-only" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content"><h3>Author-only first</h3><p>Fetch relevant kinds authored by the active profile. Fast, clear ownership semantics.</p></div>
+  </div>
+  <div class="option" data-choice="author-plus-referenced" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content"><h3>Author + referenced/contributed</h3><p>Also fetch external events that add variants or reference the user’s videos. Better completeness, more ambiguity.</p></div>
+  </div>
+  <div class="option" data-choice="server-first" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content"><h3>Server-first reverse lookup</h3><p>For each server blob, search relays for matching x/url references. Expensive and relay-dependent.</p></div>
+  </div>
+</div>
+
+<p class="subtitle"><strong>Recommendation:</strong> A for the first implementation. Model can keep edge provenance so B can be added without changing the UI.</p>
