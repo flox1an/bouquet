@@ -87,6 +87,13 @@ control names the action rather than the state, pinch-zoom is no longer
 blocked, and dialogs fit a 375px viewport. Every external link carries
 rel="noreferrer".
 
+### Plain words instead of protocol vocabulary
+
+The interface no longer says blob, asset or replica. A stored object is a
+**file**, the Nostr event that groups files is an **item**, and the same file on
+another server is a **copy**. The protocol terms remain correct in the code and
+in the Blossom APIs; they just are not the words a user has to learn.
+
 Known limitations
 
 - **Mirror and sync target Blossom servers.** NIP-96 servers are reachable
