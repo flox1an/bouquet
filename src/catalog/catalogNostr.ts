@@ -3,7 +3,7 @@ import type { Filter } from 'nostr-tools';
 import { mergeRelays, relayPool } from '../nostr/core';
 import { Catalog } from './catalog';
 
-export const CATALOG_EVENT_KINDS = [1, 20, 21, 22, 1063, 30563, 31337, 34235, 34236] as const;
+export const CATALOG_EVENT_KINDS = [1, 20, 21, 22, 1063, 5128, 15128, 30563, 31337, 34235, 34236, 35128] as const;
 
 export async function syncAuthoredEventsFromRelays(catalog: Catalog, pubkey: string, relayUrls: string[]) {
   for (const relayUrl of mergeRelays(relayUrls)) {

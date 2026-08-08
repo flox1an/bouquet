@@ -8,7 +8,7 @@ import { fetchBlossomList } from './blossom';
 import { fetchNip96List } from './nip96';
 import { getCatalog } from '../catalog/catalog';
 import { fetchHlsPlaylist } from '../catalog/enrichmentFetch';
-import { isPlaylistCandidate } from './blobRelationshipGraph';
+import { isPlaylistCandidate } from './hlsPlaylist';
 
 export interface ServerInfo extends Server {
   virtual: boolean;
@@ -66,6 +66,7 @@ export const useServerInfo = () => {
               cursor: progress.cursor,
               state: progress.state,
               error: progress.error,
+              received: progress.received,
             })
           );
         } else if (server.type === 'nip96') {

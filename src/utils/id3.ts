@@ -23,9 +23,11 @@ export interface ID3Tag {
   cover?: string;
 }
 
-// Function to open IndexedDB
+let id3Database: Promise<IDBDatabase> | undefined;
+
 function openIndexedDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (id3Database) return id3Database;
+  id3Database = new Promise((resolve, reject) => {
     const request = indexedDB.open('bouquet', 1);
 
     request.onupgradeneeded = event => {
@@ -38,9 +40,11 @@ function openIndexedDB(): Promise<IDBDatabase> {
     };
 
     request.onerror = () => {
+      id3Database = undefined;
       reject(request.error);
     };
   });
+  return id3Database;
 }
 
 // Function to get ID3Tag from IndexedDB
@@ -128,6 +132,89 @@ function resizeImage(imageBlobUrl: string, maxWidth: number, maxHeight: number):
   });
 }
 
+export const getCachedId3Tag = async (blobHash: string): Promise<ID3Tag | undefined> => {
+  try {
+    const db = await openIndexedDB();
+    return (await getID3TagFromDB(db, blobHash)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const ID3_HEADER_BYTES = 10;
+const MAX_ID3_TAG_BYTES = 8 * 1024 * 1024;
+
+function arrayBufferToFile(arrayBuffer: ArrayBuffer, fileName: string, mimeType: string) {
+  return new File([new Blob([arrayBuffer], { type: mimeType })], fileName, { type: mimeType });
+}
+
+function id3v2TagLength(bytes: Uint8Array): number | undefined {
+  if (bytes.length < ID3_HEADER_BYTES || String.fromCharCode(...bytes.slice(0, 3)) !== 'ID3') return;
+  const payloadLength = (bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9];
+  const tagLength = ID3_HEADER_BYTES + payloadLength;
+  return tagLength > ID3_HEADER_BYTES && tagLength <= MAX_ID3_TAG_BYTES ? tagLength : undefined;
+}
+
+async function fullAudioFile(blobUrl: string, blobHash: string): Promise<File> {
+  const response = await fetch(blobUrl);
+  if (!response.ok) throw new Error(`Audio download failed with ${response.status}`);
+  return arrayBufferToFile(await response.arrayBuffer(), `${blobHash}.mp3`, 'audio/mpeg');
+}
+
+async function audioTagFile(blobUrl: string, blobHash: string): Promise<File> {
+  try {
+    const headerResponse = await fetch(blobUrl, { headers: { Range: 'bytes=0-9' } });
+    if (!headerResponse.ok) throw new Error(`Range request failed with ${headerResponse.status}`);
+    const headerBytes = new Uint8Array(await headerResponse.arrayBuffer());
+    if (headerResponse.status !== 206) return arrayBufferToFile(headerBytes.buffer, `${blobHash}.mp3`, 'audio/mpeg');
+
+    const tagLength = id3v2TagLength(headerBytes);
+    if (!tagLength) return fullAudioFile(blobUrl, blobHash);
+
+    const tagResponse = await fetch(blobUrl, { headers: { Range: `bytes=0-${tagLength - 1}` } });
+    if (!tagResponse.ok) throw new Error(`Tag range request failed with ${tagResponse.status}`);
+    return arrayBufferToFile(await tagResponse.arrayBuffer(), `${blobHash}.mp3`, 'audio/mpeg');
+  } catch {
+    return fullAudioFile(blobUrl, blobHash);
+  }
+}
+
+type QueuedId3Load = {
+  blobHash: string;
+  blobUrl: string;
+  resolve: (result: { id3: ID3Tag; coverFull?: string } | undefined) => void;
+  reject: (error: unknown) => void;
+};
+
+const ID3_QUEUE_CONCURRENCY = 3;
+const queuedId3Loads = new Map<string, Promise<{ id3: ID3Tag; coverFull?: string } | undefined>>();
+const pendingId3Loads: QueuedId3Load[] = [];
+let activeId3Loads = 0;
+
+function drainId3Queue() {
+  while (activeId3Loads < ID3_QUEUE_CONCURRENCY && pendingId3Loads.length > 0) {
+    const job = pendingId3Loads.shift()!;
+    activeId3Loads += 1;
+    void fetchId3Tag(job.blobHash, job.blobUrl)
+      .then(job.resolve, job.reject)
+      .finally(() => {
+        activeId3Loads -= 1;
+        drainId3Queue();
+      });
+  }
+}
+
+export function queueId3Tag(blobHash: string, blobUrl: string): Promise<{ id3: ID3Tag; coverFull?: string } | undefined> {
+  const existing = queuedId3Loads.get(blobHash);
+  if (existing) return existing;
+  const pending = new Promise<{ id3: ID3Tag; coverFull?: string } | undefined>((resolve, reject) => {
+    pendingId3Loads.push({ blobHash, blobUrl, resolve, reject });
+  });
+  queuedId3Loads.set(blobHash, pending);
+  drainId3Queue();
+  return pending;
+}
+
 export const fetchId3Tag = async (
   blobHash: string,
   blobUrl?: string,
@@ -141,30 +228,11 @@ export const fetchId3Tag = async (
     return { id3: cachedID3Tag };
   }
 
-  function arrayBufferToFile(arrayBuffer: ArrayBuffer, fileName: string, mimeType: string) {
-    const fileBlob = new Blob([arrayBuffer], { type: mimeType });
-    const file = new File([fileBlob], fileName, { type: mimeType });
-    return file;
-  }
+  const file = localFile ?? (blobUrl ? await audioTagFile(blobUrl, blobHash) : undefined);
+  if (!file) return undefined;
 
-  // Getting from URL would be the best but it requires working Range requests
-  // an the servers. Currently non of the blossom servers are working.
-  // HEAD -> content-length would also be required and is missing in some
-  // instances. Consequently we need to download the whole file first :-(((
-  // const id3Tag = await id3.fromUrl(blob.url).catch(e => console.warn(e));
-
-  // download the whole song, convert to blob and file to read mp3 tag
-  let file = localFile;
-  if (!file) {
-    if (!blobUrl) return undefined;
-
-    // if we don't have a local file, download from blob url
-    const response = await fetch(blobUrl);
-    const buffer = await response.arrayBuffer();
-    file = arrayBufferToFile(buffer, `${blobHash}.mp3`, 'audio/mpeg');
-  }
-
-  const id3Tag = await fromFile(file).catch(e => console.warn(e));
+  let id3Tag = await fromFile(file).catch(() => undefined);
+  if (!id3Tag && !localFile && blobUrl) id3Tag = await fromFile(await fullAudioFile(blobUrl, blobHash)).catch(() => undefined);
   let imageBlobUrl: string | undefined;
 
   if (id3Tag) {

@@ -5,6 +5,8 @@ import { listBlobs } from 'blossom-client-sdk/actions/list';
 import dayjs from 'dayjs';
 
 const blossomUrlRegex = /https?:\/\/(?:www\.)?[^\s/]+\/([a-fA-F0-9]{64})(?:\.[a-zA-Z0-9]+)?/g;
+const nip96UrlRegex = /https?:\/\/(?:www\.)?[^\s/]+\/media\/[a-fA-F0-9]{64}\/([a-fA-F0-9]{64})(?:\.[a-zA-Z0-9]+)?/g;
+const genericUrlRegex = /https?:\/\/[^\s<>"']+/g;
 
 export function extractHashesFromContent(text: string) {
   let match;
@@ -13,27 +15,49 @@ export function extractHashesFromContent(text: string) {
   while ((match = blossomUrlRegex.exec(text)) !== null) {
     hashes.push(match[1]);
   }
-
-  // TODO ADD nip96 hash extraction, e.g. for
-  // https://nostrcheck.me/media/b7c6f6915cfa9a62fff6a1f02604de88c23c6c6c6d1b8f62c7cc10749f307e81/65991c7cf061c6aab117f8cbead91cdb4c2d5575e47cb9a787617ad066b56efd.mp4
-
+  nip96UrlRegex.lastIndex = 0;
+  while ((match = nip96UrlRegex.exec(text)) !== null) {
+    hashes.push(match[1]);
+  }
   return hashes;
 }
 
 export function extractHashFromUrl(url: string) {
   blossomUrlRegex.lastIndex = 0;
-  const match = blossomUrlRegex.exec(url);
-  if (match) {
-    return match[1];
+  let match = blossomUrlRegex.exec(url);
+  if (match) return match[1];
+  nip96UrlRegex.lastIndex = 0;
+  match = nip96UrlRegex.exec(url);
+  if (match) return match[1];
+}
+
+/** Extract all https?:// URLs from text, deduplicated. */
+export function extractUrlsFromText(text: string): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  genericUrlRegex.lastIndex = 0;
+  let match;
+  while ((match = genericUrlRegex.exec(text)) !== null) {
+    const url = match[0].replace(/[.,;:!?)'"\]]+$/, '');
+    if (!seen.has(url)) {
+      seen.add(url);
+      urls.push(url);
+    }
   }
+  return urls;
 }
 
 export type BlossomListProgress = {
   blobs: BlobDescriptor[];
   cursor?: string;
+  received: number;
   state: 'pending' | 'complete' | 'failed';
   error?: string;
 };
+
+const BLOSSOM_LIST_PAGE_SIZE = 100;
+
+export type BlossomListPageLoader = (cursor: string | undefined) => Promise<BlobDescriptor[]>;
 
 export async function fetchBlossomList(
   serverUrl: string,
@@ -42,73 +66,64 @@ export async function fetchBlossomList(
   onProgress?: (progress: BlossomListProgress) => Promise<void> | void
 ): Promise<BlobDescriptor[]> {
   const listAuthEvent = await createListAuth(signEventTemplate);
+  return collectBlossomListPages(
+    cursor => listBlobs(serverUrl, pubkey, { auth: listAuthEvent, cursor, limit: BLOSSOM_LIST_PAGE_SIZE }),
+    onProgress,
+    BLOSSOM_LIST_PAGE_SIZE,
+  );
+}
 
-  // Fetch all pages by iterating through results
-  // Most servers paginate by returning the most recent blobs first
-  // We'll fetch pages until we get an empty response or see duplicate blobs
-  let allBlobs: BlobDescriptor[] = [];
-  let until: number | undefined = undefined;
-  let hasMore = true;
+export async function collectBlossomListPages(
+  loadPage: BlossomListPageLoader,
+  onProgress?: (progress: BlossomListProgress) => Promise<void> | void,
+  expectedPageSize?: number,
+): Promise<BlobDescriptor[]> {
+  const allBlobs: BlobDescriptor[] = [];
   const seenHashes = new Set<string>();
-  let previousBatchSize = 0;
+  const seenCursors = new Set<string>();
+  let cursor: string | undefined;
 
   try {
-    while (hasMore) {
-      const options = until === undefined ? { auth: listAuthEvent } : { auth: listAuthEvent, until };
+    while (true) {
+      const page = await loadPage(cursor);
+      if (page.length === 0) break;
 
-      const blobs = await listBlobs(serverUrl, pubkey!, options);
-
-      // Stop if we got no results
-      if (blobs.length === 0) {
-        break;
+      // Detect servers that ignore the limit parameter and return the full list.
+      // If the page exceeds the expected size, treat it as a complete dump.
+      if (expectedPageSize !== undefined && page.length > expectedPageSize) {
+        const newBlobs = page.filter(blob => !seenHashes.has(blob.sha256));
+        for (const blob of newBlobs) seenHashes.add(blob.sha256);
+        allBlobs.push(...newBlobs);
+        await onProgress?.({ blobs: newBlobs, state: 'complete', received: allBlobs.length });
+        return allBlobs.map(blob => ({ ...blob, uploaded: blob.uploaded || dayjs().unix() }));
       }
 
-      // Filter out any duplicates (shouldn't happen but be safe)
-      const newBlobs = blobs.filter(b => !seenHashes.has(b.sha256));
-
-      // Stop if all blobs in this batch were duplicates
-      if (newBlobs.length === 0) {
-        break;
+      const nextCursor = page.at(-1)?.sha256;
+      if (!nextCursor || seenCursors.has(nextCursor)) {
+        throw new Error('Blossom list returned a non-advancing cursor');
       }
+      seenCursors.add(nextCursor);
 
-      // Add new blobs to our collection
-      newBlobs.forEach(b => seenHashes.add(b.sha256));
-      allBlobs = [...allBlobs, ...newBlobs];
+      const newBlobs = page.filter(blob => !seenHashes.has(blob.sha256));
+      for (const blob of newBlobs) seenHashes.add(blob.sha256);
+      allBlobs.push(...newBlobs);
+      cursor = nextCursor;
 
-      // If this batch is smaller than the previous one, we're likely at the end
-      // Also stop if we got very few results (likely the last page)
-      if (newBlobs.length < 10 || (previousBatchSize > 0 && newBlobs.length < previousBatchSize * 0.5)) {
-        break;
-      }
-
-      previousBatchSize = newBlobs.length;
-
-      // Find the oldest blob in this batch to use as 'until' for next page
-      const oldestUpload = Math.min(...newBlobs.map(b => b.uploaded || 0));
-
-      // Stop if we got invalid timestamps
-      if (oldestUpload === 0 || (until !== undefined && oldestUpload >= until)) {
-        hasMore = false;
-      } else {
-        // Set 'until' to just before the oldest timestamp to get the next page
-        until = oldestUpload;
-        await onProgress?.({ blobs: allBlobs, cursor: String(until), state: 'pending' });
-      }
+      await onProgress?.({ blobs: newBlobs, cursor, state: 'pending', received: allBlobs.length });
     }
   } catch (error) {
     await onProgress?.({
-      blobs: allBlobs,
-      cursor: until === undefined ? undefined : String(until),
+      blobs: [],
+      cursor,
       state: 'failed',
+      received: allBlobs.length,
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
   }
 
-  await onProgress?.({ blobs: allBlobs, state: 'complete' });
-
-  // fallback to deprecated created attibute for servers that are not using 'uploaded' yet
-  return allBlobs.map(b => ({ ...b, uploaded: b.uploaded || dayjs().unix() }));
+  await onProgress?.({ blobs: [], state: 'complete', received: allBlobs.length });
+  return allBlobs.map(blob => ({ ...blob, uploaded: blob.uploaded || dayjs().unix() }));
 }
 
 /**
