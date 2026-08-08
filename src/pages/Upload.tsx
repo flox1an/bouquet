@@ -242,7 +242,9 @@ function Upload() {
 
         await Promise.all(enabledServers.map(s => limit(() => startTransfer(s, s.name == primaryServerName))));
 
-        setFiles([]);
+        // Only drop the selection once every server is done with it. Clearing it
+        // after a partial failure left the user told to retry with nothing to retry.
+        if (failedServers.size === 0) setFiles([]);
         // TODO reset input control value??
         setFileEventsToPublish(Object.values(fileDimensions));
       }
@@ -254,7 +256,7 @@ function Upload() {
         toast({
           variant: 'destructive',
           title: 'Upload completed with errors',
-          description: `Some uploads failed on ${failedServers.size} server(s). Check the transfer status below.`,
+          description: `Some uploads failed on ${failedServers.size} server(s). Your files are still selected, so you can upload again to retry.`,
         });
       }
     } catch (error) {

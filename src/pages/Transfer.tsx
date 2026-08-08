@@ -122,8 +122,15 @@ export const Transfer = () => {
     return `${missingCount} file${missingCount > 1 ? 's' : ''} to transfer`;
   };
 
-  const performTransfer = async (sourceServer: string, targetServer: string, blobs: BlobDescriptor[]) => {
-    setTransferLog({});
+  const performTransfer = async (
+    sourceServer: string,
+    targetServer: string,
+    blobs: BlobDescriptor[],
+    // A retry covers only the failures, so it must not erase the successes
+    // already recorded for this run.
+    { resetLog = true }: { resetLog?: boolean } = {}
+  ) => {
+    if (resetLog) setTransferLog({});
     const controller = new AbortController();
     setAbortController(controller);
     setStarted(true);
@@ -471,6 +478,24 @@ export const Transfer = () => {
                         </div>
                       ))}
                     </div>
+                    {/* Without this the only way past a partial failure is to run the
+                        whole transfer again, including everything that already worked. */}
+                    <Button
+                      className="mt-3"
+                      size="sm"
+                      variant="outline"
+                      disabled={Boolean(abortController)}
+                      onClick={() => {
+                        const failed = transferJobs?.filter(job =>
+                          transferErrors.some(error => error.sha256 === job.sha256)
+                        );
+                        if (transferSource && failed?.length) {
+                          void performTransfer(transferSource, transferTarget, failed, { resetLog: false });
+                        }
+                      }}
+                    >
+                      Retry {transferErrors.length} failed transfer{transferErrors.length > 1 ? 's' : ''}
+                    </Button>
                   </AlertDescription>
                 </Alert>
               )}
