@@ -195,5 +195,9 @@ function parseJSON(value: string): unknown {
 function goodTry<T>(tryFn: () => T): T | undefined {
   try {
     return tryFn();
-  } catch {}
+  } catch {
+    // Deliberate: corrupt or unreadable localStorage must not take the app down,
+    // and every caller treats undefined as "no stored value".
+    return undefined;
+  }
 }

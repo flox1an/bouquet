@@ -48,6 +48,9 @@ export default function useEvent(
       sub.unsubscribe();
       subscriptionRef.current = null;
     };
+    // NOTE: `id` is a content hash of normalizedFilter, so the filter IS tracked here.
+    // Do not "fix" the exhaustive-deps warning by depending on the filter object: any
+    // caller passing an inline filter literal would then resubscribe on every render.
   }, [id, opts?.disable, shouldWaitForRelays, effectiveRelays]);
 
   // Subscribe to timeline from event store and return first event

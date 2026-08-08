@@ -71,7 +71,9 @@ with a real key before announcing a release.
 
 ## Current Known Items
 
-- Lint warnings still exist (0 errors, 28 warnings), mainly hook dependencies.
+- Lint warnings still exist (0 errors, 26 warnings). Sixteen are react-refresh
+  dev-only notices; the remaining hook-dependency ones were reviewed individually
+  and left deliberately, with the reason recorded at each site.
 - Build warns about a ~1.0 MB main chunk (~330 kB gzipped); accepted for the
   present usage profile, with routes already lazy-loaded.
 - Mirror and sync target Blossom servers; NIP-96 destinations are only reached

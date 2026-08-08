@@ -56,7 +56,7 @@ export const useUserServers = (): {
     };
 
     const signedBlossom = await activeAccount.signer.signEvent(blossomEvent);
-    
+
     const relays = mergeRelays(user?.relayUrls);
     await relayPool.publish(relays, signedBlossom);
 
@@ -71,7 +71,7 @@ export const useUserServers = (): {
     };
 
     const signedNip96 = await activeAccount.signer.signEvent(nip96Event);
-    
+
     await relayPool.publish(relays, signedNip96);
   };
 
@@ -110,7 +110,9 @@ export const useUserServers = (): {
         };
       }),
     ];
-  }, [nip96ServerListEvent]);
+    // This memo also reads `user` and `blossomServerListEvent`. Without them the
+    // NIP-96 list stays undefined whenever the blossom query resolves second.
+  }, [user, blossomServerListEvent, nip96ServerListEvent]);
 
   const nip96InfoQueries = useQueries({
     queries: (nip96Servers || []).map(server => ({
