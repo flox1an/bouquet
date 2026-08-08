@@ -307,7 +307,7 @@ export function BrowseActionPlanDialog({
           onEscapeKeyDown={event => phase === 'running' && event.preventDefault()}
         >
           <DialogPrimitive.Title className="text-lg font-semibold">
-            {ACTION_LABEL[action]} {assets.length} asset{assets.length === 1 ? '' : 's'}
+            {ACTION_LABEL[action]} {assets.length === 1 ? '1 item' : `${assets.length} items`}
           </DialogPrimitive.Title>
           <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">
             {phase === 'planning' && 'Computing what this action will affect…'}
@@ -375,7 +375,7 @@ export function BrowseActionPlanDialog({
                     <div key={plan.item.assetId} className="rounded border bg-muted/10 px-2 py-1.5 text-xs">
                       <p className="truncate font-medium">{plan.item.displayTitle}</p>
                       <p className="text-muted-foreground">
-                        {plan.targets.length} blob{plan.targets.length === 1 ? '' : 's'}
+                        {plan.targets.length === 1 ? '1 file' : `${plan.targets.length} files`}
                       </p>
                     </div>
                   ))}

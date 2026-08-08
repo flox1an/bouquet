@@ -168,7 +168,7 @@ export function BrowseToolbar({
         </div>
       </div>
       <p className="mt-3 font-mono text-xs text-muted-foreground">
-        {matchingCount.toLocaleString()} matching item{matchingCount === 1 ? '' : 's'}
+        {matchingCount === 1 ? '1 matching item' : `${matchingCount.toLocaleString()} matching items`}
       </p>
     </section>
   );

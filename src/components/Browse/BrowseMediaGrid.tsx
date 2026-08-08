@@ -145,8 +145,8 @@ export function BrowseMediaGrid({
                     <p className="mt-1 line-clamp-2 text-xs text-foreground/80">{item.displaySubtitle}</p>
                   )}
                   <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                    {dateLabel} {formatDate(item.displayDate)} · {item.blobCount} file
-                    {item.blobCount === 1 ? '' : 's'} · {formatFileSize(item.totalBlobSize)}
+                    {dateLabel} {formatDate(item.displayDate)} ·{' '}
+                    {item.blobCount === 1 ? '1 file' : `${item.blobCount} files`} · {formatFileSize(item.totalBlobSize)}
                     {item.unknownBlobSizeCount > 0 && ` · ${item.unknownBlobSizeCount} size unknown`}
                   </p>
                 </Link>

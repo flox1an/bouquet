@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { createElement as h } from 'react';
 import { BrowseListRow } from './BrowseListRow';
 import { BrowseSelectionBar } from './BrowseSelectionBar';
+import { BrowseMediaGrid } from './BrowseMediaGrid';
+import { groupByMonth } from '../TimelineNavigation';
 import type { TimelineItem } from './browseConstants';
 
 const item = (over: Partial<TimelineItem> = {}): TimelineItem =>
@@ -81,5 +83,29 @@ describe('plain vocabulary renders as real words', () => {
       expect(html2).not.toMatch(/\bassets?\b/i);
       expect(html2).not.toMatch(/\breplicas?\b/i);
     }
+  });
+
+  it('uses the same words in the media grid', () => {
+    const items = [item({ blobCount: 1 }), item({ assetId: 'a2', blobCount: 4 })];
+    const html = render(
+      h(BrowseMediaGrid, {
+        monthGroups: groupByMonth(items),
+        filteredItems: items,
+        toFor: (id: string) => `/browse/${id}`,
+        selectedAssetIds: {},
+        onSelect: () => {},
+        onOpen: () => {},
+        audioMetadataVersion: {},
+        onAudioVisible: () => {},
+        onPlayAudio: () => {},
+        onAction: () => {},
+      })
+    );
+    expect(html).toContain('1 file');
+    expect(html).toContain('4 files');
+    expect(html).not.toMatch(/\bblobs?\b/i);
+    expect(html).not.toMatch(/\breplicas?\b/i);
+    // "1 file" must not appear as "1 files"
+    expect(html).not.toMatch(/\b1 files\b/);
   });
 });
