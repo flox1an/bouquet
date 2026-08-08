@@ -95,7 +95,10 @@ Known limitations
   again; completed transfers are skipped because they are already present. There
   is no persisted job state across a page reload.
 - **Main bundle is ~1.0 MB (~330 kB gzipped).** Accepted for the current usage
-  profile; routes are already lazy-loaded.
+  profile; routes are already lazy-loaded and the heavy pages (Upload, Timeline,
+  Transfer, catalog) are separate chunks. Removing unused dependencies did not
+  change it - they were already tree-shaken - so reducing it further means
+  splitting what the app genuinely loads at start, not pruning the manifest.
 - **The catalog is local to each browser profile.** It is an IndexedDB index
   rebuilt from your relays and servers, not synced between devices.
 - **The media grid is not virtualized.** The list view is. Catalog operations are
