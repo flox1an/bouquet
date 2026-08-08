@@ -57,7 +57,7 @@ export function TopNav() {
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" aria-label="Account menu">
                   <User className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -70,12 +70,12 @@ export function TopNav() {
           {/* Mobile Menu */}
           <Sheet>
             <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" aria-label="Open navigation menu">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[300px]">
-              <MobileNav />
+              <MobileNav onLogout={logout} />
             </SheetContent>
           </Sheet>
         </div>
@@ -84,7 +84,7 @@ export function TopNav() {
   );
 }
 
-function MobileNav() {
+function MobileNav({ onLogout }: { onLogout: () => void }) {
   const location = useLocation();
 
   return (
@@ -107,6 +107,12 @@ function MobileNav() {
       <div className="border-t pt-4 flex items-center justify-between">
         <span className="text-sm">Theme</span>
         <ThemeToggle />
+      </div>
+      <div className="border-t pt-4">
+        <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Account</p>
+        <Button variant="outline" className="w-full" onClick={onLogout}>
+          Logout
+        </Button>
       </div>
     </div>
   );

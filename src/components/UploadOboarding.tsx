@@ -43,6 +43,8 @@ export default function UploadOnboarding() {
   const [checkedState, setCheckedState] = useState(new Array(defaultServers.length).fill(true));
   const { storeUserServers } = useUserServers();
 
+  const selectedServers = defaultServers.filter((_, index) => checkedState[index]);
+
   const handleCheckboxChange = (index: number) => {
     const updatedCheckedState = checkedState.map((item, pos) => (pos === index ? !item : item));
     setCheckedState(updatedCheckedState);
@@ -61,10 +63,7 @@ export default function UploadOnboarding() {
             onClick={() => handleCheckboxChange(index)}
           >
             <div className="flex justify-center items-center pt-1">
-              <Checkbox
-                checked={checkedState[index]}
-                onCheckedChange={() => handleCheckboxChange(index)}
-              />
+              <Checkbox checked={checkedState[index]} onCheckedChange={() => handleCheckboxChange(index)} />
             </div>
             <div className="flex flex-col gap-1">
               <span className="flex items-center gap-2">
@@ -76,17 +75,12 @@ export default function UploadOnboarding() {
               <p className="text-sm text-muted-foreground">
                 {server.description}{' '}
                 {server.buyUrl && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="mt-1"
-                    asChild
-                  >
+                  <Button variant="secondary" size="sm" className="mt-1" asChild>
                     <a
                       href={server.buyUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={e => e.stopPropagation()}
                     >
                       Buy Storage
                     </a>
@@ -99,11 +93,16 @@ export default function UploadOnboarding() {
       </div>
       <div className="mt-4 flex justify-center">
         <Button
+          disabled={selectedServers.length === 0}
           onClick={() => {
-            storeUserServers(defaultServers);
+            // Persist exactly what the checkboxes show. Saving every default here
+            // would hand the user servers they explicitly unchecked.
+            storeUserServers(selectedServers);
           }}
         >
-          Use these servers
+          {selectedServers.length === 0
+            ? 'Select at least one server'
+            : `Use ${selectedServers.length} server${selectedServers.length === 1 ? '' : 's'}`}
         </Button>
       </div>
     </div>

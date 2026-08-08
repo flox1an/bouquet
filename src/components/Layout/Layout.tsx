@@ -1,38 +1,38 @@
-import { Outlet } from "react-router-dom"
-import { TopNav } from "@/components/Layout/TopNav"
-import { Toaster } from "@/components/ui/toaster"
-import AudioPlayer from "../AudioPlayer"
-import { useGlobalContext } from "../../GlobalState"
-import { useCurrentUser } from "../../hooks/useCurrentUser"
-import Login from "./Login"
-import { Suspense, useEffect, useRef } from "react"
-import { Loader2 } from "lucide-react"
-import useLocalStorageState from "../../utils/useLocalStorageState"
+import { Outlet } from 'react-router-dom';
+import { TopNav } from '@/components/Layout/TopNav';
+import { Toaster } from '@/components/ui/toaster';
+import AudioPlayer from '../AudioPlayer';
+import { useGlobalContext } from '../../GlobalState';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import Login from './Login';
+import { Suspense, useEffect, useRef } from 'react';
+import { Loader2 } from 'lucide-react';
+import useLocalStorageState from '../../utils/useLocalStorageState';
 
 export const Layout = () => {
-  const { user, loginWithExtension } = useCurrentUser()
-  const { state } = useGlobalContext()
-  const autoLoginAttemptedRef = useRef(false)
-  const [autoLogin, setAutoLogin] = useLocalStorageState("autologin", {
+  const { user, loginWithExtension } = useCurrentUser();
+  const { state } = useGlobalContext();
+  const autoLoginAttemptedRef = useRef(false);
+  const [autoLogin, setAutoLogin] = useLocalStorageState('autologin', {
     defaultValue: false,
-  })
+  });
 
   useEffect(() => {
     if (!user && autoLogin && !autoLoginAttemptedRef.current) {
-      autoLoginAttemptedRef.current = true
+      autoLoginAttemptedRef.current = true;
       loginWithExtension().catch(() => {
-        setAutoLogin(false)
-      })
+        setAutoLogin(false);
+      });
     }
-  }, [user, autoLogin, loginWithExtension, setAutoLogin])
+  }, [user, autoLogin, loginWithExtension, setAutoLogin]);
 
   useEffect(() => {
     if (!autoLogin) {
-      autoLoginAttemptedRef.current = false
+      autoLoginAttemptedRef.current = false;
     }
-  }, [autoLogin])
+  }, [autoLogin]);
 
-  const hasAudioPlayer = !!state.currentSong
+  const hasAudioPlayer = !!state.currentSong;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -41,8 +41,9 @@ export const Layout = () => {
         {user ? (
           <Suspense
             fallback={
-              <div className="flex min-h-[60vh] items-center justify-center">
+              <div className="flex min-h-[60vh] items-center justify-center" role="status">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="sr-only">Loading page…</span>
               </div>
             }
           >
@@ -59,5 +60,5 @@ export const Layout = () => {
       )}
       <Toaster />
     </div>
-  )
-}
+  );
+};
