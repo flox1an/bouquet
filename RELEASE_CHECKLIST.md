@@ -59,10 +59,19 @@ with a real key before announcing a release.
 - [ ] Confirm delete is blocked, with a visible reason, on an asset whose graph
       is incomplete
 - [ ] Open an event's njump link and confirm it resolves to the real post
+- [ ] Sync lists your media by event title, not by hash, and files with no event
+      are marked as such rather than looking broken
+- [ ] A file referenced by an event shows the SAME title in Browse and in Sync
+- [ ] Visiting / lands on Browse, and a brand-new account is offered a server
+      rather than an empty screen
+- [ ] Uncheck a server during onboarding and confirm it is NOT saved
+- [ ] Log out from a phone-width window
+- [ ] Force a failure (stop a server mid-run) and confirm the dialog reports it
+      and still lets you close
 
 ## Current Known Items
 
-- Lint warnings still exist (0 errors, 29 warnings), mainly hook dependencies.
+- Lint warnings still exist (0 errors, 28 warnings), mainly hook dependencies.
 - Build warns about a ~1.0 MB main chunk (~330 kB gzipped); accepted for the
   present usage profile, with routes already lazy-loaded.
 - Mirror and sync target Blossom servers; NIP-96 destinations are only reached
