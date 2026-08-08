@@ -136,6 +136,11 @@ const Login: React.FC = () => {
                   placeholder="bunker://..."
                   value={bunkerUri}
                   onChange={e => setBunkerUri(e.target.value)}
+                  onKeyDown={e => {
+                    // Pressing Enter after pasting a connection string is the whole
+                    // interaction; without this the field silently swallows it.
+                    if (e.key === 'Enter' && !loading && bunkerUri.trim()) void handleBunkerLogin();
+                  }}
                   disabled={loading}
                 />
                 <Button className="w-full" onClick={handleBunkerLogin} disabled={loading || !bunkerUri.trim()}>
@@ -153,6 +158,9 @@ const Login: React.FC = () => {
                   placeholder="nsec1... or ncryptsec1..."
                   value={nsecKey}
                   onChange={e => setNsecKey(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !loading && nsecKey.trim()) void handleNsecLogin();
+                  }}
                   disabled={loading}
                 />
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 text-sm">
