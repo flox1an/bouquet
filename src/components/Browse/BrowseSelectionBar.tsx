@@ -23,10 +23,10 @@ export function BrowseSelectionBar({ selectedItems, onSelectAllVisible, onClear,
       aria-label="Selected media actions"
     >
       <span className="text-sm font-medium">
-        {selectedItems.length} item{selectedItems.length === 1 ? '' : 's'} selected
+        {selectedItems.length === 1 ? '1 item selected' : `${selectedItems.length} items selected`}
       </span>
       <span className="font-mono text-xs text-muted-foreground">
-        {totalBlobs} file{totalBlobs === 1 ? '' : 's'} · {formatFileSize(totalSize)}
+        {totalBlobs === 1 ? '1 file' : `${totalBlobs} files`} · {formatFileSize(totalSize)}
       </span>
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
         <Button size="sm" variant="ghost" onClick={onSelectAllVisible}>
