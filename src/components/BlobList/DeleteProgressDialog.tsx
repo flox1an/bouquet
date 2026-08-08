@@ -15,15 +15,21 @@ type Props = {
   blobs: BlobDescriptor[];
   onDeleteOne: (blob: BlobDescriptor) => Promise<void>;
   onClose: () => void;
+  // Fires only once deletion has actually run, so the caller can drop the
+  // selection then rather than when the user backs out of the confirmation.
+  onDeletionFinished?: () => void;
 };
 
-const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
+const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose, onDeletionFinished }: Props) => {
   const [fileStates, setFileStates] = useState<FileState[]>([]);
   const [finished, setFinished] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
-    if (!open || blobs.length === 0) return;
+    // Deleting is irreversible, so it must not begin merely because a dialog
+    // opened. Nothing runs until the user confirms.
+    if (!open || !confirmed || blobs.length === 0) return;
 
     cancelledRef.current = false;
     setFinished(false);
@@ -53,6 +59,7 @@ const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
     Promise.all(Array.from({ length: CONCURRENCY }, worker))
       .then(() => {
         setFinished(true);
+        onDeletionFinished?.();
         if (cancelledRef.current) {
           setFileStates(prev => prev.map(s => (s === 'pending' ? 'cancelled' : s)));
           return;
@@ -66,10 +73,15 @@ const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
       .catch(() => {
         // Without this the dialog blocks escape and outside-click forever.
         setFinished(true);
+        onDeletionFinished?.();
         setFileStates(prev => prev.map(s => (s === 'pending' || s === 'deleting' ? 'error' : s)));
       });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, confirmed]);
+
+  useEffect(() => {
+    if (!open) setConfirmed(false);
   }, [open]);
 
   const handleCancel = () => {
@@ -88,23 +100,27 @@ const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-          onInteractOutside={e => !finished && e.preventDefault()}
-          onEscapeKeyDown={e => !finished && e.preventDefault()}
+          onInteractOutside={e => confirmed && !finished && e.preventDefault()}
+          onEscapeKeyDown={e => confirmed && !finished && e.preventDefault()}
         >
           <DialogPrimitive.Title className="text-lg font-semibold">
-            {finished
-              ? errorCount > 0
-                ? 'Deletion finished with errors'
-                : 'Deletion complete'
-              : `Deleting ${total} file${total !== 1 ? 's' : ''}`}
+            {!confirmed
+              ? `Delete ${total} file${total !== 1 ? 's' : ''}?`
+              : finished
+                ? errorCount > 0
+                  ? 'Deletion finished with errors'
+                  : 'Deletion complete'
+                : `Deleting ${total} file${total !== 1 ? 's' : ''}`}
           </DialogPrimitive.Title>
           <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">
-            {finished
-              ? `${done} of ${total} file${total !== 1 ? 's' : ''} deleted.`
-              : `Deleting up to ${CONCURRENCY} files concurrently…`}
+            {!confirmed
+              ? 'They will be removed from every server that holds them. This cannot be undone, and the Nostr events referencing them stay on your relays.'
+              : finished
+                ? `${done} of ${total} file${total !== 1 ? 's' : ''} deleted.`
+                : `Deleting up to ${CONCURRENCY} files concurrently…`}
           </DialogPrimitive.Description>
 
-          <div className="mt-5 space-y-1.5">
+          <div className={`mt-5 space-y-1.5 ${confirmed ? '' : 'hidden'}`}>
             <Progress value={progress} className="h-2" />
             <p className="text-right text-xs tabular-nums text-muted-foreground">
               {done} / {total}
@@ -150,10 +166,15 @@ const DeleteProgressDialog = ({ open, blobs, onDeleteOne, onClose }: Props) => {
             </p>
           )}
 
-          <div className="mt-6 flex justify-end">
+          <div className="mt-6 flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={handleCancel}>
               {finished ? 'Close' : 'Cancel'}
             </Button>
+            {!confirmed && (
+              <Button variant="destructive" size="sm" onClick={() => setConfirmed(true)}>
+                Delete {total} file{total !== 1 ? 's' : ''}
+              </Button>
+            )}
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

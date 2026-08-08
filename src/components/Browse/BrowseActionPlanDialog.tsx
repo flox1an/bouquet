@@ -288,7 +288,7 @@ export function BrowseActionPlanDialog({
   const progress = rows.length ? Math.round((done / rows.length) * 100) : 0;
   const reviewingCopy =
     action === 'delete'
-      ? `${targetHashes.length} blob${targetHashes.length === 1 ? '' : 's'} across ${allowedPlans.length} asset${allowedPlans.length === 1 ? '' : 's'} will be deleted from every server that reports them.`
+      ? `${targetHashes.length} file${targetHashes.length === 1 ? '' : 's'} across ${allowedPlans.length} item${allowedPlans.length === 1 ? '' : 's'} will be deleted from every server that reports them. This cannot be undone.`
       : action === 'mirror'
         ? destination === undefined
           ? 'Choose a destination server to see what would be copied.'
@@ -322,6 +322,14 @@ export function BrowseActionPlanDialog({
               <Loader2 className="h-4 w-4 animate-spin" />
               Planning…
             </div>
+          )}
+          {action === 'delete' && phase === 'reviewing' && (
+            <p className="mt-3 border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              {/* Deleting blobs does not touch the events that reference them, so
+                  saying nothing here would leave the user with broken posts. */}
+              This deletes the files from your media servers. The Nostr events that reference them stay on your relays,
+              so any post using these files will show missing media.
+            </p>
           )}
           {phase === 'failed' && (
             <div className="mt-6 flex items-start gap-2 rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">

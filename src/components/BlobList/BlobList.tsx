@@ -51,9 +51,10 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
   }, [blobs, selectedBlobs]);
 
   const handleDeleteDialogClose = useCallback(() => {
+    // Backing out of the confirmation must not discard the selection the user
+    // just built; it is cleared once a deletion has actually run.
     setDeleteDialogOpen(false);
-    setSelectedBlobs({});
-  }, [setSelectedBlobs]);
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -323,6 +324,7 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
           blobs={blobsToDelete}
           onDeleteOne={onDelete}
           onClose={handleDeleteDialogClose}
+          onDeletionFinished={() => setSelectedBlobs({})}
         />
       )}
     </div>
