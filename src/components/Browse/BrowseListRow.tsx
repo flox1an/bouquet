@@ -139,8 +139,8 @@ export function BrowseListRow({
               {dateLabel} {formatDate(item.displayDate)} · {item.blobCount} file{item.blobCount === 1 ? '' : 's'} ·{' '}
               {formatFileSize(item.totalBlobSize)}
               {item.unknownBlobSizeCount > 0 && ` · ${item.unknownBlobSizeCount} size unknown`} · {item.replicaCount}{' '}
-              replica
-              {item.replicaCount === 1 ? '' : 's'}
+              cop
+              {item.replicaCount === 1 ? 'y' : 'ies'}
             </p>
           </div>
         </Link>
@@ -154,9 +154,9 @@ function BlobSummary({ detail, fallback }: { detail?: TimelineAssetDetail; fallb
   if (!detail) {
     return (
       <div className="border-t pt-3 md:border-l md:border-t-0 md:pl-4 md:pt-0">
-        <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Asset contents</p>
+        <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Item contents</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          {fallback.blobCount} blob{fallback.blobCount === 1 ? '' : 's'} · {formatFileSize(fallback.totalBlobSize)}
+          {fallback.blobCount} file{fallback.blobCount === 1 ? '' : 's'} · {formatFileSize(fallback.totalBlobSize)}
         </p>
       </div>
     );
@@ -168,9 +168,9 @@ function BlobSummary({ detail, fallback }: { detail?: TimelineAssetDetail; fallb
   return (
     <div className="border-t pt-3 md:border-l md:border-t-0 md:pl-4 md:pt-0">
       <div className="flex items-center justify-between gap-3">
-        <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Asset contents</p>
+        <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Item contents</p>
         <p className="font-mono text-[11px] text-muted-foreground">
-          {detail.blobs.length} blob{detail.blobs.length === 1 ? '' : 's'}
+          {detail.blobs.length} file{detail.blobs.length === 1 ? '' : 's'}
         </p>
       </div>
       <ul className="mt-2 space-y-2">
@@ -182,15 +182,15 @@ function BlobSummary({ detail, fallback }: { detail?: TimelineAssetDetail; fallb
             </div>
             <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
               {blob.eventMimeType ?? blob.mimeType ?? 'Unknown MIME'} ·{' '}
-              {blob.size !== undefined ? formatFileSize(blob.size) : 'Unknown size'} · {blob.replicaCount} replica
-              {blob.replicaCount === 1 ? '' : 's'}
+              {blob.size !== undefined ? formatFileSize(blob.size) : 'Unknown size'} · {blob.replicaCount} cop
+              {blob.replicaCount === 1 ? 'y' : 'ies'}
             </p>
           </li>
         ))}
       </ul>
       {remaining > 0 && (
         <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-          +{remaining} related blob{remaining === 1 ? '' : 's'}
+          +{remaining} related file{remaining === 1 ? '' : 's'}
         </p>
       )}
     </div>

@@ -68,7 +68,7 @@ export function BrowseToolbar({
             onChange={event => onSearchChange(event.target.value)}
             placeholder="Search titles, descriptions, event metadata, or a file hash"
             className="pl-9"
-            aria-label="Search assets"
+            aria-label="Search your media"
           />
         </label>
 

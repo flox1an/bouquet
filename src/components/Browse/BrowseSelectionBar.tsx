@@ -20,13 +20,13 @@ export function BrowseSelectionBar({ selectedItems, onSelectAllVisible, onClear,
     <div
       className="sticky top-2 z-20 mb-4 flex flex-wrap items-center gap-3 border bg-card px-4 py-2.5 shadow-[3px_3px_0_hsl(var(--border))]"
       role="toolbar"
-      aria-label="Asset selection actions"
+      aria-label="Selected media actions"
     >
       <span className="text-sm font-medium">
-        {selectedItems.length} asset{selectedItems.length === 1 ? '' : 's'} selected
+        {selectedItems.length} item{selectedItems.length === 1 ? '' : 's'} selected
       </span>
       <span className="font-mono text-xs text-muted-foreground">
-        {totalBlobs} blob{totalBlobs === 1 ? '' : 's'} · {formatFileSize(totalSize)}
+        {totalBlobs} file{totalBlobs === 1 ? '' : 's'} · {formatFileSize(totalSize)}
       </span>
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
         <Button size="sm" variant="ghost" onClick={onSelectAllVisible}>

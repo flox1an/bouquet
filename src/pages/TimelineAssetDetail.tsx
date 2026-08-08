@@ -195,15 +195,15 @@ export default function TimelineAssetDetail() {
   if (!user?.pubkey)
     return (
       <DetailMessage
-        title="Sign in to open asset details"
-        detail="Asset details are kept in your local catalog."
+        title="Sign in to open this item"
+        detail="Item details are kept in your local catalog."
         onBack={returnToTimeline}
       />
     );
   if (state === 'loading')
     return (
       <DetailMessage
-        title="Loading asset details"
+        title="Loading item details"
         detail="Reading your local catalog and how this media fits together."
         onBack={returnToTimeline}
         loading
@@ -212,7 +212,7 @@ export default function TimelineAssetDetail() {
   if (state === 'missing')
     return (
       <DetailMessage
-        title="Asset not found"
+        title="Item not found"
         detail="It may have been removed from this local catalog."
         onBack={returnToTimeline}
       />
@@ -220,8 +220,8 @@ export default function TimelineAssetDetail() {
   if (state === 'failed' || !detail)
     return (
       <DetailMessage
-        title="Asset details unavailable"
-        detail="Reading this asset from your local catalog failed. Your data is intact."
+        title="Item details unavailable"
+        detail="Reading this item from your local catalog failed. Your data is intact."
         onBack={returnToTimeline}
         onRetry={() => setLoadAttempt(attempt => attempt + 1)}
       />
@@ -390,9 +390,9 @@ export default function TimelineAssetDetail() {
           <p className="font-mono text-xs text-muted-foreground">{blobs.length} total</p>
         </div>
         <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-          <DetailStat label="Attached blobs" value={`${projection.blobCount}`} />
+          <DetailStat label="Attached files" value={`${projection.blobCount}`} />
           <DetailStat label="Total size" value={formatFileSize(projection.totalBlobSize)} />
-          <DetailStat label="Available replicas" value={`${projection.replicaCount}`} />
+          <DetailStat label="Available copies" value={`${projection.replicaCount}`} />
         </dl>
         {projection.unknownBlobSizeCount > 0 && (
           <p className="mt-3 text-xs text-muted-foreground">
@@ -467,7 +467,7 @@ export default function TimelineAssetDetail() {
                   }
                 />
                 <DetailStat label="Size" value={blob.size !== undefined ? formatFileSize(blob.size) : 'Unknown'} />
-                <DetailStat label="Replicas" value={`${blob.replicaCount}`} />
+                <DetailStat label="Copies" value={`${blob.replicaCount}`} />
                 {blob.dimensions && <DetailStat label="Dimensions" value={blob.dimensions} />}
               </dl>
               {blob.urls.length > 0 && (
@@ -536,7 +536,7 @@ function DetailMessage({
   return (
     <main className="mx-auto flex min-h-[55vh] max-w-2xl flex-col justify-center px-6">
       {loading && <Loader2 className="mb-4 h-6 w-6 animate-spin text-primary" />}
-      <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Asset details</p>
+      <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Item details</p>
       <h1 className="mt-3 text-4xl font-black tracking-tight">{title}</h1>
       <p className="mt-3 text-muted-foreground">{detail}</p>
       <div className="mt-6 flex flex-wrap gap-2">

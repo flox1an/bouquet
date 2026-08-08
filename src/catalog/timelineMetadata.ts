@@ -43,7 +43,8 @@ export function extractTimelineEventMetadata(event: NostrEvent): TimelineEventMe
   const contentTitle = conciseContent(event.content);
   const titleIsFallback = !titleTag && !contentTitle;
   const title = titleTag ?? contentTitle ?? fallbackEventTitle(event.kind);
-  const subtitle = firstTagValue(event, SUMMARY_TAGS) ?? (title !== event.content.trim() ? conciseContent(event.content) : undefined);
+  const subtitle =
+    firstTagValue(event, SUMMARY_TAGS) ?? (title !== event.content.trim() ? conciseContent(event.content) : undefined);
   const searchableTags = event.tags
     .filter(tag => [...TITLE_TAGS, ...SUMMARY_TAGS, 'imeta'].includes(tag[0]))
     .flatMap(tag => tag.slice(1));

@@ -44,11 +44,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, signal?: A
   ]);
 }
 
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  maxRetries: number,
-  signal?: AbortSignal
-): Promise<T> {
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries: number, signal?: AbortSignal): Promise<T> {
   let lastError: Error | undefined;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (signal?.aborted) {
@@ -59,16 +55,17 @@ async function retryWithBackoff<T>(
     } catch (e: any) {
       lastError = e;
       if (attempt < maxRetries) {
-        const isRetryable = e.code === 'ECONNRESET' || 
-                           e.code === 'ETIMEDOUT' ||
-                           e.message?.includes('timeout') ||
-                           e.message?.includes('Network Error') ||
-                           (e.response?.status && e.response.status >= 500);
-        
+        const isRetryable =
+          e.code === 'ECONNRESET' ||
+          e.code === 'ETIMEDOUT' ||
+          e.message?.includes('timeout') ||
+          e.message?.includes('Network Error') ||
+          (e.response?.status && e.response.status >= 500);
+
         if (!isRetryable) {
           throw e;
         }
-        
+
         const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -83,18 +80,16 @@ export const transferBlob = async (
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
   options: TransferOptions = {}
 ): Promise<BlobDescriptor> => {
-  const { 
-    signal, 
-    timeout = 60000, 
-    onPhaseChange, 
+  const {
+    signal,
+    timeout = 60000,
+    onPhaseChange,
     onProgress,
     maxRetries = 2,
     allowMirror = true,
     onMirrorUnsupported,
     onCompleted,
   } = options;
-
-  
 
   if (signal?.aborted) {
     throw new Error('Transfer cancelled');
@@ -108,23 +103,20 @@ export const transferBlob = async (
     const status = e.response?.status;
     // Treat only hard 404/410 as definitive missing source blobs.
     if (status === 404 || status === 410) {
-      throw new SourceBlobNotFoundError('Source blob is missing (not found on origin server).');
+      throw new SourceBlobNotFoundError('Source file is missing (not found on origin server).');
     }
   }
 
   if (sourceUrl.startsWith('blob:')) {
     const file = await blobUrlToFile(sourceUrl, 'cover.jpg');
     onPhaseChange?.('uploading');
-    
-    const uploadFn = () => targetServer.type == 'blossom'
-      ? uploadBlossomBlob(targetServer.url, file, signEventTemplate, onProgress, signal)
-      : uploadNip96File(targetServer, file, 'cover.jpg', signEventTemplate, onProgress, signal);
 
-    const result = await withTimeout(
-      retryWithBackoff(uploadFn, maxRetries, signal),
-      timeout,
-      signal
-    );
+    const uploadFn = () =>
+      targetServer.type == 'blossom'
+        ? uploadBlossomBlob(targetServer.url, file, signEventTemplate, onProgress, signal)
+        : uploadNip96File(targetServer, file, 'cover.jpg', signEventTemplate, onProgress, signal);
+
+    const result = await withTimeout(retryWithBackoff(uploadFn, maxRetries, signal), timeout, signal);
     onPhaseChange?.('completed');
     await onCompleted?.(result, 'upload');
     return result;
@@ -133,11 +125,7 @@ export const transferBlob = async (
       try {
         onPhaseChange?.('mirroring');
         const mirrorFn = () => mirrordBlossomBlob(targetServer.url, sourceUrl, signEventTemplate, signal);
-        const blob = await withTimeout(
-          retryWithBackoff(mirrorFn, maxRetries, signal),
-          timeout,
-          signal
-        );
+        const blob = await withTimeout(retryWithBackoff(mirrorFn, maxRetries, signal), timeout, signal);
         onProgress?.({
           loaded: blob.size,
           bytes: blob.size,
@@ -155,31 +143,23 @@ export const transferBlob = async (
         if (status === 400 || status === 404 || status === 405 || status === 501) {
           onMirrorUnsupported?.();
         }
-        
       }
     }
 
     onPhaseChange?.('downloading');
     const downloadFn = () => downloadBlossomBlob(sourceUrl, onProgress, signal);
-    const result = await withTimeout(
-      retryWithBackoff(downloadFn, maxRetries, signal),
-      timeout,
-      signal
-    );
+    const result = await withTimeout(retryWithBackoff(downloadFn, maxRetries, signal), timeout, signal);
 
     const fileName = sourceUrl.replace(/.*\//, '');
     const file = new File([result.data], fileName, { type: result.type, lastModified: new Date().getTime() });
 
     onPhaseChange?.('uploading');
-    const uploadFn = () => targetServer.type == 'blossom'
-      ? uploadBlossomBlob(targetServer.url, file, signEventTemplate, onProgress, signal)
-      : uploadNip96File(targetServer, file, fileName, signEventTemplate, onProgress, signal);
+    const uploadFn = () =>
+      targetServer.type == 'blossom'
+        ? uploadBlossomBlob(targetServer.url, file, signEventTemplate, onProgress, signal)
+        : uploadNip96File(targetServer, file, fileName, signEventTemplate, onProgress, signal);
 
-    const uploadResult = await withTimeout(
-      retryWithBackoff(uploadFn, maxRetries, signal),
-      timeout,
-      signal
-    );
+    const uploadResult = await withTimeout(retryWithBackoff(uploadFn, maxRetries, signal), timeout, signal);
     onPhaseChange?.('completed');
     await onCompleted?.(uploadResult, 'upload');
     return uploadResult;

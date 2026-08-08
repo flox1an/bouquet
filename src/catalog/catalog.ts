@@ -658,7 +658,7 @@ export class Catalog {
         version: 1,
         state: 'failed',
         completedAt: Date.now(),
-        error: 'No URL is known for this blob',
+        error: 'No URL is known for this file',
       });
       return;
     }

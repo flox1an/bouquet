@@ -406,7 +406,7 @@ describe('user blob catalog', () => {
     });
     expect(await planCatalogAction(catalog, pubkey, asset.assetId, 'mirror')).toMatchObject({
       allowed: false,
-      reason: 'No transferable source replica is currently available',
+      reason: 'No server currently has a copy that can be transferred',
       targets: [hashA],
     });
   });
@@ -742,12 +742,26 @@ describe('user blob catalog', () => {
     await projectCatalogAssets(catalog, pubkey);
     const [asset] = await queryCatalogTimeline(catalog, pubkey);
     await store.put('blob_location', {
-      id: `${hashA}:https://one.example`, sha256: hashA, serverId: 'https://one.example', state: 'present',
-      lastCheckedAt: 1, nextCheckAt: 2, canonicalUrl: `https://one.example/${hashA}`, consecutiveFailures: 0, source: 'replica',
+      id: `${hashA}:https://one.example`,
+      sha256: hashA,
+      serverId: 'https://one.example',
+      state: 'present',
+      lastCheckedAt: 1,
+      nextCheckAt: 2,
+      canonicalUrl: `https://one.example/${hashA}`,
+      consecutiveFailures: 0,
+      source: 'replica',
     });
     await store.put('blob_location', {
-      id: `${hashA}:https://two.example`, sha256: hashA, serverId: 'https://two.example', state: 'present',
-      lastCheckedAt: 1, nextCheckAt: 2, canonicalUrl: `https://two.example/${hashA}`, consecutiveFailures: 0, source: 'native-url',
+      id: `${hashA}:https://two.example`,
+      sha256: hashA,
+      serverId: 'https://two.example',
+      state: 'present',
+      lastCheckedAt: 1,
+      nextCheckAt: 2,
+      canonicalUrl: `https://two.example/${hashA}`,
+      consecutiveFailures: 0,
+      source: 'native-url',
     });
 
     expect(await getAssetReplicaMap(catalog, pubkey, asset.assetId)).toEqual([
@@ -761,52 +775,106 @@ describe('user blob catalog', () => {
   });
 
   it('builds mirror operations only for the named absent target', () => {
-    const replicaMap = [{
-      sha256: hashA, assetId: 'asset', role: 'main', sources: [{ serverId: 'source', baseUrl: 'https://source.example' }],
-      presentOn: ['source'], absentFrom: [
-        { serverId: 'one', baseUrl: 'https://one.example' },
-        { serverId: 'two', baseUrl: 'https://two.example' },
-      ],
-    }];
-    expect(buildReplicaOps(replicaMap, 'two')).toEqual([{
-      sha256: hashA, assetId: 'asset', sourceBaseUrl: 'https://source.example',
-      targetServerId: 'two', targetBaseUrl: 'https://two.example',
-    }]);
+    const replicaMap = [
+      {
+        sha256: hashA,
+        assetId: 'asset',
+        role: 'main',
+        sources: [{ serverId: 'source', baseUrl: 'https://source.example' }],
+        presentOn: ['source'],
+        absentFrom: [
+          { serverId: 'one', baseUrl: 'https://one.example' },
+          { serverId: 'two', baseUrl: 'https://two.example' },
+        ],
+      },
+    ];
+    expect(buildReplicaOps(replicaMap, 'two')).toEqual([
+      {
+        sha256: hashA,
+        assetId: 'asset',
+        sourceBaseUrl: 'https://source.example',
+        targetServerId: 'two',
+        targetBaseUrl: 'https://two.example',
+      },
+    ]);
   });
 
   it('builds sync operations for every absent blob and server pair', () => {
     const replicaMap = [
       {
-        sha256: hashA, assetId: 'asset', role: 'main',
-        sources: [{ serverId: 'z-source', baseUrl: 'https://z.example' }, { serverId: 'a-source', baseUrl: 'https://a.example' }],
-        presentOn: ['z-source', 'a-source'], absentFrom: [{ serverId: 'one', baseUrl: 'https://one.example' }],
+        sha256: hashA,
+        assetId: 'asset',
+        role: 'main',
+        sources: [
+          { serverId: 'z-source', baseUrl: 'https://z.example' },
+          { serverId: 'a-source', baseUrl: 'https://a.example' },
+        ],
+        presentOn: ['z-source', 'a-source'],
+        absentFrom: [{ serverId: 'one', baseUrl: 'https://one.example' }],
       },
       {
-        sha256: hashB, assetId: 'asset', role: 'thumbnail', sources: [{ serverId: 'source', baseUrl: 'https://source.example' }],
-        presentOn: ['source'], absentFrom: [
-          { serverId: 'one', baseUrl: 'https://one.example' }, { serverId: 'two', baseUrl: 'https://two.example' },
+        sha256: hashB,
+        assetId: 'asset',
+        role: 'thumbnail',
+        sources: [{ serverId: 'source', baseUrl: 'https://source.example' }],
+        presentOn: ['source'],
+        absentFrom: [
+          { serverId: 'one', baseUrl: 'https://one.example' },
+          { serverId: 'two', baseUrl: 'https://two.example' },
         ],
       },
     ];
     expect(buildReplicaOps(replicaMap)).toEqual([
-      { sha256: hashA, assetId: 'asset', sourceBaseUrl: 'https://a.example', targetServerId: 'one', targetBaseUrl: 'https://one.example' },
-      { sha256: hashB, assetId: 'asset', sourceBaseUrl: 'https://source.example', targetServerId: 'one', targetBaseUrl: 'https://one.example' },
-      { sha256: hashB, assetId: 'asset', sourceBaseUrl: 'https://source.example', targetServerId: 'two', targetBaseUrl: 'https://two.example' },
+      {
+        sha256: hashA,
+        assetId: 'asset',
+        sourceBaseUrl: 'https://a.example',
+        targetServerId: 'one',
+        targetBaseUrl: 'https://one.example',
+      },
+      {
+        sha256: hashB,
+        assetId: 'asset',
+        sourceBaseUrl: 'https://source.example',
+        targetServerId: 'one',
+        targetBaseUrl: 'https://one.example',
+      },
+      {
+        sha256: hashB,
+        assetId: 'asset',
+        sourceBaseUrl: 'https://source.example',
+        targetServerId: 'two',
+        targetBaseUrl: 'https://two.example',
+      },
     ]);
   });
 
   it('builds no operations for blobs already present on every target', () => {
-    expect(buildReplicaOps([{
-      sha256: hashA, assetId: 'asset', role: 'main', sources: [{ serverId: 'source', baseUrl: 'https://source.example' }],
-      presentOn: ['source', 'target'], absentFrom: [],
-    }])).toEqual([]);
+    expect(
+      buildReplicaOps([
+        {
+          sha256: hashA,
+          assetId: 'asset',
+          role: 'main',
+          sources: [{ serverId: 'source', baseUrl: 'https://source.example' }],
+          presentOn: ['source', 'target'],
+          absentFrom: [],
+        },
+      ])
+    ).toEqual([]);
   });
 
   it('builds no operations for a blob without a usable source in mirror or sync mode', () => {
-    const replicaMap = [{
-      sha256: hashA, assetId: 'asset', role: 'main', sources: [], presentOn: [],
-      absentFrom: [{ serverId: 'target', baseUrl: 'https://target.example' }],
-    }];
+    const replicaMap = [
+      {
+        sha256: hashA,
+        assetId: 'asset',
+        role: 'main',
+        sources: [],
+        presentOn: [],
+        absentFrom: [{ serverId: 'target', baseUrl: 'https://target.example' }],
+      },
+    ];
     expect(buildReplicaOps(replicaMap, 'target')).toEqual([]);
     expect(buildReplicaOps(replicaMap)).toEqual([]);
   });

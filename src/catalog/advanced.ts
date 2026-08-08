@@ -535,7 +535,7 @@ export async function projectCatalogAssets(
     const title =
       audioMetadata?.title ??
       fileName ??
-      (type === 'unknown' ? `Unclassified blob ${sha256.slice(0, 8)}` : `${type[0].toUpperCase()}${type.slice(1)}`);
+      (type === 'unknown' ? `Unclassified file ${sha256.slice(0, 8)}` : `${type[0].toUpperCase()}${type.slice(1)}`);
     const subtitle = audioMetadata ? audioSubtitle(audioMetadata) : undefined;
     await writeProjection(
       catalog,
@@ -839,20 +839,20 @@ export async function planCatalogAction(catalog: Catalog, pubkey: string, assetI
     catalog.store.getAll<BlobLocation>('blob_location'),
   ]);
   const asset = assets.find(item => item.id === assetId && item.pubkey === pubkey);
-  if (!asset) return { allowed: false, reason: 'Asset is not in this profile', targets: [] as string[] };
+  if (!asset) return { allowed: false, reason: 'This item is not in your profile', targets: [] as string[] };
   const targets = assetBlobs.filter(item => item.assetId === assetId).map(item => item.sha256);
   const incomplete = relationships.some(
     relationship => targets.includes(relationship.fromSha256) && relationship.state !== 'active'
   );
   if (action === 'delete' && (asset.state !== 'active' || incomplete))
-    return { allowed: false, reason: 'Delete requires a complete, unambiguous asset graph', targets };
+    return { allowed: false, reason: 'Delete requires a complete, unambiguous picture of this item', targets };
   const presentTargets = targets.filter(sha256 =>
     locations.some(
       location => location.sha256 === sha256 && location.state === 'present' && location.source !== 'native-url'
     )
   );
   if (action === 'mirror' && presentTargets.length === 0)
-    return { allowed: false, reason: 'No transferable source replica is currently available', targets };
+    return { allowed: false, reason: 'No server currently has a copy that can be transferred', targets };
   return { allowed: true, targets, presentTargets };
 }
 

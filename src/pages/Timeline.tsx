@@ -187,7 +187,7 @@ export default function Timeline() {
         // "you have nothing here", which is a wrong answer stated confidently.
         if (!active) return;
         setServerAssetIds(undefined);
-        setLookupError('The server filter could not be applied, so every asset is shown.');
+        setLookupError('The server filter could not be applied, so everything is shown.');
       });
     return () => {
       active = false;
@@ -505,7 +505,7 @@ export default function Timeline() {
       )}
 
       <div className="mt-4 flex flex-1 gap-6">
-        <section className="min-w-0 flex-1" aria-label="Assets">
+        <section className="min-w-0 flex-1" aria-label="Your media">
           {displayMode === 'media' ? (
             <BrowseMediaGrid
               monthGroups={monthGroups}

@@ -139,7 +139,7 @@ export function BrowseActionPlanDialog({
     const targets = (distribution[hash]?.servers ?? [])
       .map(name => serverInfo[name])
       .filter((server): server is ServerInfo => !!server && !server.virtual);
-    if (!targets.length) throw new Error('No server currently reports this blob.');
+    if (!targets.length) throw new Error('No server currently reports this file.');
     const results = await Promise.allSettled(
       targets.map(async server => {
         if (server.type === 'blossom') {
@@ -293,9 +293,9 @@ export function BrowseActionPlanDialog({
         ? destination === undefined
           ? 'Choose a destination server to see what would be copied.'
           : mirrorGapCount === 0
-            ? `${destination.name} already holds every blob of the selected asset${allowedPlans.length === 1 ? '' : 's'}. Nothing to copy.`
-            : `${mirrorGapCount} blob${mirrorGapCount === 1 ? '' : 's'} missing on ${destination.name} will be copied there.`
-        : `${syncGapCount ?? 0} blob/server gap${syncGapCount === 1 ? '' : 's'} will be synced for the allowed assets.`;
+            ? `${destination.name} already holds every file of the selected item${allowedPlans.length === 1 ? '' : 's'}. Nothing to copy.`
+            : `${mirrorGapCount} file${mirrorGapCount === 1 ? '' : 's'} missing on ${destination.name} will be copied there.`
+        : `${syncGapCount ?? 0} missing file cop${syncGapCount === 1 ? 'y' : 'ies'} will be filled in across your servers.`;
 
   return (
     <DialogPrimitive.Root open={open}>
@@ -313,7 +313,7 @@ export function BrowseActionPlanDialog({
             {phase === 'planning' && 'Computing what this action will affect…'}
             {phase === 'reviewing' && reviewingCopy}
             {phase === 'running' &&
-              `${action === 'delete' ? 'Deleting' : 'Transferring'} ${action === 'delete' ? `up to ${CONCURRENCY}` : `up to ${TRANSFER_CONCURRENCY}`} blobs concurrently…`}
+              `${action === 'delete' ? 'Deleting' : 'Transferring'} ${action === 'delete' ? `up to ${CONCURRENCY}` : `up to ${TRANSFER_CONCURRENCY}`} files concurrently…`}
             {phase === 'complete' && `${succeeded} succeeded, ${failed} failed.`}
             {phase === 'failed' && failureMessage}
           </DialogPrimitive.Description>
@@ -434,7 +434,7 @@ export function BrowseActionPlanDialog({
                   onClick={action === 'delete' ? runDelete : () => void runTransfer()}
                   disabled={targetHashes.length === 0 || (action === 'mirror' && !destination)}
                 >
-                  {ACTION_LABEL[action]} {targetHashes.length} blob{targetHashes.length === 1 ? '' : 's'}
+                  {ACTION_LABEL[action]} {targetHashes.length} file{targetHashes.length === 1 ? '' : 's'}
                 </Button>
               </>
             )}

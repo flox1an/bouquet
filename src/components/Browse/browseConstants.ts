@@ -33,6 +33,6 @@ export const SORT_FIELD_OPTIONS: Array<{ id: TimelineSortField; label: string }>
   { id: 'date', label: 'Date' },
   { id: 'title', label: 'Title' },
   { id: 'size', label: 'Size' },
-  { id: 'blobCount', label: 'Blob count' },
-  { id: 'replicaCount', label: 'Replicas' },
+  { id: 'blobCount', label: 'File count' },
+  { id: 'replicaCount', label: 'Copies' },
 ];

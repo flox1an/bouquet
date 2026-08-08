@@ -60,7 +60,7 @@ export function BrowseFilterMenu({
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel>Visibility</DropdownMenuLabel>
         <DropdownMenuCheckboxItem checked={eventOnly} onCheckedChange={onEventOnlyChange}>
-          Only assets with a Nostr event
+          Only media with a Nostr event
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem checked={descriptiveOnly} onCheckedChange={onDescriptiveOnlyChange}>
           Only descriptive titles

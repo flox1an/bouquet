@@ -2,12 +2,12 @@ import type { BlobPrefixLoader, HlsPlaylistLoader } from './catalog';
 
 export const fetchBlobPrefix: BlobPrefixLoader = async (url, maxBytes) => {
   const response = await fetch(url, { headers: { Range: `bytes=0-${maxBytes - 1}` } });
-  if (!response.ok && response.status !== 206) throw new Error(`Blob fetch failed with HTTP ${response.status}`);
+  if (!response.ok && response.status !== 206) throw new Error(`File fetch failed with HTTP ${response.status}`);
   const contentRange = response.headers.get('content-range');
   const rangeSize = contentRange ? Number(/\/(\d+)$/.exec(contentRange)?.[1]) : undefined;
   const declaredSize = rangeSize || Number(response.headers.get('content-length')) || undefined;
   const reader = response.body?.getReader();
-  if (!reader) throw new Error('Blob response has no readable body');
+  if (!reader) throw new Error('File response has no readable body');
   const chunks: Uint8Array[] = [];
   let received = 0;
   let truncated = false;
