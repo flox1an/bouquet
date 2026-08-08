@@ -77,6 +77,7 @@ export function BrowseActionPlanDialog({
   const [syncGapCount, setSyncGapCount] = useState<number>();
   const [replicaMaps, setReplicaMaps] = useState<AssetReplica[][]>([]);
   const cancelledRef = useRef(false);
+  const failedRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +89,7 @@ export function BrowseActionPlanDialog({
     setMirrorSupport({});
     setSyncGapCount(undefined);
     cancelledRef.current = false;
+    failedRef.current = false;
     void Promise.all(
       assets.map(async item => {
         const result = await planCatalogAction(getCatalog(), pubkey, item.assetId, action);
@@ -129,8 +131,10 @@ export function BrowseActionPlanDialog({
     ? replicaMaps.flatMap(map => buildReplicaOps(map, normalizeServerUrl(destination.url))).length
     : undefined;
 
-  const updateRow = (key: string, update: Partial<Row>) =>
+  const updateRow = (key: string, update: Partial<Row>) => {
+    if (update.state === 'error') failedRef.current = true;
     setRows(previous => previous.map(row => (row.key === key ? { ...row, ...update } : row)));
+  };
   const deleteHashFromAllServers = async (hash: string) => {
     const targets = (distribution[hash]?.servers ?? [])
       .map(name => serverInfo[name])
@@ -157,7 +161,9 @@ export function BrowseActionPlanDialog({
   const complete = () => {
     setPhase('complete');
     queryClient.invalidateQueries({ queryKey: ['blobs'] });
-    onDeleted();
+    // The caller clears the user's selection here. Doing that after a partial
+    // failure would take away the very items they need in order to retry.
+    if (!failedRef.current) onDeleted();
   };
   const runDelete = () => {
     const initial = targetHashes.map(hash => ({ key: hash, label: hash, state: 'pending' as const }));
