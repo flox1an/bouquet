@@ -91,6 +91,8 @@ export default function Timeline() {
   const [hashMatchAssetIds, setHashMatchAssetIds] = useState<Set<string>>();
   const [catalogVersion, setCatalogVersion] = useState(0);
   const [lookupError, setLookupError] = useState<string>();
+  const [projectionError, setProjectionError] = useState<string>();
+  const [projectionAttempt, setProjectionAttempt] = useState(0);
   const [activeMonth, setActiveMonth] = useState<string>();
   const [bulkAction, setBulkAction] = useState<CatalogAction>();
   const [cardAction, setCardAction] = useState<{ action: CatalogAction; item: TimelineItem }>();
@@ -131,10 +133,13 @@ export default function Timeline() {
           .then(projected => {
             if (!active) return;
             setItems(projected);
+            setProjectionError(undefined);
             setProjectionState('complete');
           })
-          .catch(() => {
-            if (active) setProjectionState(current => (current === 'complete' ? current : 'failed'));
+          .catch(error => {
+            if (!active) return;
+            setProjectionError(error instanceof Error ? error.message : String(error));
+            setProjectionState(current => (current === 'complete' ? current : 'failed'));
           });
       }, 200);
     };
@@ -147,7 +152,7 @@ export default function Timeline() {
       if (timer !== undefined) window.clearTimeout(timer);
       window.removeEventListener('bouquet-catalog-changed', runProjection);
     };
-  }, [user?.pubkey]);
+  }, [user?.pubkey, projectionAttempt]);
 
   const searchTerms = useMemo(() => splitSearchTerms(search), [search]);
   const hashTerms = useMemo(() => searchTerms.filter(isHashSearchTerm), [searchTerms]);
@@ -432,6 +437,20 @@ export default function Timeline() {
         initialServers={Object.values(serverInfo).filter(s => !s.virtual)}
       />
 
+      {items.length > 0 && projectionState === 'failed' && (
+        <div
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-destructive bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="status"
+        >
+          {/* Without this the list silently goes stale: the old items stay on screen
+              and nothing says the refresh failed. */}
+          <span>Showing your last known media list. Refreshing it failed.</span>
+          <Button size="sm" variant="outline" onClick={() => setProjectionAttempt(attempt => attempt + 1)}>
+            Try again
+          </Button>
+        </div>
+      )}
+
       {lookupError && (
         <p
           className="mb-4 border border-destructive bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -532,10 +551,19 @@ export default function Timeline() {
         />
       )}
       {items.length === 0 && projectionState === 'failed' && (
-        <EmptyState
-          title="Projection paused"
-          detail="Your catalog remains intact. Return after the next sync to try projecting the media again."
-        />
+        <div>
+          <EmptyState
+            title="Could not build your media list"
+            detail={
+              projectionError
+                ? `Your catalog is intact; reading it failed: ${projectionError}`
+                : 'Your catalog is intact, but reading it failed.'
+            }
+          />
+          <Button className="mt-4" onClick={() => setProjectionAttempt(attempt => attempt + 1)}>
+            Try again
+          </Button>
+        </div>
       )}
       {items.length > 0 && filteredItems.length === 0 && (
         <EmptyState

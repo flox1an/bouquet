@@ -50,6 +50,7 @@ export default function TimelineAssetDetail() {
   const navigate = useNavigate();
   const [detail, setDetail] = useState<TimelineAssetDetail>();
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'failed'>('loading');
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [descExpanded, setDescExpanded] = useState(false);
   const [availableChecked, setAvailableChecked] = useState(false);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
@@ -184,7 +185,7 @@ export default function TimelineAssetDetail() {
     return () => {
       active = false;
     };
-  }, [assetId, user?.pubkey]);
+  }, [assetId, user?.pubkey, loadAttempt]);
 
   const returnToTimeline = () => {
     const timelineLocationKey = (location.state as DetailReturnState | null)?.timelineLocationKey;
@@ -220,8 +221,9 @@ export default function TimelineAssetDetail() {
     return (
       <DetailMessage
         title="Asset details unavailable"
-        detail="Return to the timeline and try again after the next catalog update."
+        detail="Reading this asset from your local catalog failed. Your data is intact."
         onBack={returnToTimeline}
+        onRetry={() => setLoadAttempt(attempt => attempt + 1)}
       />
     );
 
@@ -523,11 +525,13 @@ function DetailMessage({
   detail,
   onBack,
   loading = false,
+  onRetry,
 }: {
   title: string;
   detail: string;
   onBack: () => void;
   loading?: boolean;
+  onRetry?: () => void;
 }) {
   return (
     <main className="mx-auto flex min-h-[55vh] max-w-2xl flex-col justify-center px-6">
@@ -535,11 +539,12 @@ function DetailMessage({
       <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Asset details</p>
       <h1 className="mt-3 text-4xl font-black tracking-tight">{title}</h1>
       <p className="mt-3 text-muted-foreground">{detail}</p>
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap gap-2">
         <Button variant="outline" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" />
           Back to timeline
         </Button>
+        {onRetry && <Button onClick={onRetry}>Try again</Button>}
       </div>
     </main>
   );
