@@ -166,7 +166,22 @@ export function BrowseActionPlanDialog({
     if (!failedRef.current) onDeleted();
   };
   const runDelete = () => {
-    const initial = targetHashes.map(hash => ({ key: hash, label: hash, state: 'pending' as const }));
+    // A confirmation that lists 64-character hashes does not tell anyone what they
+    // are about to destroy. Name the media, and keep the hash for identification.
+    const titleForHash = new Map<string, string>();
+    for (const plan of allowedPlans) {
+      for (const hash of plan.targets) {
+        if (!titleForHash.has(hash)) titleForHash.set(hash, plan.item.displayTitle);
+      }
+    }
+    const initial = targetHashes.map(hash => {
+      const title = titleForHash.get(hash);
+      return {
+        key: hash,
+        label: title ? `${title} — ${hash.slice(0, 12)}` : hash,
+        state: 'pending' as const,
+      };
+    });
     setRows(initial);
     setPhase('running');
     let nextIndex = 0;
@@ -199,14 +214,21 @@ export function BrowseActionPlanDialog({
       const destinationServerId = action === 'mirror' && destination ? normalizeServerUrl(destination.url) : undefined;
       const operationGroups = await Promise.all(
         allowedPlans.map(async plan =>
-          buildReplicaOps(await getAssetReplicaMap(getCatalog(), pubkey, plan.item.assetId), destinationServerId)
+          (
+            buildReplicaOps(
+              await getAssetReplicaMap(getCatalog(), pubkey, plan.item.assetId),
+              destinationServerId
+            ) as ReplicaOp[]
+          ).map(op => ({ op, title: plan.item.displayTitle }))
         )
       );
-      const ops = operationGroups.flat() as ReplicaOp[];
+      const labelled = operationGroups.flat();
+      const ops = labelled.map(entry => entry.op);
       setRows(
-        ops.map(op => ({
+        labelled.map(({ op, title }) => ({
           key: `${op.sha256}:${op.targetServerId}`,
-          label: `${op.sha256} → ${op.targetBaseUrl}`,
+          // Name the media being copied, not just the digest of one of its blobs.
+          label: `${title} → ${op.targetBaseUrl}`,
           state: 'pending',
         }))
       );
