@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { getCatalog } from '../catalog/catalog';
+import { getCatalogClient } from '../catalog/catalogClient';
 import ServerListPopup from '../components/ServerListPopup';
 import { useUserServers, type Server } from '../utils/useUserServers';
 
@@ -183,7 +183,7 @@ export const Transfer = () => {
           },
           onCompleted: (blob, method) => {
             if (!user?.pubkey) return;
-            return getCatalog()
+            return getCatalogClient()
               .ingestUpload(
                 user.pubkey,
                 { url: serverInfo[targetServer].url, type: serverInfo[targetServer].type },

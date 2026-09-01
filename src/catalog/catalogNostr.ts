@@ -1,11 +1,18 @@
 import { firstValueFrom, toArray } from 'rxjs';
 import type { Filter } from 'nostr-tools';
 import { mergeRelays, relayPool } from '../nostr/core';
-import { Catalog } from './catalog';
+import type { Catalog } from './catalog';
 
 export const CATALOG_EVENT_KINDS = [1, 20, 21, 22, 1063, 5128, 15128, 30563, 31337, 34235, 34236, 35128] as const;
 
-export async function syncAuthoredEventsFromRelays(catalog: Catalog, pubkey: string, relayUrls: string[]) {
+/**
+ * Both the in-thread catalog and the worker client expose these two methods with the
+ * same shape, and the relay loaders have to run on this thread either way - the
+ * client bridges them back out of the worker.
+ */
+type EventSyncTarget = Pick<Catalog, 'syncAuthoredEvents' | 'syncReverseLookups'>;
+
+export async function syncAuthoredEventsFromRelays(catalog: EventSyncTarget, pubkey: string, relayUrls: string[]) {
   for (const relayUrl of mergeRelays(relayUrls)) {
     try {
       await catalog.syncAuthoredEvents(pubkey, relayUrl, async ({ until, limit }) => {
@@ -18,7 +25,7 @@ export async function syncAuthoredEventsFromRelays(catalog: Catalog, pubkey: str
   }
 }
 
-export async function syncReverseLookupsFromRelays(catalog: Catalog, pubkey: string, relayUrls: string[]) {
+export async function syncReverseLookupsFromRelays(catalog: EventSyncTarget, pubkey: string, relayUrls: string[]) {
   for (const relayUrl of mergeRelays(relayUrls)) {
     try {
       await catalog.syncReverseLookups(pubkey, relayUrl, async hashes => {

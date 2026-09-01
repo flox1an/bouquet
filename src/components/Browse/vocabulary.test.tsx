@@ -45,7 +45,6 @@ const row = (over = {}) =>
   render(
     h(BrowseListRow, {
       item: item(over),
-      pubkey: 'pk',
       to: '/x',
       selected: false,
       onSelect: () => {},
@@ -99,6 +98,8 @@ describe('plain vocabulary renders as real words', () => {
         onAudioVisible: () => {},
         onPlayAudio: () => {},
         onAction: () => {},
+        onRegisterMonthScroll: () => {},
+        onActiveMonthChange: () => {},
       })
     );
     expect(html).toContain('1 file');

@@ -1,4 +1,5 @@
-import { ArrowDownAZ, ArrowUpAZ, LayoutGrid, List, Search, Settings } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowDownAZ, ArrowUpAZ, LayoutGrid, List, Loader2, RefreshCw, Search, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,8 +24,11 @@ type BrowseToolbarProps = {
   selectedServerName?: string;
   onServerChange: (name: string | undefined) => void;
   onManageServers: () => void;
+  onRescan: () => Promise<unknown>;
   eventOnly: boolean;
   onEventOnlyChange: (value: boolean) => void;
+  unlinkedOnly: boolean;
+  onUnlinkedOnlyChange: (value: boolean) => void;
   descriptiveOnly: boolean;
   onDescriptiveOnlyChange: (value: boolean) => void;
   availabilityFilter: AvailabilityFilter[];
@@ -45,8 +49,11 @@ export function BrowseToolbar({
   selectedServerName,
   onServerChange,
   onManageServers,
+  onRescan,
   eventOnly,
   onEventOnlyChange,
+  unlinkedOnly,
+  onUnlinkedOnlyChange,
   descriptiveOnly,
   onDescriptiveOnlyChange,
   availabilityFilter,
@@ -54,6 +61,7 @@ export function BrowseToolbar({
   matchingCount,
 }: BrowseToolbarProps) {
   const realServers = servers.filter(server => !server.virtual);
+  const [isRescanning, setIsRescanning] = useState(false);
 
   return (
     <section className="mb-6 border bg-card p-4 shadow-[3px_3px_0_hsl(var(--border))]" aria-label="Browse toolbar">
@@ -156,10 +164,26 @@ export function BrowseToolbar({
           Manage servers
         </Button>
 
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={isRescanning}
+          onClick={() => {
+            setIsRescanning(true);
+            void onRescan().finally(() => setIsRescanning(false));
+          }}
+        >
+          {isRescanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          Rescan
+        </Button>
+
         <div className="shrink-0">
           <BrowseFilterMenu
             eventOnly={eventOnly}
             onEventOnlyChange={onEventOnlyChange}
+            unlinkedOnly={unlinkedOnly}
+            onUnlinkedOnlyChange={onUnlinkedOnlyChange}
             descriptiveOnly={descriptiveOnly}
             onDescriptiveOnlyChange={onDescriptiveOnlyChange}
             availabilityFilter={availabilityFilter}

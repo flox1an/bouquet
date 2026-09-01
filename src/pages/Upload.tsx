@@ -27,7 +27,7 @@ import UploadPublished from '../components/UploadPublished';
 import { Info } from 'lucide-react';
 import UploadOnboarding from '../components/UploadOboarding';
 import { toast } from '@/hooks/use-toast';
-import { getCatalog } from '../catalog/catalog';
+import { getCatalogClient } from '../catalog/catalogClient';
 
 function Upload() {
   const { servers, serversLoading } = useUserServers();
@@ -203,7 +203,7 @@ function Upload() {
               m: newBlob.type,
             };
             if (user?.pubkey) {
-              void getCatalog()
+              void getCatalogClient()
                 .ingestUpload(user.pubkey, { url: server.url, type: server.type }, newBlob)
                 .catch(() => undefined);
             }
@@ -323,7 +323,7 @@ function Upload() {
               return transferBlob(fileEventData.selectedThumbnail, serverInfo[s], signEventTemplate, {
                 onCompleted: (blob, method) => {
                   if (!user?.pubkey) return;
-                  return getCatalog()
+                  return getCatalogClient()
                     .ingestUpload(
                       user.pubkey,
                       { url: serverInfo[s].url, type: serverInfo[s].type },

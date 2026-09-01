@@ -108,9 +108,11 @@ Known limitations
   splitting what the app genuinely loads at start, not pruning the manifest.
 - **The catalog is local to each browser profile.** It is an IndexedDB index
   rebuilt from your relays and servers, not synced between devices.
-- **The media grid is not virtualized.** The list view is. Catalog operations are
-  linear (~10µs per asset; 50k assets project in about half a second), so the
-  limit is DOM size in grid mode with a very large catalog, not the index.
+- **The media grid is virtualized.** Both views are: the grid renders month
+  headers and card rows through a window virtualizer, the list likewise. Catalog
+  operations are linear (~10µs per asset; 50k assets project in about half a
+  second), so the remaining limit is rendering during fast scroll of very large
+  catalogs, not the index.
 - **Deleting files does not delete the Nostr events.** Bouquet issues no NIP-09
   deletion request. Posts referencing deleted files will show missing media, and
   both delete dialogs say so before you confirm.

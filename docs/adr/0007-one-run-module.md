@@ -1,0 +1,5 @@
+# Batch operations run through one run module (runTasks)
+
+All bulk flows (delete, mirror, sync, upload) share one shape: bounded worker pool, per-task outcomes, cancellation, and a verdict that decides whether the user's selection may be cleared. That shape was implemented four times, and the same invariant — never clear the selection on partial failure — had to be fixed twice in separate commits across three files. Batch operations now run through `src/utils/run.ts`: the module owns concurrency, abort gating, index-aligned outcomes, and the verdict (`allSucceeded`, `failed`, `cancelled`); each flow keeps its own presentation and per-task work.
+
+Seam rules: expected outcomes are returned *values*, not errors — a 404 "already gone" is a successful task, so `runTasks` contains no HTTP status knowledge. The rejected alternative (an `isExpected(error)` classifier option) would have put protocol error-shape knowledge inside the runner; if it resurfaces, this ADR is the reason it was declined. An aborted run must not clear the selection: whatever completed is real and recorded, the rest is still there to retry.

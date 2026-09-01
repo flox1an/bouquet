@@ -1,6 +1,6 @@
 import type { NostrEvent } from 'nostr-tools';
 import { nip19 } from 'nostr-tools';
-import type { Catalog } from './catalog';
+import type { Catalog, CatalogServerType } from './catalog';
 import { extractTimelineEventMetadata, type TimelineEventMetadata } from './timelineMetadata';
 import { EVENT_EXTRACTOR_VERSION } from './eventReferences';
 
@@ -9,7 +9,7 @@ export type CatalogAction = 'mirror' | 'sync' | 'delete';
 
 type Membership = { pubkey: string; sha256: string; status: 'active' | 'unresolved' | 'forgotten' };
 type ProfileServer = { pubkey: string; serverId: string; enabled: boolean };
-type Server = { serverId: string; baseUrl: string };
+type Server = { serverId: string; baseUrl: string; serverType: CatalogServerType };
 type BlobLocation = {
   id: string;
   sha256: string;
@@ -23,7 +23,7 @@ type BlobLocation = {
   reportedMimeType?: string;
   canonicalUrl: string;
   consecutiveFailures: number;
-  source?: 'replica' | 'native-url';
+  source?: 'replica' | 'native-url' | 'server-list';
 };
 type BlobLocationHistory = {
   id: string;
@@ -92,6 +92,8 @@ export type TimelineProjection = {
   replicaCount: number;
   availabilityState: 'complete' | 'partial' | 'unavailable' | 'unknown';
   metadataCompleteness: 'pending' | 'complete' | 'failed';
+  /** Start of the projection run that wrote this record; see `queryCatalogTimeline`. */
+  projectedAt: number;
 };
 export type TimelineSortField = 'date' | 'title' | 'size' | 'blobCount' | 'replicaCount';
 export type TimelineSort = { field: TimelineSortField; direction: 'asc' | 'desc' };
@@ -331,6 +333,13 @@ export async function projectCatalogAssets(
   options?: { force?: boolean }
 ): Promise<void> {
   if (!options?.force && !(await catalog.isProjectionStale(pubkey))) return;
+  // Taken before any read: a mutation landing during the run must still count as
+  // newer than this projection, or its changes would be treated as already applied.
+  // Strictly greater than the previous stamp, not just Date.now(): two projection
+  // runs landing in the same millisecond (a delete or mirror can trigger one right
+  // after another) would otherwise both write rows the query's `projectedAt >=
+  // stamp` filter can't tell apart, resurrecting the run being replaced.
+  const runStamp = Math.max(Date.now(), (await catalog.getProjectionStamp(pubkey)) + 1);
   const [
     memberships,
     profileEvents,
@@ -384,7 +393,9 @@ export async function projectCatalogAssets(
       .map(relationship => relationship.fromSha256)
   );
   const assigned = new Set<string>();
-
+  const assets: Asset[] = [];
+  const assetBlobs: AssetBlob[] = [];
+  const projections: TimelineProjection[] = [];
   for (const event of profileTimelineEvents) {
     const eventReferences = referencesByEvent.get(event.eventId) ?? [];
     const primary =
@@ -412,7 +423,7 @@ export async function projectCatalogAssets(
     const audioMetadata = type === 'audio' ? audioMetadataFor(primary, audioFactsByHash) : undefined;
     const title = audioMetadata?.title ?? event.title;
     const subtitle = audioMetadata ? (audioSubtitle(audioMetadata) ?? event.subtitle) : event.subtitle;
-    await catalog.store.put<Asset>('asset', {
+    assets.push({
       id: assetId,
       pubkey,
       identityType,
@@ -429,7 +440,7 @@ export async function projectCatalogAssets(
           : reference.role === 'thumbnail' || reference.role === 'image'
             ? 'thumbnail'
             : 'rendition';
-      await catalog.store.put<AssetBlob>('asset_blob', {
+      assetBlobs.push({
         id: `${assetId}:${reference.sha256}:${role}`,
         assetId,
         sha256: reference.sha256!,
@@ -438,13 +449,13 @@ export async function projectCatalogAssets(
       });
       assigned.add(reference.sha256!);
     }
-    for (const descendant of blobHashes.filter(hash => !referencedHashes.includes(hash))) {
-      await catalog.store.put<AssetBlob>('asset_blob', {
+    for (const [ordinal, descendant] of blobHashes.filter(hash => !referencedHashes.includes(hash)).entries()) {
+      assetBlobs.push({
         id: `${assetId}:${descendant}:rendition`,
         assetId,
         sha256: descendant,
         role: 'rendition',
-        ordinal: referencedHashes.length,
+        ordinal,
       });
       assigned.add(descendant);
     }
@@ -457,8 +468,8 @@ export async function projectCatalogAssets(
         return event.eventId;
       }
     })();
-    await writeProjection(
-      catalog,
+    writeProjection(
+      projections,
       pubkey,
       assetId,
       type,
@@ -482,7 +493,8 @@ export async function projectCatalogAssets(
         previewUrl: preview ? blobUrlFor(preview, urlsByHash) : undefined,
         blobHashes,
         blobsByHash,
-      }
+      },
+      runStamp
     );
   }
 
@@ -497,7 +509,7 @@ export async function projectCatalogAssets(
     const blob = blobsByHash.get(sha256);
     const type = hlsPlaylistHashes.has(sha256) ? 'video' : assetTypeFromMime(blob?.verifiedMimeType);
     const assetId = `${pubkey}:root-blob:${sha256}`;
-    await catalog.store.put<Asset>('asset', {
+    assets.push({
       id: assetId,
       pubkey,
       identityType: 'root-blob',
@@ -507,7 +519,7 @@ export async function projectCatalogAssets(
       firstSeenAt: blob?.firstSeenAt ?? Date.now(),
       lastProjectedAt: Date.now(),
     });
-    await catalog.store.put<AssetBlob>('asset_blob', {
+    assetBlobs.push({
       id: `${assetId}:${sha256}:primary`,
       assetId,
       sha256,
@@ -517,7 +529,7 @@ export async function projectCatalogAssets(
     const attachedHashes = collectDescendants(sha256, childrenByParent);
     for (const [ordinal, descendant] of attachedHashes.entries()) {
       if (descendant === sha256) continue;
-      await catalog.store.put<AssetBlob>('asset_blob', {
+      assetBlobs.push({
         id: `${assetId}:${descendant}:rendition`,
         assetId,
         sha256: descendant,
@@ -537,8 +549,8 @@ export async function projectCatalogAssets(
       fileName ??
       (type === 'unknown' ? `Unclassified file ${sha256.slice(0, 8)}` : `${type[0].toUpperCase()}${type.slice(1)}`);
     const subtitle = audioMetadata ? audioSubtitle(audioMetadata) : undefined;
-    await writeProjection(
-      catalog,
+    writeProjection(
+      projections,
       pubkey,
       assetId,
       type,
@@ -557,10 +569,12 @@ export async function projectCatalogAssets(
         primaryUrl: blobUrlFor(sha256, urlsByHash),
         blobHashes: uniqueHashes(attachedHashes),
         blobsByHash,
-      }
+      },
+      runStamp
     );
   }
-  await catalog.markProjectionComplete(pubkey);
+  await flushWrites(catalog, { assets, assetBlobs, projections });
+  await catalog.markProjectionComplete(pubkey, runStamp);
 }
 
 async function hydrateTimelineEvents(
@@ -649,8 +663,22 @@ function blobSummary(blobHashes: string[], blobsByHash: Map<string, Blob>) {
   };
 }
 
-async function writeProjection(
+/** Chunked bulk write: one transaction per chunk keeps memory and lock time bounded. */
+async function flushWrites(
   catalog: Catalog,
+  writes: { assets: Asset[]; assetBlobs: AssetBlob[]; projections: TimelineProjection[] }
+): Promise<void> {
+  const chunk = 2000;
+  for (let i = 0; i < writes.assets.length; i += chunk)
+    await catalog.store.putMany('asset', writes.assets.slice(i, i + chunk));
+  for (let i = 0; i < writes.assetBlobs.length; i += chunk)
+    await catalog.store.putMany('asset_blob', writes.assetBlobs.slice(i, i + chunk));
+  for (let i = 0; i < writes.projections.length; i += chunk)
+    await catalog.store.putMany('timeline_projection', writes.projections.slice(i, i + chunk));
+}
+
+async function writeProjection(
+  projections: TimelineProjection[],
   pubkey: string,
   assetId: string,
   displayType: Asset['assetType'],
@@ -669,14 +697,15 @@ async function writeProjection(
     searchText: string;
     dateSource: TimelineProjection['displayDateSource'];
   },
-  media: { primaryUrl?: string; previewUrl?: string; blobHashes: string[]; blobsByHash: Map<string, Blob> }
+  media: { primaryUrl?: string; previewUrl?: string; blobHashes: string[]; blobsByHash: Map<string, Blob> },
+  projectedAt: number
 ) {
   const present = locations.filter(location => location.sha256 === primary && location.state === 'present');
   const known = locations.filter(location => location.sha256 === primary);
   const availabilityState: TimelineProjection['availabilityState'] =
     present.length > 0 ? 'complete' : known.length > 0 ? 'unavailable' : 'unknown';
   const summary = blobSummary(media.blobHashes, media.blobsByHash);
-  await catalog.store.put<TimelineProjection>('timeline_projection', {
+  projections.push({
     id: `${pubkey}:${assetId}`,
     pubkey,
     assetId,
@@ -699,59 +728,83 @@ async function writeProjection(
     replicaCount: present.filter(location => location.source !== 'native-url').length,
     availabilityState,
     metadataCompleteness: display.eventId ? 'complete' : 'pending',
+    projectedAt,
   });
 }
-
 export async function queryCatalogTimeline(
   catalog: Catalog,
   pubkey: string,
   query: TimelineQuery = {}
 ): Promise<TimelineProjection[]> {
-  const [projections, assetBlobs, locations] = await Promise.all([
-    catalog.store.getAll<TimelineProjection>('timeline_projection'),
-    catalog.store.getAll<AssetBlob>('asset_blob'),
-    query.serverId ? catalog.store.getAll<BlobLocation>('blob_location') : Promise.resolve<BlobLocation[]>([]),
-  ]);
-  const eventAssetIds = new Set(
-    projections.filter(projection => projection.eventId).map(projection => projection.assetId)
-  );
-  const eventReferencedHashes = new Set(
-    assetBlobs.filter(assetBlob => eventAssetIds.has(assetBlob.assetId)).map(assetBlob => assetBlob.sha256)
-  );
+  const stamp = await catalog.getProjectionStamp(pubkey);
   const searchTerms = splitSearchTerms(query.search);
+  const hashTerms = searchTerms.filter(isHashSearchTerm);
+  // Only the two selective filters pay for a join. A plain browse, a type filter and
+  // a text search all answer from `timeline_projection` alone, which is what keeps
+  // filtering off the multi-table read path.
+  const [projections, assetBlobs] = await Promise.all([
+    catalog.store.getAll<TimelineProjection>('timeline_projection'),
+    hashTerms.length > 0 ? catalog.store.getAll<AssetBlob>('asset_blob') : Promise.resolve<AssetBlob[]>([]),
+  ]);
   const assetBlobsByAssetId = Map.groupBy(assetBlobs, assetBlob => assetBlob.assetId);
   const matchesSearchTerm = (projection: TimelineProjection, term: string): boolean => {
     if (projection.searchText.includes(term)) return true;
     if (!isHashSearchTerm(term)) return false;
-    return (assetBlobsByAssetId.get(projection.assetId) ?? []).some(assetBlob =>
-      assetBlob.sha256.toLocaleLowerCase().startsWith(term)
-    );
+    return (assetBlobsByAssetId.get(projection.assetId) ?? []).some(assetBlob => assetBlob.sha256.startsWith(term));
   };
 
   let assetIdsOnServer: Set<string> | undefined;
   if (query.serverId) {
-    const presentHashes = new Set(
-      locations
-        .filter(location => location.serverId === query.serverId && location.state === 'present')
-        .map(location => location.sha256)
-    );
-    assetIdsOnServer = new Set(
-      assetBlobs.filter(assetBlob => presentHashes.has(assetBlob.sha256)).map(assetBlob => assetBlob.assetId)
-    );
+    assetIdsOnServer = new Set(await queryCatalogAssetIds(catalog, { serverId: query.serverId }));
   }
 
   const filtered = projections
     .filter(projection => projection.pubkey === pubkey)
-    .filter(
-      projection =>
-        projection.eventId || !projection.primaryBlobSha256 || !eventReferencedHashes.has(projection.primaryBlobSha256)
-    )
+    // Projections from an earlier run are leftovers: a blob that has since been
+    // claimed by an event asset, or one that left the catalog entirely. The store
+    // has no delete, so the run stamp is what separates them from the live set.
+    .filter(projection => projection.projectedAt >= stamp)
     .filter(projection => !query.types || query.types.includes(projection.displayType))
     .filter(projection => !query.availability || query.availability.includes(projection.availabilityState))
     .filter(projection => !assetIdsOnServer || assetIdsOnServer.has(projection.assetId))
     .filter(projection => searchTerms.every(term => matchesSearchTerm(projection, term)));
 
   return sortTimelineProjections(filtered, query.sort);
+}
+
+/**
+ * The two filters Browse cannot answer from the list it already holds: "present on
+ * this server" and "contains this file hash". Both need nothing but asset ids, so
+ * this reads `asset_blob` and returns ids instead of cloning every projection back
+ * across the worker boundary - which is what a filter change used to pay for.
+ *
+ * Several hash terms narrow each other: an asset must carry a blob for each one.
+ */
+export async function queryCatalogAssetIds(
+  catalog: Catalog,
+  query: { serverId?: string; hashTerms?: string[] }
+): Promise<string[]> {
+  const hashTerms = query.hashTerms ?? [];
+  if (!query.serverId && hashTerms.length === 0) return [];
+  const [assetBlobs, presentLocations] = await Promise.all([
+    catalog.store.getAll<AssetBlob>('asset_blob'),
+    query.serverId
+      ? catalog.store.getAllFromIndex<BlobLocation>('blob_location', 'by_server_state', [query.serverId, 'present'])
+      : Promise.resolve<BlobLocation[]>([]),
+  ]);
+  let assetIds: Set<string> | undefined;
+  const narrow = (keep: (assetBlob: AssetBlob) => boolean) => {
+    const matched = new Set(assetBlobs.filter(keep).map(assetBlob => assetBlob.assetId));
+    assetIds = assetIds === undefined ? matched : new Set([...assetIds].filter(id => matched.has(id)));
+  };
+  if (query.serverId) {
+    const presentHashes = new Set(presentLocations.map(location => location.sha256));
+    narrow(assetBlob => presentHashes.has(assetBlob.sha256));
+  }
+  // Hashes are stored lower-case, and `isHashSearchTerm` only accepts lower-case hex,
+  // so the prefix test needs no case handling.
+  for (const term of hashTerms) narrow(assetBlob => assetBlob.sha256.startsWith(term));
+  return [...(assetIds ?? [])];
 }
 
 export function sortTimelineProjections(items: TimelineProjection[], sort?: TimelineSort): TimelineProjection[] {
@@ -769,64 +822,88 @@ export function sortTimelineProjections(items: TimelineProjection[], sort?: Time
   return [...items].sort((a, b) => factor * compare(a, b));
 }
 
+/**
+ * Assembles one blob's row from records the caller has already fetched, so that the
+ * whole-asset loader and the contents summary can disagree about what to fetch
+ * without disagreeing about what a blob looks like.
+ */
+function toTimelineAssetBlob(
+  assetBlob: AssetBlob,
+  blob: Blob | undefined,
+  urls: BlobUrl[],
+  locations: BlobLocation[],
+  eventFacts: MetadataFact[]
+): TimelineAssetBlob {
+  const present = locations.filter(location => location.state === 'present');
+  return {
+    sha256: assetBlob.sha256,
+    role: assetBlob.role,
+    ordinal: assetBlob.ordinal,
+    mimeType: blob?.verifiedMimeType,
+    eventMimeType: eventFacts.find(fact => fact.field === 'mime_type')?.value as string | undefined,
+    dimensions: eventFacts.find(fact => fact.field === 'dimensions')?.value as string | undefined,
+    size: blob?.verifiedSize,
+    urls: [...new Set(urls.map(url => url.url))],
+    replicaCount: present.filter(location => location.source !== 'native-url').length,
+    availabilityState: present.length > 0 ? 'complete' : locations.length > 0 ? 'unavailable' : 'unknown',
+  };
+}
+
+async function loadAssetBlobs(catalog: Catalog, assetBlobs: AssetBlob[]): Promise<TimelineAssetBlob[]> {
+  return Promise.all(
+    assetBlobs.map(async assetBlob => {
+      const [blob, urls, locations, facts] = await Promise.all([
+        catalog.store.get<Blob>('blob', assetBlob.sha256),
+        catalog.store.getAllFromIndex<BlobUrl>('blob_url', 'by_sha256', assetBlob.sha256),
+        catalog.store.getAllFromIndex<BlobLocation>('blob_location', 'by_sha256', assetBlob.sha256),
+        catalog.store.getAllFromIndex<MetadataFact>('metadata_fact', 'by_subject', assetBlob.sha256),
+      ]);
+      return toTimelineAssetBlob(
+        assetBlob,
+        blob,
+        urls,
+        locations,
+        facts.filter(fact => fact.namespace === 'event')
+      );
+    })
+  );
+}
+
+async function assetBlobsInOrder(catalog: Catalog, assetId: string): Promise<AssetBlob[]> {
+  const assetBlobs = await catalog.store.getAllFromIndex<AssetBlob>('asset_blob', 'by_asset', assetId);
+  return assetBlobs.sort((a, b) => a.ordinal - b.ordinal);
+}
+
 export async function getCatalogTimelineAsset(
   catalog: Catalog,
   pubkey: string,
   assetId: string
 ): Promise<TimelineAssetDetail | undefined> {
-  const [projections, assetBlobs, blobs, blobUrls, locations, metadataFacts, catalogEvents] = await Promise.all([
-    catalog.store.getAll<TimelineProjection>('timeline_projection'),
-    catalog.store.getAll<AssetBlob>('asset_blob'),
-    catalog.store.getAll<Blob>('blob'),
-    catalog.store.getAll<BlobUrl>('blob_url'),
-    catalog.store.getAll<BlobLocation>('blob_location'),
-    catalog.store.getAll<MetadataFact>('metadata_fact'),
-    catalog.store.getAll<CatalogEvent>('catalog_event'),
-  ]);
-  const projection = projections.find(item => item.pubkey === pubkey && item.assetId === assetId);
+  const projection = await catalog.store.get<TimelineProjection>('timeline_projection', `${pubkey}:${assetId}`);
   if (!projection) return;
-  const blobsByHash = new Map(blobs.map(blob => [blob.sha256, blob]));
-  const urlsByHash = Map.groupBy(
-    blobUrls.filter(url => url.sha256),
-    url => url.sha256!
-  );
-  const factsByHash = Map.groupBy(
-    metadataFacts.filter(fact => fact.namespace === 'event'),
-    fact => fact.subjectId
-  );
-  return {
-    projection,
-    event: projection.eventId ? catalogEvents.find(event => event.eventId === projection.eventId)?.event : undefined,
-    blobs: assetBlobs
-      .filter(blob => blob.assetId === assetId)
-      .sort((a, b) => a.ordinal - b.ordinal)
-      .map(assetBlob => {
-        const replicas = locations.filter(
-          location =>
-            location.sha256 === assetBlob.sha256 && location.state === 'present' && location.source !== 'native-url'
-        );
-        const known = locations.some(location => location.sha256 === assetBlob.sha256);
-        const eventFacts = factsByHash.get(assetBlob.sha256) ?? [];
-        return {
-          sha256: assetBlob.sha256,
-          role: assetBlob.role,
-          ordinal: assetBlob.ordinal,
-          mimeType: blobsByHash.get(assetBlob.sha256)?.verifiedMimeType,
-          eventMimeType: eventFacts.find(f => f.field === 'mime_type')?.value as string | undefined,
-          dimensions: eventFacts.find(f => f.field === 'dimensions')?.value as string | undefined,
-          size: blobsByHash.get(assetBlob.sha256)?.verifiedSize,
-          urls: [...new Set(urlsByHash.get(assetBlob.sha256)?.map(url => url.url) ?? [])],
-          replicaCount: replicas.length,
-          availabilityState: locations.some(
-            location => location.sha256 === assetBlob.sha256 && location.state === 'present'
-          )
-            ? 'complete'
-            : known
-              ? 'unavailable'
-              : 'unknown',
-        };
-      }),
-  };
+  const [blobs, catalogEvent] = await Promise.all([
+    assetBlobsInOrder(catalog, assetId).then(assetBlobs => loadAssetBlobs(catalog, assetBlobs)),
+    projection.eventId
+      ? catalog.store.get<CatalogEvent>('catalog_event', projection.eventId)
+      : Promise.resolve(undefined),
+  ]);
+  return { projection, event: catalogEvent?.event, blobs };
+}
+
+/**
+ * What a browse row shows of an item's contents: the total file count, and detail for
+ * only the first few. An HLS item can carry two hundred blobs, so loading them all to
+ * render four would make scrolling cost grow with segment count.
+ */
+export type TimelineAssetContents = { totalCount: number; blobs: TimelineAssetBlob[] };
+
+export async function getCatalogAssetContents(
+  catalog: Catalog,
+  assetId: string,
+  limit: number
+): Promise<TimelineAssetContents> {
+  const assetBlobs = await assetBlobsInOrder(catalog, assetId);
+  return { totalCount: assetBlobs.length, blobs: await loadAssetBlobs(catalog, assetBlobs.slice(0, limit)) };
 }
 
 export async function planCatalogAction(catalog: Catalog, pubkey: string, assetId: string, action: CatalogAction) {
@@ -861,7 +938,7 @@ export type AssetReplica = {
   assetId: string;
   role: string;
   size?: number;
-  sources: Array<{ serverId: string; baseUrl: string }>;
+  sources: Array<{ serverId: string; baseUrl: string; serverType: CatalogServerType }>;
   presentOn: string[];
   absentFrom: Array<{ serverId: string; baseUrl: string }>;
 };
@@ -893,7 +970,14 @@ export async function getAssetReplicaMap(catalog: Catalog, pubkey: string, asset
             .filter(location => location.state === 'present' && location.source !== 'native-url')
             .flatMap(location => {
               const server = serversById.get(location.serverId);
-              return server ? [[server.serverId, { serverId: server.serverId, baseUrl: server.baseUrl }] as const] : [];
+              return server
+                ? [
+                    [
+                      server.serverId,
+                      { serverId: server.serverId, baseUrl: server.baseUrl, serverType: server.serverType },
+                    ] as const,
+                  ]
+                : [];
             })
         ).values(),
       ];

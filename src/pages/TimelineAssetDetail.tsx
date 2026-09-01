@@ -11,17 +11,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { nip19 } from 'nostr-tools';
-import { getCatalog } from '../catalog/catalog';
-import {
-  getCatalogTimelineAsset,
-  projectCatalogAssets,
-  refreshEventUrlAvailability,
-  refreshReplicaAvailability,
-  type TimelineAssetDetail,
-} from '../catalog/advanced';
+import { getCatalogClient } from '../catalog/catalogClient';
+import type { TimelineAssetDetail as TimelineAssetDetailType } from '../catalog/advanced';
 import { AudioTimelinePreview } from '../components/AudioTimelinePreview';
 import { TimelineThumbnail } from '../components/TimelineThumbnail';
 import { useNostr } from '../utils/nostr';
+import { useServerInfo } from '../utils/useServerInfo';
 import { formatDate, formatFileSize } from '../utils/utils';
 import { probeNativeUrl } from '../catalog/availabilityFetch';
 import { eventKindLabel } from '../catalog/eventKinds';
@@ -45,10 +40,15 @@ type DetailReturnState = { timelineLocationKey?: string };
 
 export default function TimelineAssetDetail() {
   const { user } = useNostr();
+  const { distribution } = useServerInfo();
+  const knownServersFor = useCallback(
+    (sha256: string | undefined) => (sha256 ? (distribution[sha256]?.servers ?? []) : []),
+    [distribution]
+  );
   const { assetId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [detail, setDetail] = useState<TimelineAssetDetail>();
+  const [detail, setDetail] = useState<TimelineAssetDetailType>();
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'failed'>('loading');
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -82,8 +82,7 @@ export default function TimelineAssetDetail() {
       return;
     }
     await Promise.all([
-      refreshReplicaAvailability(
-        getCatalog(),
+      getCatalogClient().refreshReplicaAvailability(
         user.pubkey,
         probe,
         1_000_000,
@@ -95,12 +94,13 @@ export default function TimelineAssetDetail() {
           }));
         }
       ),
-      refreshEventUrlAvailability(getCatalog(), user.pubkey, probeNativeUrl, 1_000_000, blobHashes),
+      getCatalogClient().refreshEventUrlAvailability(user.pubkey, probeNativeUrl, 1_000_000, blobHashes),
     ]).catch(() => undefined);
     setCheckingAvailability(false);
     setAvailableChecked(true);
     if (assetId)
-      getCatalogTimelineAsset(getCatalog(), user.pubkey, assetId)
+      getCatalogClient()
+        .getCatalogTimelineAsset(user.pubkey, assetId)
         .then(result => {
           if (result) setDetail(result);
         })
@@ -111,13 +111,13 @@ export default function TimelineAssetDetail() {
     if (!user?.pubkey || !assetId) return;
     let active = true;
     setState('loading');
-    void getCatalog()
+    void getCatalogClient()
       .reprojectEvents(user.pubkey)
-      .then(() => getCatalogTimelineAsset(getCatalog(), user.pubkey, assetId))
+      .then(() => getCatalogClient().getCatalogTimelineAsset(user.pubkey, assetId))
       .then(async result => {
         if (result) return result;
-        await projectCatalogAssets(getCatalog(), user.pubkey);
-        return getCatalogTimelineAsset(getCatalog(), user.pubkey, assetId);
+        await getCatalogClient().projectCatalogAssets(user.pubkey);
+        return getCatalogClient().getCatalogTimelineAsset(user.pubkey, assetId);
       })
       .then(result => {
         if (!active) return;
@@ -148,8 +148,7 @@ export default function TimelineAssetDetail() {
             }
           };
           Promise.all([
-            refreshReplicaAvailability(
-              getCatalog(),
+            getCatalogClient().refreshReplicaAvailability(
               user.pubkey,
               probe,
               1_000_000,
@@ -161,14 +160,15 @@ export default function TimelineAssetDetail() {
                 }));
               }
             ),
-            refreshEventUrlAvailability(getCatalog(), user.pubkey, probeNativeUrl, 1_000_000, blobHashes),
+            getCatalogClient().refreshEventUrlAvailability(user.pubkey, probeNativeUrl, 1_000_000, blobHashes),
           ])
             .then(() => {
               if (!active) return;
               setCheckingAvailability(false);
               setAvailableChecked(true);
               if (assetId)
-                getCatalogTimelineAsset(getCatalog(), user.pubkey, assetId)
+                getCatalogClient()
+                  .getCatalogTimelineAsset(user.pubkey, assetId)
                   .then(r => {
                     if (r && active) setDetail(r);
                   })
@@ -334,7 +334,7 @@ export default function TimelineAssetDetail() {
                   )}
                   {eventIdentifier && (
                     <a
-                      href={`https://njump.me/${eventIdentifier}`}
+                      href={`https://nostr.at/${eventIdentifier}`}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 uppercase text-primary underline-offset-4 hover:underline"
@@ -371,7 +371,7 @@ export default function TimelineAssetDetail() {
             {projection.displayType === 'audio' ? (
               <AudioTimelinePreview item={projection} />
             ) : (
-              <TimelineThumbnail item={projection} />
+              <TimelineThumbnail item={projection} knownServersFor={knownServersFor} />
             )}
           </div>
         </div>

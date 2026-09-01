@@ -1,28 +1,31 @@
 import { useRef } from 'react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { BrowseListRow } from './BrowseListRow';
+import type { KnownServersFor } from '../TimelineThumbnail';
 import type { TimelineItem } from './browseConstants';
 
 type BrowseListViewProps = {
   items: TimelineItem[];
-  pubkey: string;
   toFor: (assetId: string) => string;
   selectedAssetIds: Record<string, boolean>;
   onSelect: (assetId: string, event?: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>) => void;
   onOpen: (assetId: string) => void;
   audioMetadataVersion: Record<string, number>;
   onAudioVisible: (item: TimelineItem) => void;
+  knownServersFor?: KnownServersFor;
+  pubkey?: string;
 };
 
 export function BrowseListView({
   items,
-  pubkey,
   toFor,
   selectedAssetIds,
   onSelect,
   onOpen,
   audioMetadataVersion,
   onAudioVisible,
+  knownServersFor,
+  pubkey,
 }: BrowseListViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -50,13 +53,14 @@ export function BrowseListView({
           >
             <BrowseListRow
               item={item}
-              pubkey={pubkey}
               to={toFor(item.assetId)}
               selected={!!selectedAssetIds[item.assetId]}
               onSelect={onSelect}
               onOpen={() => onOpen(item.assetId)}
               audioMetadataVersion={audioMetadataVersion[item.assetId]}
               onAudioVisible={() => onAudioVisible(item)}
+              knownServersFor={knownServersFor}
+              pubkey={pubkey}
             />
           </div>
         );

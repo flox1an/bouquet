@@ -11,6 +11,7 @@ import {
   isHashSearchTerm,
   planCatalogAction,
   projectCatalogAssets,
+  queryCatalogAssetIds,
   queryCatalogTimeline,
   refreshReplicaAvailability,
   refreshEventUrlAvailability,
@@ -363,7 +364,9 @@ describe('user blob catalog', () => {
     await refreshReplicaAvailability(catalog, pubkey, async () => ({ status: 404 }));
 
     const history = await store.getAll<{ newState: string }>('blob_location_history');
-    expect(history.map(item => item.newState)).toEqual(['present', 'absent']);
+    // Presence is already known from the server list itself, so the first probe
+    // confirms a state that was never `absent`/unknown - no transition to log.
+    expect(history.map(item => item.newState)).toEqual(['absent']);
 
     await catalog.ingestAuthoredEvents(pubkey, [event('asset-event', 100, [['x', hashA]])], 'wss://relay.example');
     await projectCatalogAssets(catalog, pubkey);
@@ -379,6 +382,99 @@ describe('user blob catalog', () => {
       allowed: true,
       targets: [hashA],
     });
+  });
+  it('makes server-listed blobs visible to the server filter without a replica probe', async () => {
+    const catalog = new Catalog(new MemoryCatalogStore());
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://almond.slidetr.net', type: 'blossom' },
+      blobs: [blob(hashA), blob(hashB)],
+      state: 'complete',
+    });
+    await catalog.ingestAuthoredEvents(
+      pubkey,
+      [event('asset-a', 100, [['x', hashA]]), event('asset-b', 200, [['x', hashB]])],
+      'wss://relay.example'
+    );
+    await projectCatalogAssets(catalog, pubkey, { force: true });
+
+    const assetIds = await queryCatalogAssetIds(catalog, { serverId: 'https://almond.slidetr.net' });
+    expect(assetIds).toHaveLength(2);
+    const timeline = await queryCatalogTimeline(catalog, pubkey, { serverId: 'https://almond.slidetr.net' });
+    expect(timeline).toHaveLength(2);
+  });
+  it('removes a server from the filter and replica count once a delete confirms it is gone', async () => {
+    const store = new MemoryCatalogStore();
+    const catalog = new Catalog(store);
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://one.example', type: 'blossom' },
+      blobs: [blob(hashA)],
+      state: 'complete',
+    });
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://two.example', type: 'blossom' },
+      blobs: [blob(hashA)],
+      state: 'complete',
+    });
+    await catalog.ingestAuthoredEvents(pubkey, [event('asset-a', 100, [['x', hashA]])], 'wss://relay.example');
+    await projectCatalogAssets(catalog, pubkey, { force: true });
+    expect(await queryCatalogAssetIds(catalog, { serverId: 'https://one.example' })).toHaveLength(1);
+    const beforeDelete = await queryCatalogTimeline(catalog, pubkey);
+    expect(beforeDelete[0]).toMatchObject({ replicaCount: 2 });
+
+    await catalog.recordBlobsRemoved(pubkey, [{ sha256: hashA, serverUrl: 'https://one.example' }]);
+
+    // Gone from the deleted server's filter, still present on the other one.
+    expect(await queryCatalogAssetIds(catalog, { serverId: 'https://one.example' })).toHaveLength(0);
+    expect(await queryCatalogAssetIds(catalog, { serverId: 'https://two.example' })).toHaveLength(1);
+    await projectCatalogAssets(catalog, pubkey, { force: true });
+    const afterDelete = await queryCatalogTimeline(catalog, pubkey);
+    expect(afterDelete[0]).toMatchObject({ replicaCount: 1, availabilityState: 'complete' });
+
+    // Deleting on the last remaining server drops it to unavailable, not "unknown" -
+    // the catalog has direct evidence it is gone everywhere, not merely unchecked.
+    await catalog.recordBlobsRemoved(pubkey, [{ sha256: hashA, serverUrl: 'https://two.example' }]);
+    await projectCatalogAssets(catalog, pubkey, { force: true });
+    const afterBothDeleted = await queryCatalogTimeline(catalog, pubkey);
+    expect(afterBothDeleted[0]).toMatchObject({ replicaCount: 0, availabilityState: 'unavailable' });
+
+    const history = await store.getAll<{ sha256: string; serverId: string; previousState?: string; newState: string; reason?: string }>(
+      'blob_location_history'
+    );
+    expect(history).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sha256: hashA, serverId: 'https://one.example', previousState: 'present', newState: 'absent' }),
+        expect.objectContaining({ sha256: hashA, serverId: 'https://two.example', previousState: 'present', newState: 'absent' }),
+      ])
+    );
+  });
+  it('removing a file directly on the server drops it from the filter once the full list is rescanned', async () => {
+    const catalog = new Catalog(new MemoryCatalogStore());
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://one.example', type: 'blossom' },
+      blobs: [blob(hashA), blob(hashB)],
+      state: 'complete',
+      full: true,
+    });
+    await catalog.ingestAuthoredEvents(
+      pubkey,
+      [event('asset-a', 100, [['x', hashA]]), event('asset-b', 100, [['x', hashB]])],
+      'wss://relay.example'
+    );
+    await projectCatalogAssets(catalog, pubkey, { force: true });
+    expect(await queryCatalogAssetIds(catalog, { serverId: 'https://one.example' })).toHaveLength(2);
+
+    // hashB was deleted outside the app - the next full rescan no longer sees it.
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://one.example', type: 'blossom' },
+      blobs: [blob(hashA)],
+      state: 'complete',
+      full: true,
+    });
+    await projectCatalogAssets(catalog, pubkey, { force: true });
+
+    const assetIds = await queryCatalogAssetIds(catalog, { serverId: 'https://one.example' });
+    expect(assetIds).toHaveLength(1);
+    expect(assetIds[0]).toBe(`${pubkey}:immutable-event:asset-a`);
   });
   it('marks a directly referenced native URL as available without treating it as a transferable replica', async () => {
     const catalog = new Catalog(new MemoryCatalogStore());
@@ -767,7 +863,7 @@ describe('user blob catalog', () => {
     expect(await getAssetReplicaMap(catalog, pubkey, asset.assetId)).toEqual([
       expect.objectContaining({
         sha256: hashA,
-        sources: [{ serverId: 'https://one.example', baseUrl: 'https://one.example' }],
+        sources: [{ serverId: 'https://one.example', baseUrl: 'https://one.example', serverType: 'blossom' }],
         presentOn: ['https://one.example', 'https://two.example'],
         absentFrom: [{ serverId: 'https://three.example', baseUrl: 'https://three.example' }],
       }),
@@ -780,7 +876,7 @@ describe('user blob catalog', () => {
         sha256: hashA,
         assetId: 'asset',
         role: 'main',
-        sources: [{ serverId: 'source', baseUrl: 'https://source.example' }],
+        sources: [{ serverId: 'source', baseUrl: 'https://source.example', serverType: 'blossom' as const }],
         presentOn: ['source'],
         absentFrom: [
           { serverId: 'one', baseUrl: 'https://one.example' },
@@ -806,8 +902,8 @@ describe('user blob catalog', () => {
         assetId: 'asset',
         role: 'main',
         sources: [
-          { serverId: 'z-source', baseUrl: 'https://z.example' },
-          { serverId: 'a-source', baseUrl: 'https://a.example' },
+          { serverId: 'z-source', baseUrl: 'https://z.example', serverType: 'blossom' as const },
+          { serverId: 'a-source', baseUrl: 'https://a.example', serverType: 'blossom' as const },
         ],
         presentOn: ['z-source', 'a-source'],
         absentFrom: [{ serverId: 'one', baseUrl: 'https://one.example' }],
@@ -816,7 +912,7 @@ describe('user blob catalog', () => {
         sha256: hashB,
         assetId: 'asset',
         role: 'thumbnail',
-        sources: [{ serverId: 'source', baseUrl: 'https://source.example' }],
+        sources: [{ serverId: 'source', baseUrl: 'https://source.example', serverType: 'blossom' as const }],
         presentOn: ['source'],
         absentFrom: [
           { serverId: 'one', baseUrl: 'https://one.example' },
@@ -856,7 +952,7 @@ describe('user blob catalog', () => {
           sha256: hashA,
           assetId: 'asset',
           role: 'main',
-          sources: [{ serverId: 'source', baseUrl: 'https://source.example' }],
+          sources: [{ serverId: 'source', baseUrl: 'https://source.example', serverType: 'blossom' as const }],
           presentOn: ['source', 'target'],
           absentFrom: [],
         },

@@ -1,18 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { getCatalog, normalizeServerUrl } from '../catalog/catalog';
+import { normalizeServerUrl } from '../catalog/catalog';
+import { getCatalogClient } from '../catalog/catalogClient';
 import {
-  projectCatalogAssets,
-  queryCatalogTimeline,
   isHashSearchTerm,
-  refreshEventUrlAvailability,
   sortTimelineProjections,
   splitSearchTerms,
   type CatalogAction,
   type TimelineSort,
 } from '../catalog/advanced';
+import { syncAuthoredEventsFromRelays, syncReverseLookupsFromRelays } from '../catalog/catalogNostr';
 import { useNostr } from '../utils/nostr';
 import { useCatalogStatus } from '../catalog/useCatalogStatus';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -21,7 +20,6 @@ import ServerListPopup from '../components/ServerListPopup';
 import { TimelineNavigation, groupByMonth } from '../components/TimelineNavigation';
 import { queueId3Tag, type ID3Tag } from '../utils/id3';
 import { useGlobalContext } from '../GlobalState';
-import { probeNativeUrl } from '../catalog/availabilityFetch';
 import { BrowseToolbar, type BrowseDisplayMode } from '../components/Browse/BrowseToolbar';
 import { BrowseMediaGrid } from '../components/Browse/BrowseMediaGrid';
 import { BrowseListView } from '../components/Browse/BrowseListView';
@@ -38,6 +36,7 @@ type BrowseViewState = {
   descriptiveOnly: boolean;
   displayMode: BrowseDisplayMode;
   eventOnly: boolean;
+  unlinkedOnly: boolean;
   scrollY: number;
   search: string;
   selectedServerName?: string;
@@ -58,13 +57,17 @@ function storedBrowseView(key: string): BrowseViewState | undefined {
 const DEFAULT_SORT: TimelineSort = { field: 'date', direction: 'desc' };
 
 export default function Timeline() {
-  const { user, signEventTemplate } = useNostr();
+  const { user, signEventTemplate, relaysReady } = useNostr();
   const { dispatch } = useGlobalContext();
   const location = useLocation();
   const navigate = useNavigate();
   const timelineLocationKey = (location.state as TimelineReturnState | null)?.timelineLocationKey ?? location.key;
   const status = useCatalogStatus(user?.pubkey);
-  const { serverInfo, distribution } = useServerInfo();
+  const { serverInfo, distribution, rescan } = useServerInfo();
+  const knownServersFor = useCallback(
+    (sha256: string | undefined) => (sha256 ? (distribution[sha256]?.servers ?? []) : []),
+    [distribution]
+  );
   const { storeUserServers } = useUserServers();
   const [isServerListDialogOpen, setIsServerListDialogOpen] = useState(false);
   const initialView = useRef(storedBrowseView(timelineLocationKey));
@@ -77,7 +80,19 @@ export default function Timeline() {
 
   const [displayMode, setDisplayMode] = useState<BrowseDisplayMode>(() => initialView.current?.displayMode ?? 'media');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>(() => initialView.current?.typeFilter ?? 'all');
-  const [eventOnly, setEventOnly] = useState(() => initialView.current?.eventOnly ?? false);
+  const [eventOnly, setEventOnlyState] = useState(() => initialView.current?.eventOnly ?? false);
+  const [unlinkedOnly, setUnlinkedOnlyState] = useState(() => initialView.current?.unlinkedOnly ?? false);
+  // The two are opposite ends of the same axis - "has an event" vs. "does not" -
+  // so turning one on always turns the other off, instead of silently combining
+  // into a filter that can never match anything.
+  const setEventOnly = useCallback((value: boolean) => {
+    setEventOnlyState(value);
+    if (value) setUnlinkedOnlyState(false);
+  }, []);
+  const setUnlinkedOnly = useCallback((value: boolean) => {
+    setUnlinkedOnlyState(value);
+    if (value) setEventOnlyState(false);
+  }, []);
   const [descriptiveOnly, setDescriptiveOnly] = useState(() => initialView.current?.descriptiveOnly ?? false);
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter[]>(
     () => initialView.current?.availabilityFilter ?? []
@@ -97,6 +112,28 @@ export default function Timeline() {
   const [bulkAction, setBulkAction] = useState<CatalogAction>();
   const [cardAction, setCardAction] = useState<{ action: CatalogAction; item: TimelineItem }>();
 
+  // Nothing else in the app pulls the user's own events into the catalog, so without
+  // this the timeline only ever holds bare files: "only media with an event" matches
+  // nothing, and no title, description or event link ever appears. The relay loaders
+  // run on this thread; the worker client bridges them back out.
+  const syncedRelayKey = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!user?.pubkey || !relaysReady) return;
+    const relayUrls = user.relayUrls ?? [];
+    const key = `${user.pubkey}:${relayUrls.join(',')}`;
+    if (syncedRelayKey.current === key) return;
+    syncedRelayKey.current = key;
+    const catalog = getCatalogClient();
+    const pubkey = user.pubkey;
+    void (async () => {
+      await syncAuthoredEventsFromRelays(catalog, pubkey, relayUrls);
+      await syncReverseLookupsFromRelays(catalog, pubkey, relayUrls);
+    })().catch(() => {
+      // Every per-relay failure is already recorded in the catalog's sync runs, and
+      // the timeline stays usable from the files it knows about.
+    });
+  }, [relaysReady, user?.pubkey, user?.relayUrls]);
+
   useEffect(() => {
     if (!user?.pubkey) {
       setItems([]);
@@ -105,9 +142,10 @@ export default function Timeline() {
     }
 
     let active = true;
-    const catalog = getCatalog();
+    const catalog = getCatalogClient();
 
-    void queryCatalogTimeline(catalog, user.pubkey)
+    void catalog
+      .queryCatalogTimeline(user.pubkey)
       .then(cached => {
         if (!active || cached.length === 0) return;
         setItems(cached);
@@ -119,16 +157,29 @@ export default function Timeline() {
       });
 
     let timer: number | undefined;
+    let inFlight = false;
+    let dirty = false;
     const runProjection = () => {
       if (timer !== undefined) window.clearTimeout(timer);
+      // Server-list sync fires a change event per page. Without single-flight
+      // every page triggers a full re-projection, so a long sync stacks dozens
+      // of catalog-wide projections and wedges the worker.
       timer = window.setTimeout(() => {
         if (!active) return;
+        if (inFlight) {
+          dirty = true;
+          return;
+        }
+        inFlight = true;
         setProjectionState(current => (current === 'complete' ? current : 'projecting'));
         void (async () => {
           await catalog.reprojectEvents(user.pubkey);
-          await refreshEventUrlAvailability(catalog, user.pubkey, probeNativeUrl);
-          await projectCatalogAssets(catalog, user.pubkey);
-          return queryCatalogTimeline(catalog, user.pubkey);
+          // Checking every URL here used to run catalog-wide on every reprojection -
+          // a relay sync firing dozens of times turned into thousands of HEAD
+          // requests. `useNativeUrlAvailabilityCheck` now does this per row/card,
+          // scoped to what virtualization actually renders.
+          await catalog.projectCatalogAssets(user.pubkey);
+          return catalog.queryCatalogTimeline(user.pubkey);
         })()
           .then(projected => {
             if (!active) return;
@@ -140,8 +191,15 @@ export default function Timeline() {
             if (!active) return;
             setProjectionError(error instanceof Error ? error.message : String(error));
             setProjectionState(current => (current === 'complete' ? current : 'failed'));
+          })
+          .finally(() => {
+            inFlight = false;
+            if (dirty && active) {
+              dirty = false;
+              runProjection();
+            }
           });
-      }, 200);
+      }, 500);
     };
 
     runProjection();
@@ -164,10 +222,20 @@ export default function Timeline() {
   // Catalog-backed lookups below must re-run when the catalog itself changes, not
   // whenever `items` happens to be replaced. Audio metadata reprojection rewrites
   // `items` frequently and would otherwise re-read every blob location each time.
+  // A relay sync fires one change event per page - measured at 25 in under four
+  // seconds - and each one re-runs the two catalog-backed lookups below. Coalescing
+  // turns that burst into a single query instead of a queue the worker serializes.
   useEffect(() => {
-    const bump = () => setCatalogVersion(version => version + 1);
+    let timer: number | undefined;
+    const bump = () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      timer = window.setTimeout(() => setCatalogVersion(version => version + 1), 400);
+    };
     window.addEventListener('bouquet-catalog-changed', bump);
-    return () => window.removeEventListener('bouquet-catalog-changed', bump);
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      window.removeEventListener('bouquet-catalog-changed', bump);
+    };
   }, []);
 
   useEffect(() => {
@@ -176,10 +244,11 @@ export default function Timeline() {
       return;
     }
     let active = true;
-    void queryCatalogTimeline(getCatalog(), user.pubkey, { serverId })
-      .then(result => {
+    void getCatalogClient()
+      .queryCatalogAssetIds({ serverId })
+      .then(assetIds => {
         if (!active) return;
-        setServerAssetIds(new Set(result.map(item => item.assetId)));
+        setServerAssetIds(new Set(assetIds));
         setLookupError(undefined);
       })
       .catch(() => {
@@ -202,10 +271,11 @@ export default function Timeline() {
       return;
     }
     let active = true;
-    void queryCatalogTimeline(getCatalog(), user.pubkey, { search: hashTerms.join(' ') })
-      .then(result => {
+    void getCatalogClient()
+      .queryCatalogAssetIds({ hashTerms })
+      .then(assetIds => {
         if (!active) return;
-        setHashMatchAssetIds(new Set(result.map(item => item.assetId)));
+        setHashMatchAssetIds(new Set(assetIds));
         setLookupError(undefined);
       })
       .catch(() => {
@@ -222,13 +292,18 @@ export default function Timeline() {
     const filtered = items.filter(
       item =>
         (!eventOnly || item.eventId !== undefined) &&
+        (!unlinkedOnly || item.eventId === undefined) &&
         (!descriptiveOnly || !item.displayTitleIsFallback) &&
         (typeFilter === 'all' ||
           (typeFilter === 'media' ? item.displayType !== 'unknown' : item.displayType === typeFilter)) &&
         (availabilityFilter.length === 0 || availabilityFilter.includes(item.availabilityState)) &&
         (!serverId || serverAssetIds?.has(item.assetId)) &&
         textTerms.every(term => item.searchText.includes(term)) &&
-        (hashTerms.length === 0 || hashMatchAssetIds?.has(item.assetId) === true)
+        // A hash can also appear in an item's own text, so the catalog lookup only
+        // adds the assets whose files match; it does not replace the text match.
+        (hashTerms.length === 0 ||
+          hashTerms.every(term => item.searchText.includes(term)) ||
+          hashMatchAssetIds?.has(item.assetId) === true)
     );
     return displayMode === 'list' ? sortTimelineProjections(filtered, sort) : filtered;
   }, [
@@ -236,6 +311,7 @@ export default function Timeline() {
     descriptiveOnly,
     displayMode,
     eventOnly,
+    unlinkedOnly,
     hashMatchAssetIds,
     hashTerms,
     items,
@@ -284,6 +360,7 @@ export default function Timeline() {
           descriptiveOnly,
           displayMode,
           eventOnly,
+          unlinkedOnly,
           scrollY: window.scrollY,
           search,
           selectedServerName,
@@ -300,9 +377,10 @@ export default function Timeline() {
     if (!user?.pubkey) return;
     if (audioProjectionTimer.current !== undefined) window.clearTimeout(audioProjectionTimer.current);
     audioProjectionTimer.current = window.setTimeout(() => {
-      const catalog = getCatalog();
-      void projectCatalogAssets(catalog, user.pubkey, { force: true })
-        .then(() => queryCatalogTimeline(catalog, user.pubkey))
+      const catalog = getCatalogClient();
+      void catalog
+        .projectCatalogAssets(user.pubkey, { force: true })
+        .then(() => catalog.queryCatalogTimeline(user.pubkey))
         .then(setItems)
         .catch(() => undefined);
     }, 200);
@@ -313,7 +391,7 @@ export default function Timeline() {
     void queueId3Tag(item.primaryBlobSha256, item.primaryUrl)
       .then(async result => {
         if (!result) return;
-        await getCatalog().ingestId3(item.primaryBlobSha256!, result.id3);
+        await getCatalogClient().ingestId3(item.primaryBlobSha256!, result.id3);
         setAudioMetadata(current => ({ ...current, [item.primaryBlobSha256!]: result.id3 }));
         setAudioMetadataVersion(current => ({ ...current, [item.assetId]: (current[item.assetId] ?? 0) + 1 }));
         scheduleAudioProjection();
@@ -336,28 +414,13 @@ export default function Timeline() {
 
   const monthGroups = useMemo(() => groupByMonth(filteredItems), [filteredItems]);
 
-  const scrollToMonth = (key: string) => {
-    const el = document.querySelector(`[data-month="${key}"]`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  useEffect(() => {
-    if (displayMode !== 'media') return;
-    const observer = new IntersectionObserver(
-      entries => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const key = entry.target.getAttribute('data-month');
-            if (key) setActiveMonth(key);
-          }
-        }
-      },
-      { rootMargin: '-80px 0px 60% 0px' }
-    );
-    const targets = document.querySelectorAll('[data-month]');
-    for (const el of targets) observer.observe(el);
-    return () => observer.disconnect();
-  }, [displayMode, monthGroups]);
+  // The media grid virtualizes its rows, so month jumps and active-month
+  // tracking are delegated to it instead of querying the DOM.
+  const monthScrollerRef = useRef<(key: string) => void>(() => undefined);
+  const registerMonthScroll = useCallback((scroll: (key: string) => void) => {
+    monthScrollerRef.current = scroll;
+  }, []);
+  const scrollToMonth = useCallback((key: string) => monthScrollerRef.current(key), []);
 
   const handleSaveServers = async (newServers: Server[]) => {
     await storeUserServers(newServers);
@@ -421,8 +484,11 @@ export default function Timeline() {
         selectedServerName={selectedServerName}
         onServerChange={setSelectedServerName}
         onManageServers={() => setIsServerListDialogOpen(true)}
+        onRescan={rescan}
         eventOnly={eventOnly}
         onEventOnlyChange={setEventOnly}
+        unlinkedOnly={unlinkedOnly}
+        onUnlinkedOnlyChange={setUnlinkedOnly}
         descriptiveOnly={descriptiveOnly}
         onDescriptiveOnlyChange={setDescriptiveOnly}
         availabilityFilter={availabilityFilter}
@@ -473,7 +539,6 @@ export default function Timeline() {
           action={bulkAction}
           assets={selectedItems}
           pubkey={user.pubkey}
-          distribution={distribution}
           serverInfo={serverInfo}
           signEventTemplate={signEventTemplate}
           onClose={() => setBulkAction(undefined)}
@@ -490,7 +555,6 @@ export default function Timeline() {
           action={cardAction.action}
           assets={[cardAction.item]}
           pubkey={user.pubkey}
-          distribution={distribution}
           serverInfo={serverInfo}
           signEventTemplate={signEventTemplate}
           onClose={() => setCardAction(undefined)}
@@ -508,6 +572,8 @@ export default function Timeline() {
         <section className="min-w-0 flex-1" aria-label="Your media">
           {displayMode === 'media' ? (
             <BrowseMediaGrid
+              knownServersFor={knownServersFor}
+              pubkey={user?.pubkey}
               monthGroups={monthGroups}
               filteredItems={filteredItems}
               toFor={assetId => `/browse/${encodeURIComponent(assetId)}`}
@@ -518,11 +584,14 @@ export default function Timeline() {
               onAudioVisible={loadAudioMetadata}
               onPlayAudio={playAudio}
               onAction={(item, action) => setCardAction({ item, action })}
+              onRegisterMonthScroll={registerMonthScroll}
+              onActiveMonthChange={setActiveMonth}
             />
           ) : (
             <BrowseListView
+              knownServersFor={knownServersFor}
+              pubkey={user?.pubkey}
               items={filteredItems}
-              pubkey={user.pubkey}
               toFor={assetId => `/browse/${encodeURIComponent(assetId)}`}
               selectedAssetIds={selectedAssetIds}
               onSelect={handleSelectAsset}

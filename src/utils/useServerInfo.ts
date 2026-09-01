@@ -6,7 +6,7 @@ import { nip19 } from 'nostr-tools';
 import { Server, useUserServers } from './useUserServers';
 import { fetchBlossomList } from './blossom';
 import { fetchNip96List } from './nip96';
-import { getCatalog } from '../catalog/catalog';
+import { getCatalogClient } from '../catalog/catalogClient';
 import { fetchHlsPlaylist } from '../catalog/enrichmentFetch';
 import { isPlaylistCandidate } from './hlsPlaylist';
 
@@ -60,7 +60,7 @@ export const useServerInfo = () => {
         }
         if (server.type === 'blossom') {
           return fetchBlossomList(server.url, pubkey!, signEventTemplate, progress =>
-            getCatalog().ingestServerList(pubkey!, {
+            getCatalogClient().ingestServerList(pubkey!, {
               server: { url: server.url, type: server.type },
               blobs: progress.blobs,
               cursor: progress.cursor,
@@ -102,18 +102,20 @@ export const useServerInfo = () => {
     void Promise.all(
       servers.map((server, index) => {
         const result = blobs[index];
-        const state = server.name === 'nostr.build'
-          ? 'unsupported'
-          : result.isError
-            ? 'failed'
-            : result.data
-              ? 'complete'
-              : 'pending';
-        return getCatalog().ingestServerList(pubkey, {
+        const state =
+          server.name === 'nostr.build'
+            ? 'unsupported'
+            : result.isError
+              ? 'failed'
+              : result.data
+                ? 'complete'
+                : 'pending';
+        return getCatalogClient().ingestServerList(pubkey, {
           server: { url: server.url, type: server.type },
           blobs: result.data,
           state,
           error: result.error instanceof Error ? result.error.message : undefined,
+          full: state === 'complete',
         });
       })
     );
@@ -122,12 +124,14 @@ export const useServerInfo = () => {
   useEffect(() => {
     if (!pubkey) return;
     const playlistRoots = servers.flatMap((server, index) =>
-      (blobs[index].data ?? [])
-        .filter(isPlaylistCandidate)
-        .map(blob => ({ blob, server }))
+      (blobs[index].data ?? []).filter(isPlaylistCandidate).map(blob => ({ blob, server }))
     );
     void Promise.all(
-      playlistRoots.map(({ blob }) => getCatalog().enrichHls(pubkey, blob.sha256, fetchHlsPlaylist).catch(() => undefined))
+      playlistRoots.map(({ blob }) =>
+        getCatalogClient()
+          .enrichHls(pubkey, blob.sha256, fetchHlsPlaylist)
+          .catch(() => undefined)
+      )
     );
   }, [blobs, catalogSyncKey, pubkey, servers]);
 
@@ -193,18 +197,20 @@ export const useServerInfo = () => {
 
       if (!si.blobs) return;
       si.blobs.forEach((blob: BlobDescriptor) => {
-          if (dict[blob.sha256]) {
-            dict[blob.sha256].servers.push(server.name);
-          } else {
-            dict[blob.sha256] = {
-              blob,
-              servers: [server.name],
-            };
-          }
-        });
+        if (dict[blob.sha256]) {
+          dict[blob.sha256].servers.push(server.name);
+        } else {
+          dict[blob.sha256] = {
+            blob,
+            servers: [server.name],
+          };
+        }
+      });
     });
     return dict;
   }, [servers, serverInfo]);
 
-  return { serverInfo: allServersAggregation, distribution, setMirrorSupported };
+  const rescan = () => Promise.all(blobs.map(query => query.refetch()));
+
+  return { serverInfo: allServersAggregation, distribution, setMirrorSupported, rescan };
 };

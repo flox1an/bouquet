@@ -22,6 +22,8 @@ const AVAILABILITY_OPTIONS: Array<{ id: AvailabilityFilter; label: string }> = [
 type BrowseFilterMenuProps = {
   eventOnly: boolean;
   onEventOnlyChange: (value: boolean) => void;
+  unlinkedOnly: boolean;
+  onUnlinkedOnlyChange: (value: boolean) => void;
   descriptiveOnly: boolean;
   onDescriptiveOnlyChange: (value: boolean) => void;
   availabilityFilter: AvailabilityFilter[];
@@ -31,12 +33,15 @@ type BrowseFilterMenuProps = {
 export function BrowseFilterMenu({
   eventOnly,
   onEventOnlyChange,
+  unlinkedOnly,
+  onUnlinkedOnlyChange,
   descriptiveOnly,
   onDescriptiveOnlyChange,
   availabilityFilter,
   onAvailabilityFilterChange,
 }: BrowseFilterMenuProps) {
-  const activeCount = (eventOnly ? 1 : 0) + (descriptiveOnly ? 1 : 0) + availabilityFilter.length;
+  const activeCount =
+    (eventOnly ? 1 : 0) + (unlinkedOnly ? 1 : 0) + (descriptiveOnly ? 1 : 0) + availabilityFilter.length;
 
   const toggleAvailability = (id: AvailabilityFilter) => {
     onAvailabilityFilterChange(
@@ -61,6 +66,9 @@ export function BrowseFilterMenu({
         <DropdownMenuLabel>Visibility</DropdownMenuLabel>
         <DropdownMenuCheckboxItem checked={eventOnly} onCheckedChange={onEventOnlyChange}>
           Only media with a Nostr event
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem checked={unlinkedOnly} onCheckedChange={onUnlinkedOnlyChange}>
+          Only unlinked content (no Nostr event)
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem checked={descriptiveOnly} onCheckedChange={onDescriptiveOnlyChange}>
           Only descriptive titles

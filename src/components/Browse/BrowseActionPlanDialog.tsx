@@ -4,23 +4,17 @@ import { BlobDescriptor, EventTemplate, SignedEvent } from 'blossom-client-sdk';
 import { createDeleteAuth } from 'blossom-client-sdk/auth';
 import { deleteBlob as deleteBlobFromServer } from 'blossom-client-sdk/actions/delete';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Loader2, ShieldAlert, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleSlash, Loader2, ShieldAlert, Trash2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { getCatalog, normalizeServerUrl } from '../../catalog/catalog';
-import {
-  buildReplicaOps,
-  getAssetReplicaMap,
-  planCatalogAction,
-  projectCatalogAssets,
-  refreshReplicaAvailability,
-  type AssetReplica,
-  type CatalogAction,
-  type ReplicaOp,
-} from '../../catalog/advanced';
+import { formatFileSize } from '../../utils/utils';
+import { normalizeServerUrl, type BlobRemoval, type CatalogServerType } from '../../catalog/catalog';
+import { getCatalogClient } from '../../catalog/catalogClient';
+import { buildReplicaOps, type AssetReplica, type CatalogAction, type ReplicaOp } from '../../catalog/advanced';
 import { probeReplica } from '../../catalog/availabilityFetch';
 import { transferBlob, type TransferPhase } from '../../utils/transfer';
+import { runTasks } from '../../utils/run';
 import { deleteNip96File } from '../../utils/nip96';
 import type { ServerInfo } from '../../utils/useServerInfo';
 import { ServerSelect } from '../ServerList/ServerSelect';
@@ -28,7 +22,7 @@ import type { TimelineItem } from './browseConstants';
 
 const CONCURRENCY = 5;
 const TRANSFER_CONCURRENCY = 2;
-type RowState = 'pending' | 'running' | 'done' | 'error';
+type RowState = 'pending' | 'running' | 'done' | 'not_found' | 'error';
 type Row = {
   key: string;
   label: string;
@@ -46,7 +40,6 @@ type BrowseActionPlanDialogProps = {
   action: CatalogAction;
   assets: TimelineItem[];
   pubkey: string;
-  distribution: Record<string, { servers: string[] }>;
   serverInfo: Record<string, ServerInfo>;
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>;
   onClose: () => void;
@@ -61,7 +54,6 @@ export function BrowseActionPlanDialog({
   action,
   assets,
   pubkey,
-  distribution,
   serverInfo,
   signEventTemplate,
   onClose,
@@ -77,8 +69,16 @@ export function BrowseActionPlanDialog({
   const [syncGapCount, setSyncGapCount] = useState<number>();
   const [replicaMaps, setReplicaMaps] = useState<AssetReplica[][]>([]);
   const cancelledRef = useRef(false);
+  const deleteAbortRef = useRef<AbortController | undefined>(undefined);
   const failedRef = useRef(false);
 
+  // Background catalog updates (a server-list refresh, a projection re-run) give
+  // Timeline a freshly-built `items` array on every change, so `assets` is a new
+  // array reference even when it still names the same selection. Keying the
+  // effect on the array itself would restart planning - and flash the dialog
+  // back to its loading state - on every such background update. The asset ids
+  // are what actually identifies "what is this dialog for".
+  const assetIdsKey = assets.map(item => item.assetId).join(',');
   useEffect(() => {
     if (!open) return;
     setPhase('planning');
@@ -92,7 +92,7 @@ export function BrowseActionPlanDialog({
     failedRef.current = false;
     void Promise.all(
       assets.map(async item => {
-        const result = await planCatalogAction(getCatalog(), pubkey, item.assetId, action);
+        const result = await getCatalogClient().planCatalogAction(pubkey, item.assetId, action);
         return {
           item,
           allowed: result.allowed,
@@ -105,7 +105,7 @@ export function BrowseActionPlanDialog({
         setPlans(result);
         const allowed = result.filter(plan => plan.allowed);
         const maps = await Promise.all(
-          allowed.map(plan => getAssetReplicaMap(getCatalog(), pubkey, plan.item.assetId))
+          allowed.map(plan => getCatalogClient().getAssetReplicaMap(pubkey, plan.item.assetId))
         );
         setReplicaMaps(maps);
         if (action === 'sync') setSyncGapCount(maps.flatMap(map => buildReplicaOps(map)).length);
@@ -115,7 +115,8 @@ export function BrowseActionPlanDialog({
         setFailureMessage(errorMessage(error));
         setPhase('failed');
       });
-  }, [open, assets, action, pubkey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- assetIdsKey stands in for `assets`
+  }, [open, assetIdsKey, action, pubkey]);
 
   if (!open) return null;
   const allowedPlans = plans?.filter(plan => plan.allowed) ?? [];
@@ -130,78 +131,163 @@ export function BrowseActionPlanDialog({
   const mirrorGapCount = destination
     ? replicaMaps.flatMap(map => buildReplicaOps(map, normalizeServerUrl(destination.url))).length
     : undefined;
+  const hostOf = (url: string) => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return url;
+    }
+  };
+  // The live per-server blob list (`serverInfo`) is a browser-side snapshot: it is
+  // empty while a server's list request is loading, erroring, or simply not
+  // configured right now. The catalog's replica map is the durable record - the
+  // same one the server filter and the mirror/sync actions above already trust -
+  // so delete targets come from there too, with the live list used only to pick a
+  // display name and to update its cache after a successful delete.
+  const liveServerByServerId = new Map(
+    Object.values(serverInfo)
+      .filter(server => !server.virtual)
+      .map(server => [normalizeServerUrl(server.url), server] as const)
+  );
+  type DeleteTask = {
+    hash: string;
+    title: string;
+    size?: number;
+    serverId: string;
+    baseUrl: string;
+    serverType: CatalogServerType;
+  };
+  // Every (file, server) pair delete will actually touch - computed once up front so
+  // the review screen, the button's disabled state, and the run itself all agree on
+  // what "this" delete means, instead of the run rediscovering it from scratch.
+  const deleteTasks: DeleteTask[] =
+    action === 'delete'
+      ? (() => {
+          const byKey = new Map<string, DeleteTask>();
+          allowedPlans.forEach((plan, index) => {
+            for (const replica of replicaMaps[index] ?? []) {
+              for (const source of replica.sources) {
+                const key = `${replica.sha256}:${source.serverId}`;
+                if (byKey.has(key)) continue;
+                byKey.set(key, {
+                  hash: replica.sha256,
+                  title: plan.item.displayTitle,
+                  size: replica.size,
+                  serverId: source.serverId,
+                  baseUrl: source.baseUrl,
+                  serverType: source.serverType,
+                });
+              }
+            }
+          });
+          return [...byKey.values()];
+        })()
+      : [];
+  const deleteServerBreakdown =
+    action === 'delete'
+      ? Object.values(
+          deleteTasks.reduce<Record<string, { serverName: string; count: number; size: number }>>((acc, task) => {
+            const serverName = liveServerByServerId.get(task.serverId)?.name ?? hostOf(task.baseUrl);
+            const entry = acc[task.serverId] ?? { serverName, count: 0, size: 0 };
+            entry.count += 1;
+            entry.size += task.size ?? 0;
+            acc[task.serverId] = entry;
+            return acc;
+          }, {})
+        ).sort((a, b) => a.serverName.localeCompare(b.serverName))
+      : [];
+  const hashesOnNoServer =
+    action === 'delete' ? targetHashes.filter(hash => !deleteTasks.some(task => task.hash === hash)) : [];
 
   const updateRow = (key: string, update: Partial<Row>) => {
     if (update.state === 'error') failedRef.current = true;
     setRows(previous => previous.map(row => (row.key === key ? { ...row, ...update } : row)));
   };
-  const deleteHashFromAllServers = async (hash: string) => {
-    const targets = (distribution[hash]?.servers ?? [])
-      .map(name => serverInfo[name])
-      .filter((server): server is ServerInfo => !!server && !server.virtual);
-    if (!targets.length) throw new Error('No server currently reports this file.');
-    const results = await Promise.allSettled(
-      targets.map(async server => {
-        if (server.type === 'blossom') {
-          const auth = await createDeleteAuth(signEventTemplate, hash);
-          await deleteBlobFromServer(server.url, hash, { auth });
-        } else await deleteNip96File(server, hash, signEventTemplate);
-        queryClient.setQueryData(['blobs', server.name], (old: BlobDescriptor[] | undefined) =>
-          old ? old.filter(blob => blob.sha256 !== hash) : old
-        );
-      })
-    );
-    const failures = results.filter(result => result.status === 'rejected');
-    if (failures.length)
-      throw new Error(
-        `Failed on ${failures.length}/${targets.length} server(s): ${errorMessage((failures[0] as PromiseRejectedResult).reason)}`
-      );
+  // Both blossom (HTTPError#status) and NIP-96 (axios) surface the same signal
+  // differently. Either way, a 404 means the server already agrees with us -
+  // that's success for our purposes, not a failure to report.
+  const isNotFoundError = (error: unknown): boolean => {
+    if (!error || typeof error !== 'object') return false;
+    if ('status' in error) return (error as { status?: number }).status === 404;
+    if ('response' in error) return (error as { response?: { status?: number } }).response?.status === 404;
+    return false;
   };
 
-  const complete = () => {
+  const complete = (result?: { cancelled: boolean }) => {
     setPhase('complete');
     queryClient.invalidateQueries({ queryKey: ['blobs'] });
     // The caller clears the user's selection here. Doing that after a partial
-    // failure would take away the very items they need in order to retry.
-    if (!failedRef.current) onDeleted();
+    // failure or a cancelled run would take away the very items they need in
+    // order to retry.
+    if (!failedRef.current && !result?.cancelled) onDeleted();
   };
   const runDelete = () => {
-    // A confirmation that lists 64-character hashes does not tell anyone what they
-    // are about to destroy. Name the media, and keep the hash for identification.
-    const titleForHash = new Map<string, string>();
-    for (const plan of allowedPlans) {
-      for (const hash of plan.targets) {
-        if (!titleForHash.has(hash)) titleForHash.set(hash, plan.item.displayTitle);
-      }
-    }
-    const initial = targetHashes.map(hash => {
-      const title = titleForHash.get(hash);
-      return {
-        key: hash,
-        label: title ? `${title} — ${hash.slice(0, 12)}` : hash,
-        state: 'pending' as const,
-      };
-    });
-    setRows(initial);
+    const rowKey = (hash: string, serverId: string) => `${hash}:${serverId}`;
+    setRows(
+      deleteTasks.map(task => {
+        const serverName = liveServerByServerId.get(task.serverId)?.name ?? hostOf(task.baseUrl);
+        return {
+          key: rowKey(task.hash, task.serverId),
+          label: `${task.title} — ${task.hash.slice(0, 12)} → ${serverName}`,
+          state: 'pending' as const,
+        };
+      })
+    );
     setPhase('running');
-    let nextIndex = 0;
-    const worker = async () => {
-      while (true) {
-        if (cancelledRef.current) return;
-        const i = nextIndex++;
-        if (i >= targetHashes.length) return;
-        const hash = targetHashes[i];
-        updateRow(hash, { state: 'running', message: undefined });
+    const controller = new AbortController();
+    deleteAbortRef.current = controller;
+    const removed: BlobRemoval[] = [];
+    void runTasks(
+      deleteTasks,
+      async task => {
+        const key = rowKey(task.hash, task.serverId);
+        const live = liveServerByServerId.get(task.serverId);
+        const dropFromLiveCache = () => {
+          if (!live) return; // no live list loaded for this server - nothing to reconcile
+          queryClient.setQueryData(['blobs', live.name], (old: BlobDescriptor[] | undefined) =>
+            old ? old.filter(blob => blob.sha256 !== task.hash) : old
+          );
+        };
+        updateRow(key, { state: 'running', message: undefined });
         try {
-          await deleteHashFromAllServers(hash);
-          updateRow(hash, { state: 'done' });
+          if (task.serverType === 'blossom') {
+            const auth = await createDeleteAuth(signEventTemplate, task.hash);
+            await deleteBlobFromServer(task.baseUrl, task.hash, { auth });
+          } else {
+            await deleteNip96File(
+              live ?? { type: 'nip96', name: hostOf(task.baseUrl), url: task.baseUrl },
+              task.hash,
+              signEventTemplate
+            );
+          }
+          dropFromLiveCache();
+          removed.push({ sha256: task.hash, serverUrl: task.baseUrl });
+          updateRow(key, { state: 'done' });
         } catch (error) {
-          updateRow(hash, { state: 'error', message: errorMessage(error) });
+          if (isNotFoundError(error)) {
+            dropFromLiveCache();
+            removed.push({ sha256: task.hash, serverUrl: task.baseUrl, reason: 'not found on server' });
+            updateRow(key, { state: 'not_found', message: 'Already gone from this server.' });
+          } else {
+            updateRow(key, { state: 'error', message: errorMessage(error) });
+            // Re-throw so runTasks counts the task as failed and the run verdict
+            // keeps the selection alive for a retry.
+            throw error;
+          }
         }
-      }
-    };
-    void Promise.all(Array.from({ length: CONCURRENCY }, worker))
-      .then(complete)
+      },
+      { concurrency: CONCURRENCY, signal: controller.signal }
+    )
+      .then(async result => {
+        // Every server that confirmed the blob gone - deleted just now, or already a
+        // 404 - stops counting as a replica immediately, instead of waiting for the
+        // next probe to notice the file it just watched disappear.
+        if (removed.length > 0) {
+          await getCatalogClient().recordBlobsRemoved(pubkey, removed);
+          await getCatalogClient().projectCatalogAssets(pubkey, { force: true });
+        }
+        complete(result);
+      })
       .catch(error => {
         setFailureMessage(errorMessage(error));
         setPhase('failed');
@@ -216,7 +302,7 @@ export function BrowseActionPlanDialog({
         allowedPlans.map(async plan =>
           (
             buildReplicaOps(
-              await getAssetReplicaMap(getCatalog(), pubkey, plan.item.assetId),
+              await getCatalogClient().getAssetReplicaMap(pubkey, plan.item.assetId),
               destinationServerId
             ) as ReplicaOp[]
           ).map(op => ({ op, title: plan.item.displayTitle }))
@@ -256,7 +342,7 @@ export function BrowseActionPlanDialog({
               onPhaseChange: transferPhase => updateRow(key, { phase: transferPhase }),
               onProgress: event => updateRow(key, { loaded: event.loaded, total: event.total }),
             });
-            await getCatalog().ingestUpload(pubkey, { url: target.url, type: target.type }, descriptor, true);
+            await getCatalogClient().ingestUpload(pubkey, { url: target.url, type: target.type }, descriptor, true);
             transferredHashes.add(op.sha256);
             updateRow(key, { state: 'done', phase: 'completed' });
           } catch (error) {
@@ -268,8 +354,8 @@ export function BrowseActionPlanDialog({
       // Blobs that made it across before a cancel are really there, so record them either
       // way. Without this the catalog keeps reporting them as missing on the destination.
       if (transferredHashes.size > 0) {
-        await refreshReplicaAvailability(getCatalog(), pubkey, probeReplica, 100, [...transferredHashes]);
-        await projectCatalogAssets(getCatalog(), pubkey, { force: true });
+        await getCatalogClient().refreshReplicaAvailability(pubkey, probeReplica, 100, [...transferredHashes]);
+        await getCatalogClient().projectCatalogAssets(pubkey, { force: true });
       }
       if (!cancelledRef.current) complete();
     } catch (error) {
@@ -282,13 +368,14 @@ export function BrowseActionPlanDialog({
     }
   };
 
-  const done = rows.filter(row => row.state === 'done' || row.state === 'error').length;
+  const done = rows.filter(row => row.state === 'done' || row.state === 'not_found' || row.state === 'error').length;
   const succeeded = rows.filter(row => row.state === 'done').length;
+  const notFound = rows.filter(row => row.state === 'not_found').length;
   const failed = rows.filter(row => row.state === 'error').length;
   const progress = rows.length ? Math.round((done / rows.length) * 100) : 0;
   const reviewingCopy =
     action === 'delete'
-      ? `${targetHashes.length} file${targetHashes.length === 1 ? '' : 's'} across ${allowedPlans.length} item${allowedPlans.length === 1 ? '' : 's'} will be deleted from every server that reports them. This cannot be undone.`
+      ? `${targetHashes.length} file${targetHashes.length === 1 ? '' : 's'} across ${allowedPlans.length} item${allowedPlans.length === 1 ? '' : 's'} will be deleted from ${deleteServerBreakdown.length} server${deleteServerBreakdown.length === 1 ? '' : 's'}. This cannot be undone.`
       : action === 'mirror'
         ? destination === undefined
           ? 'Choose a destination server to see what would be copied.'
@@ -314,7 +401,10 @@ export function BrowseActionPlanDialog({
             {phase === 'reviewing' && reviewingCopy}
             {phase === 'running' &&
               `${action === 'delete' ? 'Deleting' : 'Transferring'} ${action === 'delete' ? `up to ${CONCURRENCY}` : `up to ${TRANSFER_CONCURRENCY}`} files concurrently…`}
-            {phase === 'complete' && `${succeeded} succeeded, ${failed} failed.`}
+            {phase === 'complete' &&
+              (action === 'delete'
+                ? `${succeeded} deleted, ${notFound} already gone, ${failed} failed.`
+                : `${succeeded} succeeded, ${failed} failed.`)}
             {phase === 'failed' && failureMessage}
           </DialogPrimitive.Description>
           {phase === 'planning' && (
@@ -346,6 +436,33 @@ export function BrowseActionPlanDialog({
                   onServerChange={setChosenServerName}
                   placeholder="Choose a destination server"
                 />
+              )}
+              {action === 'delete' && deleteServerBreakdown.length > 0 && (
+                <div className="space-y-1">
+                  <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
+                    Servers affected ({deleteServerBreakdown.length})
+                  </p>
+                  {deleteServerBreakdown.map(server => (
+                    <div
+                      key={server.serverName}
+                      className="flex items-center justify-between rounded border bg-muted/10 px-2 py-1.5 text-xs"
+                    >
+                      <span className="truncate font-medium">{server.serverName}</span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {server.count} file{server.count === 1 ? '' : 's'} · {formatFileSize(server.size)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {action === 'delete' && hashesOnNoServer.length > 0 && (
+                <div className="flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+                  <CircleSlash className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <p>
+                    {hashesOnNoServer.length} file{hashesOnNoServer.length === 1 ? '' : 's'} not found on any known
+                    server already - nothing to delete there.
+                  </p>
+                </div>
               )}
               {blockedPlans.length > 0 && (
                 <div className="space-y-1">
@@ -399,12 +516,14 @@ export function BrowseActionPlanDialog({
                       'rounded px-1.5 py-1 text-xs font-mono',
                       row.state === 'running' && 'bg-muted text-foreground',
                       row.state === 'done' && 'text-muted-foreground',
+                      row.state === 'not_found' && 'text-amber-700 dark:text-amber-400',
                       row.state === 'error' && 'text-destructive'
                     )}
                   >
                     <div className="flex items-center gap-2">
                       <span className="shrink-0">
                         {row.state === 'done' && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                        {row.state === 'not_found' && <CircleSlash className="h-3.5 w-3.5" />}
                         {row.state === 'error' && <XCircle className="h-3.5 w-3.5 text-destructive" />}
                         {row.state === 'running' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                         {row.state === 'pending' && <Trash2 className="h-3.5 w-3.5 opacity-30" />}
@@ -416,7 +535,11 @@ export function BrowseActionPlanDialog({
                         {row.phase} {Math.round(((row.loaded ?? 0) / row.total) * 100)}%
                       </p>
                     )}
-                    {row.message && <p className="ml-5 break-words text-destructive">{row.message}</p>}
+                    {row.message && (
+                      <p className={cn('ml-5 break-words', row.state === 'error' ? 'text-destructive' : 'opacity-80')}>
+                        {row.message}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -432,7 +555,11 @@ export function BrowseActionPlanDialog({
                   variant={action === 'delete' ? 'destructive' : 'default'}
                   size="sm"
                   onClick={action === 'delete' ? runDelete : () => void runTransfer()}
-                  disabled={targetHashes.length === 0 || (action === 'mirror' && !destination)}
+                  disabled={
+                    targetHashes.length === 0 ||
+                    (action === 'mirror' && !destination) ||
+                    (action === 'delete' && deleteTasks.length === 0)
+                  }
                 >
                   {ACTION_LABEL[action]} {targetHashes.length} file{targetHashes.length === 1 ? '' : 's'}
                 </Button>
@@ -444,6 +571,7 @@ export function BrowseActionPlanDialog({
                 size="sm"
                 onClick={() => {
                   cancelledRef.current = true;
+                  deleteAbortRef.current?.abort();
                   onClose();
                 }}
               >

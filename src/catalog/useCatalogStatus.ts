@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { CatalogStatus } from './catalog';
-import { getCatalog } from './catalog';
+import { getCatalogClient } from './catalogClient';
 
 export function useCatalogStatus(pubkey: string | undefined) {
   const [status, setStatus] = useState<CatalogStatus>();
@@ -12,9 +12,9 @@ export function useCatalogStatus(pubkey: string | undefined) {
     }
     let cancelled = false;
     const refresh = () => {
-      getCatalog()
+      getCatalogClient()
         .getCatalogStatus(pubkey)
-        .then(nextStatus => {
+        .then((nextStatus: CatalogStatus | undefined) => {
           if (!cancelled) setStatus(nextStatus);
         })
         .catch(error => {

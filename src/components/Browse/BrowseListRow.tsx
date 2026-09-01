@@ -1,35 +1,41 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Checkbox } from '@/components/ui/checkbox';
-import { getCatalog } from '../../catalog/catalog';
-import { getCatalogTimelineAsset, type TimelineAssetDetail } from '../../catalog/advanced';
-import { TimelineThumbnail } from '../TimelineThumbnail';
+import { getCatalogClient } from '../../catalog/catalogClient';
+import type { TimelineAssetContents } from '../../catalog/advanced';
+import { TimelineThumbnail, type KnownServersFor } from '../TimelineThumbnail';
+import { useNativeUrlAvailabilityCheck } from './useNativeUrlAvailability';
 import { AudioTimelinePreview } from '../AudioTimelinePreview';
 import { formatDate, formatFileSize } from '../../utils/utils';
 import { AVAILABILITY_LABEL, TYPE_ICON, type TimelineItem } from './browseConstants';
 import { eventKindLabel } from '../../catalog/eventKinds';
 
+const VISIBLE_BLOB_COUNT = 4;
+
 type BrowseListRowProps = {
   item: TimelineItem;
-  pubkey: string;
   to: string;
   selected: boolean;
   onSelect: (assetId: string, event?: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>) => void;
   onOpen: () => void;
   audioMetadataVersion?: number;
   onAudioVisible: () => void;
+  knownServersFor?: KnownServersFor;
+  pubkey?: string;
 };
 
 export function BrowseListRow({
   item,
-  pubkey,
   to,
   selected,
   onSelect,
   onOpen,
   audioMetadataVersion,
   onAudioVisible,
+  knownServersFor,
+  pubkey,
 }: BrowseListRowProps) {
+  useNativeUrlAvailabilityCheck(pubkey, item);
   const Icon = TYPE_ICON[item.displayType];
   const dateLabel =
     item.displayDateSource === 'event'
@@ -45,7 +51,7 @@ export function BrowseListRow({
         : item.availabilityState === 'unavailable'
           ? 'bg-destructive'
           : 'bg-muted-foreground';
-  const [detail, setDetail] = useState<TimelineAssetDetail>();
+  const [contents, setContents] = useState<TimelineAssetContents>();
   const rootRef = useRef<HTMLDivElement>(null);
   const hasRequested = useRef(false);
 
@@ -57,10 +63,9 @@ export function BrowseListRow({
         for (const entry of entries) {
           if (entry.isIntersecting && !hasRequested.current) {
             hasRequested.current = true;
-            void getCatalogTimelineAsset(getCatalog(), pubkey, item.assetId)
-              .then(result => {
-                if (result) setDetail(result);
-              })
+            void getCatalogClient()
+              .getCatalogAssetContents(item.assetId, VISIBLE_BLOB_COUNT)
+              .then(setContents)
               .catch(() => undefined); // Row already renders from the projection.
             observer.disconnect();
           }
@@ -70,7 +75,8 @@ export function BrowseListRow({
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [item.assetId, pubkey]);
+    // The asset id already carries the profile, so no pubkey is needed to scope it.
+  }, [item.assetId]);
 
   return (
     <div
@@ -101,7 +107,7 @@ export function BrowseListRow({
                 onVisible={onAudioVisible}
               />
             ) : (
-              <TimelineThumbnail item={item} />
+              <TimelineThumbnail item={item} knownServersFor={knownServersFor} />
             )}
           </div>
           <div className="min-w-0">
@@ -143,38 +149,39 @@ export function BrowseListRow({
             </p>
           </div>
         </Link>
-        <BlobSummary detail={detail} fallback={item} />
+        <BlobSummary contents={contents} fallback={item} />
       </div>
     </div>
   );
 }
 
-function BlobSummary({ detail, fallback }: { detail?: TimelineAssetDetail; fallback: TimelineItem }) {
-  if (!detail) {
+function BlobSummary({ contents, fallback }: { contents?: TimelineAssetContents; fallback: TimelineItem }) {
+  // Until the contents load, the projection's own counts stand in. They can lag a
+  // manifest expansion, so once the real count arrives it wins.
+  const total = contents?.totalCount ?? fallback.blobCount;
+  const fileLabel = total === 1 ? '1 file' : `${total} files`;
+
+  if (!contents) {
     return (
       <div className="border-t pt-3 md:border-l md:border-t-0 md:pl-4 md:pt-0">
         <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Item contents</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          {fallback.blobCount === 1 ? '1 file' : `${fallback.blobCount} files`} ·{' '}
-          {formatFileSize(fallback.totalBlobSize)}
+          {fileLabel} · {formatFileSize(fallback.totalBlobSize)}
         </p>
       </div>
     );
   }
 
-  const visibleBlobs = detail.blobs.slice(0, 4);
-  const remaining = detail.blobs.length - visibleBlobs.length;
+  const remaining = total - contents.blobs.length;
 
   return (
     <div className="border-t pt-3 md:border-l md:border-t-0 md:pl-4 md:pt-0">
       <div className="flex items-center justify-between gap-3">
         <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Item contents</p>
-        <p className="font-mono text-[11px] text-muted-foreground">
-          {detail.blobs.length === 1 ? '1 file' : `${detail.blobs.length} files`}
-        </p>
+        <p className="font-mono text-[11px] text-muted-foreground">{fileLabel}</p>
       </div>
       <ul className="mt-2 space-y-2">
-        {visibleBlobs.map(blob => (
+        {contents.blobs.map(blob => (
           <li key={`${blob.sha256}:${blob.role}:${blob.ordinal}`} className="min-w-0 border bg-muted/25 px-2 py-1.5">
             <div className="flex items-center justify-between gap-3">
               <p className="truncate font-mono text-xs">{blob.sha256}</p>

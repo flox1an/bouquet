@@ -6,8 +6,14 @@ import { extractEventReferences, EVENT_EXTRACTOR_VERSION, type EventReference } 
 import { extractTimelineEventMetadata, type TimelineEventMetadata } from './timelineMetadata';
 
 const DATABASE_NAME = 'bouquet-user-blob-catalog';
-const DATABASE_VERSION = 8;
+const DATABASE_VERSION = 9;
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
+
+/**
+ * Bumped when `timeline_projection` records change shape. A profile stamped with an
+ * older version is reprojected once, so the query never has to cope with two shapes.
+ */
+export const PROJECTION_VERSION = 1;
 
 export type CatalogServerType = 'blossom' | 'nip96';
 export type EvidenceType =
@@ -27,6 +33,7 @@ type ProfileRecord = {
   lastSyncAt?: number;
   lastMutationAt?: number;
   lastProjectedAt?: number;
+  projectionVersion?: number;
   catalogVersion: number;
   eventExtractorVersion?: number;
 };
@@ -215,10 +222,57 @@ export type StoreName =
   | 'timeline_projection'
   | 'timeline_event';
 
+/**
+ * Every index is declared here rather than inside `migrate`, so that the IndexedDB
+ * schema and the in-memory store used by the tests cannot drift apart. `since` is the
+ * database version that introduced the index, and drives the migration gate.
+ */
+export type CatalogIndexDefinition = { store: StoreName; name: string; keyPath: string | string[]; since: number };
+
+export const CATALOG_INDEXES: readonly CatalogIndexDefinition[] = [
+  { store: 'profile_server', name: 'by_pubkey', keyPath: 'pubkey', since: 3 },
+  { store: 'profile_blob_membership', name: 'by_pubkey', keyPath: 'pubkey', since: 3 },
+  { store: 'profile_blob_evidence', name: 'by_profile_hash', keyPath: ['pubkey', 'sha256'], since: 3 },
+  { store: 'profile_blob_evidence', name: 'by_source', keyPath: ['evidenceType', 'sourceId'], since: 3 },
+  { store: 'server_list_run', name: 'by_pubkey', keyPath: 'pubkey', since: 3 },
+  { store: 'catalog_event', name: 'by_pubkey_kind_created_at', keyPath: ['pubkey', 'kind', 'createdAt'], since: 3 },
+  { store: 'profile_event', name: 'by_pubkey', keyPath: 'pubkey', since: 3 },
+  { store: 'event_relay_observation', name: 'by_profile_event', keyPath: ['pubkey', 'eventId'], since: 3 },
+  { store: 'event_reference', name: 'by_profile_event', keyPath: ['pubkey', 'eventId'], since: 3 },
+  { store: 'event_sync_run', name: 'by_pubkey', keyPath: 'pubkey', since: 3 },
+  { store: 'reverse_lookup_job', name: 'by_profile_relay', keyPath: ['pubkey', 'relayUrl'], since: 4 },
+  { store: 'blob_url', name: 'by_sha256', keyPath: 'sha256', since: 5 },
+  { store: 'blob_relationship', name: 'by_from_sha256', keyPath: 'fromSha256', since: 5 },
+  { store: 'metadata_fact', name: 'by_subject', keyPath: 'subjectId', since: 5 },
+  { store: 'extractor_result', name: 'by_sha256', keyPath: 'sha256', since: 5 },
+  { store: 'blob_location', name: 'by_blob_server', keyPath: ['sha256', 'serverId'], since: 6 },
+  { store: 'blob_location', name: 'by_server_state', keyPath: ['serverId', 'state'], since: 6 },
+  { store: 'blob_location_history', name: 'by_blob_server', keyPath: ['sha256', 'serverId'], since: 6 },
+  { store: 'asset', name: 'by_profile', keyPath: 'pubkey', since: 7 },
+  { store: 'asset_blob', name: 'by_asset', keyPath: 'assetId', since: 7 },
+  { store: 'timeline_projection', name: 'by_profile_date', keyPath: ['pubkey', 'displayDate'], since: 7 },
+  { store: 'timeline_event', name: 'by_profile', keyPath: 'pubkey', since: 8 },
+  // Reading every location for one blob is the hot path behind an item's contents.
+  // `by_blob_server` could serve it only through a prefix range, which both stores
+  // would have to implement identically, so a plain equality index is cheaper to trust.
+  { store: 'blob_location', name: 'by_sha256', keyPath: 'sha256', since: 9 },
+];
+
+function indexDefinition(store: StoreName, name: string): CatalogIndexDefinition {
+  const definition = CATALOG_INDEXES.find(index => index.store === store && index.name === name);
+  if (!definition) throw new Error(`Unknown catalog index ${store}.${name}`);
+  return definition;
+}
+
 export interface CatalogStore {
   get<T>(store: StoreName, key: IDBValidKey): Promise<T | undefined>;
   put<T>(store: StoreName, value: T): Promise<void>;
+  /** Writes many records of one store in a single transaction; projections and
+      ingests use this to avoid one transaction per record. */
+  putMany<T>(store: StoreName, values: T[]): Promise<void>;
   getAll<T>(store: StoreName): Promise<T[]>;
+  /** Records whose index key equals `key`. Compound indexes take an array key. */
+  getAllFromIndex<T>(store: StoreName, index: string, key: IDBValidKey): Promise<T[]>;
 }
 
 function request<T>(operation: IDBRequest<T>): Promise<T> {
@@ -249,19 +303,40 @@ export class IndexedDbCatalogStore implements CatalogStore {
 
   async put<T>(store: StoreName, value: T): Promise<void> {
     const db = await this.database;
-    const transaction = db.transaction(store, 'readwrite');
-    await request(transaction.objectStore(store).put(value));
     const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const transaction = db.transaction(store, 'readwrite');
+    // Handlers must be registered in the same task as the request: awaiting the
+    // request first can let the transaction auto-commit before `oncomplete` is
+    // attached, which left writes hanging forever under sync load.
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed'));
     transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
-    await promise;
+    transaction.objectStore(store).put(value);
+    return promise;
   }
 
+  async putMany<T>(store: StoreName, values: T[]): Promise<void> {
+    const db = await this.database;
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const transaction = db.transaction(store, 'readwrite');
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed'));
+    transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
+    const objectStore = transaction.objectStore(store);
+    for (const value of values) objectStore.put(value);
+    return promise;
+  }
   async getAll<T>(store: StoreName): Promise<T[]> {
     const db = await this.database;
     const transaction = db.transaction(store, 'readonly');
     return (await request(transaction.objectStore(store).getAll())) as T[];
+  }
+
+  async getAllFromIndex<T>(store: StoreName, index: string, key: IDBValidKey): Promise<T[]> {
+    indexDefinition(store, index);
+    const db = await this.database;
+    const transaction = db.transaction(store, 'readonly');
+    return (await request(transaction.objectStore(store).index(index).getAll(key))) as T[];
   }
   private migrate(db: IDBDatabase, transaction: IDBTransaction, oldVersion: number) {
     if (oldVersion < 1) {
@@ -280,69 +355,77 @@ export class IndexedDbCatalogStore implements CatalogStore {
       db.createObjectStore('event_reference', { keyPath: 'id' });
       db.createObjectStore('event_sync_run', { keyPath: 'id' });
     }
-    if (oldVersion < 3) {
-      transaction.objectStore('profile_server').createIndex('by_pubkey', 'pubkey');
-      transaction.objectStore('profile_blob_membership').createIndex('by_pubkey', 'pubkey');
-      transaction.objectStore('profile_blob_evidence').createIndex('by_profile_hash', ['pubkey', 'sha256']);
-      transaction.objectStore('profile_blob_evidence').createIndex('by_source', ['evidenceType', 'sourceId']);
-      transaction.objectStore('server_list_run').createIndex('by_pubkey', 'pubkey');
-      transaction
-        .objectStore('catalog_event')
-        .createIndex('by_pubkey_kind_created_at', ['pubkey', 'kind', 'createdAt']);
-      transaction.objectStore('profile_event').createIndex('by_pubkey', 'pubkey');
-      transaction.objectStore('event_relay_observation').createIndex('by_profile_event', ['pubkey', 'eventId']);
-      transaction.objectStore('event_reference').createIndex('by_profile_event', ['pubkey', 'eventId']);
-      transaction.objectStore('event_sync_run').createIndex('by_pubkey', 'pubkey');
-    }
-    if (oldVersion < 4) {
-      db.createObjectStore('reverse_lookup_job', { keyPath: 'id' });
-      transaction.objectStore('reverse_lookup_job').createIndex('by_profile_relay', ['pubkey', 'relayUrl']);
-    }
+    if (oldVersion < 4) db.createObjectStore('reverse_lookup_job', { keyPath: 'id' });
     if (oldVersion < 5) {
       db.createObjectStore('blob_url', { keyPath: 'id' });
       db.createObjectStore('blob_relationship', { keyPath: 'id' });
       db.createObjectStore('metadata_fact', { keyPath: 'id' });
       db.createObjectStore('extractor_result', { keyPath: 'id' });
-      transaction.objectStore('blob_url').createIndex('by_sha256', 'sha256');
-      transaction.objectStore('blob_relationship').createIndex('by_from_sha256', 'fromSha256');
-      transaction.objectStore('metadata_fact').createIndex('by_subject', 'subjectId');
-      transaction.objectStore('extractor_result').createIndex('by_sha256', 'sha256');
     }
     if (oldVersion < 6) {
       db.createObjectStore('blob_location', { keyPath: 'id' });
       db.createObjectStore('blob_location_history', { keyPath: 'id' });
-      transaction.objectStore('blob_location').createIndex('by_blob_server', ['sha256', 'serverId']);
-      transaction.objectStore('blob_location').createIndex('by_server_state', ['serverId', 'state']);
-      transaction.objectStore('blob_location_history').createIndex('by_blob_server', ['sha256', 'serverId']);
     }
     if (oldVersion < 7) {
       db.createObjectStore('asset', { keyPath: 'id' });
       db.createObjectStore('asset_blob', { keyPath: 'id' });
       db.createObjectStore('timeline_projection', { keyPath: 'id' });
-      transaction.objectStore('asset').createIndex('by_profile', 'pubkey');
-      transaction.objectStore('asset_blob').createIndex('by_asset', 'assetId');
-      transaction.objectStore('timeline_projection').createIndex('by_profile_date', ['pubkey', 'displayDate']);
     }
-    if (oldVersion < 8) {
-      db.createObjectStore('timeline_event', { keyPath: 'id' });
-      transaction.objectStore('timeline_event').createIndex('by_profile', 'pubkey');
+    if (oldVersion < 8) db.createObjectStore('timeline_event', { keyPath: 'id' });
+
+    // Indexes come from the shared registry so that this schema and the in-memory
+    // store cannot disagree about what is indexed.
+    for (const index of CATALOG_INDEXES) {
+      if (oldVersion >= index.since) continue;
+      transaction.objectStore(index.store).createIndex(index.name, index.keyPath);
     }
   }
 }
 
 export class MemoryCatalogStore implements CatalogStore {
   private readonly stores = new Map<StoreName, Map<IDBValidKey, unknown>>();
+  // Real index buckets, not a filter over every record. A linear stand-in would let
+  // an indexed read look correct in tests while staying proportional to the catalog,
+  // which is precisely the regression the scale tests exist to catch.
+  private readonly indexes = new Map<string, Map<string, Map<IDBValidKey, unknown>>>();
 
   async get<T>(store: StoreName, key: IDBValidKey): Promise<T | undefined> {
     return this.getStore(store).get(key) as T | undefined;
   }
 
   async put<T>(store: StoreName, value: T): Promise<void> {
-    this.getStore(store).set(recordKeyForStore(store, value), structuredClone(value));
+    const key = recordKeyForStore(store, value);
+    const previous = this.getStore(store).get(key);
+    const record = structuredClone(value);
+    this.getStore(store).set(key, record);
+    for (const definition of CATALOG_INDEXES) {
+      if (definition.store !== store) continue;
+      const bucket = this.getIndex(store, definition.name);
+      const previousKey = previous === undefined ? undefined : indexKeyOf(previous, definition.keyPath);
+      if (previousKey !== undefined) bucket.get(previousKey)?.delete(key);
+      const indexKey = indexKeyOf(record, definition.keyPath);
+      if (indexKey === undefined) continue;
+      let entries = bucket.get(indexKey);
+      if (!entries) {
+        entries = new Map();
+        bucket.set(indexKey, entries);
+      }
+      entries.set(key, record);
+    }
+  }
+
+  async putMany<T>(store: StoreName, values: T[]): Promise<void> {
+    for (const value of values) await this.put(store, value);
   }
 
   async getAll<T>(store: StoreName): Promise<T[]> {
     return [...this.getStore(store).values()].map(value => structuredClone(value) as T);
+  }
+
+  async getAllFromIndex<T>(store: StoreName, index: string, key: IDBValidKey): Promise<T[]> {
+    indexDefinition(store, index);
+    const entries = this.getIndex(store, index).get(serializeIndexKey(key));
+    return entries ? [...entries.values()].map(value => structuredClone(value) as T) : [];
   }
 
   private getStore(name: StoreName) {
@@ -353,6 +436,35 @@ export class MemoryCatalogStore implements CatalogStore {
     }
     return store;
   }
+
+  private getIndex(store: StoreName, name: string) {
+    const id = `${store}.${name}`;
+    let index = this.indexes.get(id);
+    if (!index) {
+      index = new Map();
+      this.indexes.set(id, index);
+    }
+    return index;
+  }
+}
+
+function serializeIndexKey(key: IDBValidKey): string {
+  return JSON.stringify(Array.isArray(key) ? key : [key]);
+}
+
+/**
+ * IndexedDB leaves a record out of an index when any key path component is missing,
+ * and the in-memory store has to agree, or a test would see rows the browser hides.
+ */
+function indexKeyOf(record: unknown, keyPath: string | string[]): string | undefined {
+  const fields = Array.isArray(keyPath) ? keyPath : [keyPath];
+  const values: IDBValidKey[] = [];
+  for (const field of fields) {
+    const value = (record as Record<string, unknown>)[field];
+    if (value === undefined || value === null) return undefined;
+    values.push(value as IDBValidKey);
+  }
+  return serializeIndexKey(values);
 }
 
 const KEY_FIELD_BY_STORE: Record<StoreName, string> = {
@@ -404,6 +516,32 @@ export type CatalogStatus = {
   enrichments: { pending: number; failed: number; truncated: number };
   lastSyncAt?: number;
 };
+type BlobLocationRecord = {
+  id: string;
+  sha256: string;
+  serverId: string;
+  state: 'present' | 'absent';
+  firstPresentAt?: number;
+  lastPresentAt?: number;
+  lastCheckedAt: number;
+  nextCheckAt: number;
+  reportedSize?: number;
+  reportedMimeType?: string;
+  canonicalUrl: string;
+  consecutiveFailures: number;
+  source: 'server-list' | 'delete';
+};
+type BlobLocationHistoryRecord = {
+  id: string;
+  sha256: string;
+  serverId: string;
+  observedAt: number;
+  previousState?: string;
+  newState: 'present' | 'absent';
+  reason?: string;
+};
+
+export type BlobRemoval = { sha256: string; serverUrl: string; reason?: string };
 
 export type ServerListInput = {
   server: { url: string; type: CatalogServerType };
@@ -412,6 +550,11 @@ export type ServerListInput = {
   state: ServerListState;
   error?: string;
   received?: number;
+  /** `blobs` is the server's complete current listing (not one page of a
+      still-in-progress paginated fetch). Anything previously recorded
+      present on this server but absent from this list gets marked removed,
+      so a rescan clears files that were deleted directly on the server. */
+  full?: boolean;
 };
 
 export type EventPageLoader = (input: { until?: number; limit: number }) => Promise<NostrEvent[]>;
@@ -454,8 +597,82 @@ export class Catalog {
         depth: 0,
         discoveredAt: now,
       });
+      // The server just told us it holds this blob - that's direct, authoritative
+      // presence evidence, not something the HTTP-probe replica check should have
+      // to rediscover before the server filter (or replica count) can see it.
+      const id = `${descriptor.sha256}:${serverId}`;
+      const previous = await this.store.get<BlobLocationRecord>('blob_location', id);
+      await this.store.put<BlobLocationRecord>('blob_location', {
+        id,
+        sha256: descriptor.sha256,
+        serverId,
+        state: 'present',
+        firstPresentAt: previous?.firstPresentAt ?? now,
+        lastPresentAt: now,
+        lastCheckedAt: now,
+        nextCheckAt: now + 24 * 60 * 60_000,
+        reportedSize: descriptor.size,
+        reportedMimeType: descriptor.type,
+        canonicalUrl: descriptor.url,
+        consecutiveFailures: 0,
+        source: 'server-list',
+      });
+    }
+    if (input.full && input.blobs) {
+      const receivedHashes = new Set(input.blobs.map(blob => blob.sha256));
+      const present = await this.store.getAllFromIndex<BlobLocationRecord>('blob_location', 'by_server_state', [
+        serverId,
+        'present',
+      ]);
+      const missing = present.filter(location => !receivedHashes.has(location.sha256));
+      if (missing.length > 0) {
+        await this.recordBlobsRemoved(
+          pubkey,
+          missing.map(location => ({ sha256: location.sha256, serverUrl: serverId, reason: 'rescan' }))
+        );
+      }
     }
     this.changed(pubkey);
+  }
+  /**
+   * The delete dialog just watched a server confirm the blob is gone (deleted,
+   * or already a 404) - that's the same kind of direct, authoritative evidence
+   * `ingestServerList`'s presence write relies on, just for the opposite
+   * transition. Recording it here means the server filter and replica counts
+   * reflect the deletion immediately, instead of waiting for the next HTTP
+   * probe to notice absence on its own schedule.
+   */
+  async recordBlobsRemoved(pubkey: string, removals: BlobRemoval[]): Promise<void> {
+    const now = Date.now();
+    for (const { sha256, serverUrl, reason } of removals) {
+      const serverId = normalizeServerUrl(serverUrl);
+      const id = `${sha256}:${serverId}`;
+      const previous = await this.store.get<BlobLocationRecord>('blob_location', id);
+      if (previous?.state === 'absent') continue;
+      await this.store.put<BlobLocationRecord>('blob_location', {
+        id,
+        sha256,
+        serverId,
+        state: 'absent',
+        firstPresentAt: previous?.firstPresentAt,
+        lastPresentAt: previous?.lastPresentAt,
+        lastCheckedAt: now,
+        nextCheckAt: now + 24 * 60 * 60_000,
+        canonicalUrl: previous?.canonicalUrl ?? `${serverUrl}/${sha256}`,
+        consecutiveFailures: (previous?.consecutiveFailures ?? 0) + 1,
+        source: 'delete',
+      });
+      await this.store.put<BlobLocationHistoryRecord>('blob_location_history', {
+        id: `${id}:${now}:${previous?.state ?? 'none'}:absent`,
+        sha256,
+        serverId,
+        observedAt: now,
+        previousState: previous?.state,
+        newState: 'absent',
+        reason,
+      });
+    }
+    if (removals.length > 0) this.changed(pubkey);
   }
 
   async ingestUpload(
@@ -564,7 +781,9 @@ export class Catalog {
     }
     await this.store.put<ProfileRecord>('profile', { ...profile, eventExtractorVersion: EVENT_EXTRACTOR_VERSION });
     await this.touchProfileMutation(pubkey);
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('bouquet-catalog-changed'));
+    // `changed` also reaches the main thread from inside the worker; a bare
+    // `window.dispatchEvent` here notified nobody once the catalog moved off-thread.
+    this.changed(pubkey);
   }
 
   async syncReverseLookups(
@@ -1164,9 +1383,25 @@ export class Catalog {
       });
   }
 
-  async markProjectionComplete(pubkey: string): Promise<void> {
+  /**
+   * `projectedAt` is the moment the run *started*, so that a mutation arriving
+   * mid-run still counts as newer and `queryCatalogTimeline` can treat every
+   * projection carrying an older stamp as a leftover of a previous run.
+   */
+  async markProjectionComplete(pubkey: string, projectedAt = Date.now()): Promise<void> {
     const profile = await this.store.get<ProfileRecord>('profile', pubkey);
-    if (profile) await this.store.put<ProfileRecord>('profile', { ...profile, lastProjectedAt: Date.now() });
+    if (profile)
+      await this.store.put<ProfileRecord>('profile', {
+        ...profile,
+        lastProjectedAt: projectedAt,
+        projectionVersion: PROJECTION_VERSION,
+      });
+  }
+
+  /** The stamp a projection must carry to still be part of the current timeline. */
+  async getProjectionStamp(pubkey: string): Promise<number> {
+    const profile = await this.store.get<ProfileRecord>('profile', pubkey);
+    return profile?.lastProjectedAt ?? 0;
   }
 
   async updateBlobServerMetadata(sha256: string, size?: number, mimeType?: string): Promise<void> {
@@ -1185,11 +1420,17 @@ export class Catalog {
   async isProjectionStale(pubkey: string): Promise<boolean> {
     const profile = await this.store.get<ProfileRecord>('profile', pubkey);
     if (!profile?.lastProjectedAt) return true;
+    // A projection written before the current shape lacks the run stamp the query
+    // filters on, so it has to be rebuilt once even when nothing else changed.
+    if (profile.projectionVersion !== PROJECTION_VERSION) return true;
     return (profile.lastMutationAt ?? 0) > profile.lastProjectedAt;
   }
 
+  /** Set by the worker host so change notifications leave the worker. */
+  onChanged?: (pubkey?: string) => void;
+
   private changed(pubkey?: string) {
-    if (pubkey) void this.touchProfileMutation(pubkey);
+    this.onChanged?.(pubkey);
     if (typeof window !== 'undefined') window.dispatchEvent(new Event('bouquet-catalog-changed'));
   }
 
@@ -1250,10 +1491,4 @@ export function normalizeServerUrl(value: string): string {
   url.search = '';
   url.pathname = url.pathname.replace(/\/+$/, '');
   return url.toString().replace(/\/$/, '');
-}
-
-let catalog: Catalog | undefined;
-export function getCatalog(): Catalog {
-  if (!catalog) catalog = new Catalog(new IndexedDbCatalogStore());
-  return catalog;
 }

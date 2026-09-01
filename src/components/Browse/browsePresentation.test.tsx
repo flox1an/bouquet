@@ -40,7 +40,6 @@ describe('browse presentation smoke', () => {
       const html = render(
         h(BrowseListRow, {
           item: item({ availabilityState }),
-          pubkey: 'pk',
           to: '/browse/x',
           selected: false,
           onSelect: () => {},
@@ -64,7 +63,6 @@ describe('browse presentation smoke', () => {
           displayTitle: 'Unlinked file',
           displayTitleIsFallback: true,
         }),
-        pubkey: 'pk',
         to: '/browse/x',
         selected: false,
         onSelect: () => {},
@@ -113,6 +111,8 @@ describe('browse presentation smoke', () => {
         onAudioVisible: () => {},
         onPlayAudio: () => {},
         onAction: () => {},
+        onRegisterMonthScroll: () => {},
+        onActiveMonthChange: () => {},
       })
     );
     expect(html).toContain('January picture');

@@ -22,7 +22,7 @@ const Badge = ({ ev }: { ev: NostrEvent }) => {
       relays: [],
     } as EventPointer);
     return (
-      <a target="_blank" rel="noreferrer" href={`https://njump.me/${nevent}`}>
+      <a target="_blank" rel="noreferrer" href={`https://nostr.at/${nevent}`}>
         <ShadcnBadge className="mr-2">filemeta</ShadcnBadge>
       </a>
     );
@@ -51,7 +51,7 @@ const Badge = ({ ev }: { ev: NostrEvent }) => {
       relays: [],
     } as EventPointer);
     return (
-      <a target="_blank" rel="noreferrer" href={`https://njump.me/${nevent}`}>
+      <a target="_blank" rel="noreferrer" href={`https://nostr.at/${nevent}`}>
         <ShadcnBadge className="mr-2">picture</ShadcnBadge>
       </a>
     );
@@ -93,7 +93,7 @@ const Badge = ({ ev }: { ev: NostrEvent }) => {
       relays: [],
     } as EventPointer);
     return (
-      <a target="_blank" rel="noreferrer" href={`https://njump.me/${nevent}`}>
+      <a target="_blank" rel="noreferrer" href={`https://nostr.at/${nevent}`}>
         <ShadcnBadge className="mr-2">post</ShadcnBadge>
       </a>
     );
