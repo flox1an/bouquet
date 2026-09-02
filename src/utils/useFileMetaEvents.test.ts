@@ -5,7 +5,15 @@ import { groupEventsByHash } from './fileMetaEventIndex';
 const hash = 'a'.repeat(64);
 
 function event(id: string, tags: string[][]): NostrEvent {
-  return { id, pubkey: 'p'.repeat(64), kind: 1063, created_at: 1, tags, content: '', sig: 's'.repeat(128) } as NostrEvent;
+  return {
+    id,
+    pubkey: 'p'.repeat(64),
+    kind: 1063,
+    created_at: 1,
+    tags,
+    content: '',
+    sig: 's'.repeat(128),
+  } as NostrEvent;
 }
 
 describe('groupEventsByHash', () => {

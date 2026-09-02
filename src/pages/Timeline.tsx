@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { normalizeServerUrl } from '../catalog/catalog';
 import { getCatalogClient } from '../catalog/catalogClient';
+import { identifyUnexplainedBlobs } from '../catalog/identifyBlobs';
 import {
   isHashSearchTerm,
   sortTimelineProjections,
@@ -211,6 +212,17 @@ export default function Timeline() {
       window.removeEventListener('bouquet-catalog-changed', runProjection);
     };
   }, [user?.pubkey, projectionAttempt]);
+
+  // Files no server ever typed only become recognisable once their first bytes are
+  // read - and a playlist among them is what folds hundreds of segments into one
+  // item. The sweep is resumable and skips what it has already read, so it is started
+  // once per visit and left to converge in the background.
+  const sweptPubkey = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!user?.pubkey || projectionState !== 'complete' || sweptPubkey.current === user.pubkey) return;
+    sweptPubkey.current = user.pubkey;
+    void identifyUnexplainedBlobs(user.pubkey);
+  }, [projectionState, user?.pubkey]);
 
   const searchTerms = useMemo(() => splitSearchTerms(search), [search]);
   const hashTerms = useMemo(() => searchTerms.filter(isHashSearchTerm), [searchTerms]);

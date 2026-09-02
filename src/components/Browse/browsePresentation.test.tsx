@@ -127,4 +127,64 @@ describe('browse presentation smoke', () => {
     expect(html.indexOf('March picture')).toBeLessThan(janHeading);
     expect(html.indexOf('January picture')).toBeGreaterThan(janHeading);
   });
+
+  it('identifies a hash-named file by kind and short hash, and counts segments as segments', () => {
+    const hash = '4edb1e6b8529'.padEnd(64, 'f');
+    const items = [
+      item({
+        assetId: 'a1',
+        displayTitle: 'MP4 video',
+        displayTitleIsFallback: true,
+        displayKindLabel: 'MP4 video',
+        displayType: 'video',
+        displaySubtitle: undefined,
+        primaryBlobSha256: hash,
+        blobCount: 1,
+        totalBlobSize: 46_400_000,
+      }),
+      item({
+        assetId: 'a2',
+        displayTitle: 'HLS video',
+        displayTitleIsFallback: true,
+        displayKindLabel: 'HLS video',
+        displayType: 'video',
+        displaySubtitle: undefined,
+        blobCount: 43,
+        segmentCount: 42,
+        displayDurationSeconds: 151,
+        displayDimensions: '1920×1080',
+      }),
+    ];
+    const html = render(
+      h(BrowseMediaGrid, {
+        monthGroups: groupByMonth(items),
+        filteredItems: items,
+        toFor: (id: string) => `/browse/${id}`,
+        selectedAssetIds: {},
+        onSelect: () => {},
+        onOpen: () => {},
+        audioMetadataVersion: {},
+        onAudioVisible: () => {},
+        onPlayAudio: () => {},
+        onAction: () => {},
+        onRegisterMonthScroll: () => {},
+        onActiveMonthChange: () => {},
+      })
+    );
+    const text = html.replace(/<!--.*?-->/g, '').replace(/<[^>]+>/g, ' ');
+    // The kind carries the identity, a short hash keeps the file findable, and
+    // the full 64-character hash never reaches the card.
+    expect(text).toContain('MP4 video');
+    expect(text).toContain('4edb1e6b');
+    expect(text).not.toContain(hash);
+    expect(text).toContain('1 file');
+    // 43 stored files are one playlist the user chose plus 42 segments.
+    expect(text).toContain('1 playlist + 42 segments');
+    expect(text).not.toMatch(/\b43 files\b/);
+    expect(text).toContain('2:31');
+    expect(text).toContain('1920×1080');
+    // Actions stay reachable without a visible button row on every card.
+    expect(text).toContain('Actions for MP4 video');
+    expect(html).not.toContain('>Mirror<');
+  });
 });

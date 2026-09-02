@@ -101,13 +101,13 @@ export async function fetchNip96List(
     });
 
     const list = response.data as Nip96ListResponse;
-    
+
     if (list.files.length === 0) {
       break;
     }
-    
+
     allFiles = [...allFiles, ...list.files];
-    
+
     // Check if we've fetched all files
     if (allFiles.length >= list.total) {
       hasMore = false;
@@ -185,7 +185,6 @@ export async function uploadNip96File(
   }
 
   const result = response.data as Nip96UploadResult;
-  
 
   const x = getValueByTag(result.nip94_event?.tags, 'x') || getValueByTag(result.nip94_event?.tags, 'ox');
 

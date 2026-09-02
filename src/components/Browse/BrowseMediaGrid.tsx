@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Play } from 'lucide-react';
+import { MoreVertical, Play } from 'lucide-react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { MonthGroup } from '../TimelineNavigation';
 import { AudioTimelinePreview } from '../AudioTimelinePreview';
 import { TimelineThumbnail, type KnownServersFor } from '../TimelineThumbnail';
@@ -32,17 +38,22 @@ type BrowseMediaGridProps = {
   pubkey?: string;
 };
 
-// Must match the grid's sm/md/lg breakpoints so column width stays honest.
+// Column widths are set inline from this table, so it is the single source of
+// truth for grid density. Cards are compact enough that a thumbnail still reads
+// at these widths.
 function columnCountFor(width: number): number {
-  if (width >= 1024) return 4;
-  if (width >= 768) return 3;
-  if (width >= 640) return 2;
-  return 1;
+  if (width >= 1536) return 6;
+  if (width >= 1024) return 5;
+  if (width >= 768) return 4;
+  if (width >= 640) return 3;
+  return 2;
 }
 
 function useColumnCount(): number {
   // renderToString environments (vocabulary tests) have no window; default wide.
-  const [columns, setColumns] = useState(() => columnCountFor(typeof window === 'undefined' ? 1024 : window.innerWidth));
+  const [columns, setColumns] = useState(() =>
+    columnCountFor(typeof window === 'undefined' ? 1024 : window.innerWidth)
+  );
   useEffect(() => {
     const onResize = () => setColumns(columnCountFor(window.innerWidth));
     window.addEventListener('resize', onResize);
@@ -113,8 +124,11 @@ export function BrowseMediaGrid({
 
   const virtualizer = useWindowVirtualizer({
     count: rows.length,
-    estimateSize: index => (rows[index].type === 'header' ? 36 : 340),
-    overscan: 4,
+    // Measured card row at the five-column width a 1280px window gives
+    // (243px square card + the row's own py-1).
+    // Rows are re-measured on mount, so this only has to keep the scrollbar
+    // and the initial jump honest.
+    estimateSize: index => (rows[index].type === 'header' ? 36 : 251),
     scrollMargin: containerRef.current?.offsetTop ?? 0,
     getItemKey: index => rows[index].key,
     // Without a rect the virtualizer renders nothing, which is what a server
@@ -136,7 +150,8 @@ export function BrowseMediaGrid({
   // virtual range have no DOM node, so this reads the virtualizer's measurements
   // instead of observing [data-month] elements.
   const activeMonth = useMemo(() => {
-    const viewportTop = (typeof window === 'undefined' ? 0 : window.scrollY) - (containerRef.current?.offsetTop ?? 0) + 80;
+    const viewportTop =
+      (typeof window === 'undefined' ? 0 : window.scrollY) - (containerRef.current?.offsetTop ?? 0) + 80;
     let current: string | undefined;
     for (const measurement of virtualizer.measurementsCache) {
       if (measurement.start > viewportTop) break;
@@ -204,6 +219,29 @@ export function BrowseMediaGrid({
   );
 }
 
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+function formatDuration(seconds: number): string {
+  const total = Math.round(seconds);
+  const minutes = Math.floor(total / 60) % 60;
+  const rest = String(total % 60).padStart(2, '0');
+  const hours = Math.floor(total / 3600);
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`;
+}
+
+/** A 43-file HLS video is one playlist plus 42 segments the user never chose;
+    counting them all as "43 files" reads as 43 uploads. */
+function fileSummary(item: TimelineItem): string {
+  const segments = item.segmentCount ?? 0;
+  if (segments <= 0) return plural(item.blobCount, 'file');
+  const rest = item.blobCount - segments;
+  if (rest <= 0) return plural(segments, 'segment');
+  return `${rest === 1 ? '1 playlist' : plural(rest, 'file')} + ${plural(segments, 'segment')}`;
+}
+
+const OVERLAY_BADGE =
+  'pointer-events-none border border-border bg-background/85 px-1 py-px font-mono text-[10px] leading-4 tracking-wide';
+
 function MediaCard({
   item,
   toFor,
@@ -245,22 +283,26 @@ function MediaCard({
         : item.availabilityState === 'unavailable'
           ? 'bg-destructive'
           : 'bg-muted-foreground';
+  // When the title is only the kind label, the meta line would repeat it.
+  const meta = [
+    item.displayTitleIsFallback ? undefined : item.displayKindLabel,
+    formatFileSize(item.totalBlobSize),
+    item.displayDimensions,
+    fileSummary(item),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const shortHash = item.displayTitleIsFallback ? item.primaryBlobSha256?.slice(0, 8) : undefined;
+  const segments = item.segmentCount ?? 0;
   return (
     <article
       data-asset-id={item.assetId}
-      className="group relative border bg-card p-3 shadow-[3px_3px_0_hsl(var(--border))] transition-transform hover:-translate-y-0.5"
+      className="group relative aspect-square overflow-hidden bg-muted transition-transform hover:-translate-y-0.5"
     >
-      <Checkbox
-        checked={selected}
-        onCheckedChange={() => onSelect(item.assetId)}
-        onClick={event => event.stopPropagation()}
-        aria-label={`Select ${item.displayTitle}`}
-        className="absolute left-2 top-2 z-10 bg-background"
-      />
       <Link
         to={toFor(item.assetId)}
         onClick={event => onOpen(item.assetId, event.currentTarget.closest('article')?.getBoundingClientRect().top)}
-        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         aria-label={`Open details for ${item.displayTitle}`}
       >
         {item.displayType === 'audio' ? (
@@ -269,66 +311,94 @@ function MediaCard({
             metadataVersion={metadataVersion}
             sourceUrl={item.primaryUrl}
             onVisible={() => onAudioVisible(item)}
+            fill
           />
         ) : (
-          <TimelineThumbnail item={item} knownServersFor={knownServersFor} />
+          <TimelineThumbnail item={item} knownServersFor={knownServersFor} fill />
         )}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-primary bg-primary/10">
-            <Icon className="h-4 w-4" />
+        {/* Kind first: at column width the line truncates, and losing the clock
+            time costs less than losing "Unlinked file". */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2 pb-1.5 pt-10">
+          <div className="flex items-baseline gap-1.5">
+            <Icon className="h-3.5 w-3.5 shrink-0 translate-y-0.5 text-white/70" aria-hidden="true" />
+            <h2
+              className={`truncate text-sm text-white ${item.displayTitleIsFallback ? 'font-medium' : 'font-semibold'}`}
+            >
+              {item.displayTitle}
+            </h2>
+            {shortHash && <span className="shrink-0 font-mono text-[10px] text-white/60">{shortHash}</span>}
           </div>
-          <div className="flex items-center gap-1.5">
+          {item.displaySubtitle && <p className="truncate text-xs text-white/80">{item.displaySubtitle}</p>}
+          <p
+            className="truncate font-mono text-[10px] leading-4 text-white/60"
+            title={
+              item.unknownBlobSizeCount > 0 ? `${plural(item.unknownBlobSizeCount, 'file')} of unknown size` : undefined
+            }
+          >
+            {[eventKindLabel(item.eventKind), meta, `${dateLabel} ${formatDate(item.displayDate)}`]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </div>
+      </Link>
+      {/* Overlay layer over the full-bleed square preview: keeps the controls
+          off the text gradient without nesting buttons inside the link. */}
+      <div className="pointer-events-none absolute inset-0">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => onSelect(item.assetId)}
+          onClick={event => event.stopPropagation()}
+          aria-label={`Select ${item.displayTitle}`}
+          className="pointer-events-auto absolute left-1 top-1 bg-background"
+        />
+        <div className="absolute right-1 top-1 flex items-center gap-1">
+          {segments > 0 && <span className={OVERLAY_BADGE}>HLS · {plural(segments, 'segment')}</span>}
+          {item.displayDurationSeconds !== undefined && (
+            <span className={OVERLAY_BADGE}>{formatDuration(item.displayDurationSeconds)}</span>
+          )}
+          <span className="flex h-4 w-4 items-center justify-center border border-border bg-background/85">
             <span
               role="img"
               className={`h-2 w-2 shrink-0 border border-foreground/30 ${availabilityClass}`}
               title={AVAILABILITY_LABEL[item.availabilityState]}
               aria-label={AVAILABILITY_LABEL[item.availabilityState]}
             />
-            <span
-              className={`border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
-                item.eventId ? 'border-primary text-foreground' : 'border-muted-foreground/50 text-muted-foreground'
-              }`}
-            >
-              {eventKindLabel(item.eventKind)}
-            </span>
-          </div>
+          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="secondary"
+                className="pointer-events-auto h-6 w-6 border border-border opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+              >
+                <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only">Actions for {item.displayTitle}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => onAction(item, 'mirror')}>Mirror</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onAction(item, 'sync')}>Sync</DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => onAction(item, 'delete')}
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <h2
-          className={`mt-2 truncate text-sm font-semibold ${
-            item.displayTitleIsFallback ? 'italic text-muted-foreground' : ''
-          }`}
-        >
-          {item.displayTitle}
-        </h2>
-        {item.displaySubtitle && <p className="mt-1 line-clamp-2 text-xs text-foreground/80">{item.displaySubtitle}</p>}
-        <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-          {dateLabel} {formatDate(item.displayDate)} · {item.blobCount === 1 ? '1 file' : `${item.blobCount} files`} ·{' '}
-          {formatFileSize(item.totalBlobSize)}
-          {item.unknownBlobSizeCount > 0 && ` · ${item.unknownBlobSizeCount} size unknown`}
-        </p>
-      </Link>
-      <div className="mt-2 flex flex-wrap gap-1.5">
         {item.displayType === 'audio' && (
           <Button
-            size="sm"
+            size="icon"
             variant="secondary"
             disabled={!item.primaryUrl}
             onClick={() => onPlayAudio(item)}
             aria-label={`Play ${item.displayTitle}`}
+            className="pointer-events-auto absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 border border-border shadow-[2px_2px_0_hsl(var(--border))]"
           >
-            <Play className="h-4 w-4" />
-            Play
+            <Play className="h-4 w-4" aria-hidden="true" />
           </Button>
         )}
-        <Button size="sm" variant="outline" onClick={() => onAction(item, 'mirror')}>
-          Mirror
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => onAction(item, 'sync')}>
-          Sync
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => onAction(item, 'delete')}>
-          Delete
-        </Button>
       </div>
     </article>
   );

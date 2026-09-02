@@ -9,11 +9,14 @@ export function AudioTimelinePreview({
   metadataVersion = 0,
   sourceUrl,
   onVisible,
+  fill = false,
 }: {
   item: AudioTimelinePreviewItem;
   metadataVersion?: number;
   sourceUrl?: string;
   onVisible?: () => void;
+  /** Fill the parent box (square timeline card) instead of rendering the inline 16:9 box. */
+  fill?: boolean;
 }) {
   const [metadata, setMetadata] = useState<ID3Tag>();
   const previewRef = useRef<HTMLDivElement>(null);
@@ -52,12 +55,39 @@ export function AudioTimelinePreview({
     return () => observer.disconnect();
   }, [item.primaryBlobSha256, sourceUrl]);
 
+  const cover = metadata?.cover ?? '/music-placeholder.png';
+  if (!fill) {
+    return (
+      <div ref={previewRef} className="relative mb-2 aspect-video overflow-hidden border bg-primary/10">
+        <img
+          src={cover}
+          alt={metadata?.cover ? `Cover art for ${item.displayTitle}` : ''}
+          className="h-full w-full object-cover"
+          loading="lazy"
+        />
+        {!metadata?.cover && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/35">
+            <Music2 className="h-6 w-6 text-primary" aria-hidden="true" />
+          </div>
+        )}
+      </div>
+    );
+  }
   return (
-    <div ref={previewRef} className="relative mb-2 aspect-video overflow-hidden border bg-primary/10">
+    <div ref={previewRef} className="relative flex h-full w-full items-center justify-center overflow-hidden bg-primary/10">
+      {metadata?.cover && (
+        <img
+          src={cover}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
+          loading="lazy"
+        />
+      )}
       <img
-        src={metadata?.cover ?? '/music-placeholder.png'}
+        src={cover}
         alt={metadata?.cover ? `Cover art for ${item.displayTitle}` : ''}
-        className="h-full w-full object-cover"
+        className="relative h-full w-full object-contain"
         loading="lazy"
       />
       {!metadata?.cover && (

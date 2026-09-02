@@ -32,6 +32,12 @@ class CountingStore implements CatalogStore {
     this.reads.push(`index:${store}.${index}`);
     return this.inner.getAllFromIndex<T>(store, index, key);
   }
+  delete(store: StoreName, key: IDBValidKey) {
+    return this.inner.delete(store, key);
+  }
+  reset() {
+    return this.inner.reset();
+  }
 }
 
 const pubkey = 'p'.repeat(64);

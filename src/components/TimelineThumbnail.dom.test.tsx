@@ -71,4 +71,29 @@ describe('TimelineThumbnail', () => {
     expect(box.className).toContain('aspect-video');
     expect(box.querySelector('svg')).toBeTruthy();
   });
+  it('fill variant backs the contained image with a blurred copy that never drives the fallback chain', () => {
+    const { container } = render(h(TimelineThumbnail, { item: item(), fill: true }));
+    const box = container.firstElementChild as HTMLElement;
+    // Fills its parent instead of rendering the inline 16:9 box.
+    expect(box.className).toContain('h-full');
+    expect(box.className).not.toContain('aspect-video');
+
+    const imgs = () => box.querySelectorAll('img');
+    expect(imgs()).toHaveLength(2);
+    expect(imgs()[0].src).toBe(imgs()[1].src);
+
+    // The backdrop has no error handler: failing it must not skip a source.
+    fireEvent.error(imgs()[0]);
+    expect(imgs()).toHaveLength(2);
+    expect(imgs()[0].src).toBe(imgs()[1].src);
+
+    // Only the main image advances the chain, through both sources to the placeholder.
+    const firstSrc = imgs()[1].src;
+    fireEvent.error(imgs()[1]);
+    expect(imgs()[0].src).not.toBe(firstSrc);
+    expect(imgs()[0].src).toBe(imgs()[1].src);
+    fireEvent.error(imgs()[1]);
+    expect(box.querySelector('img')).toBeNull();
+    expect(box.querySelector('svg')).toBeTruthy();
+  });
 });

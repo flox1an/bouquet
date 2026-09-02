@@ -3,6 +3,7 @@ import { nip19 } from 'nostr-tools';
 import type { Catalog, CatalogServerType } from './catalog';
 import { extractTimelineEventMetadata, type TimelineEventMetadata } from './timelineMetadata';
 import { EVENT_EXTRACTOR_VERSION } from './eventReferences';
+import { isGenericMimeType } from '../utils/mimeTypes';
 
 export type ReplicaState = 'present' | 'absent' | 'unauthorized' | 'rate_limited' | 'unreachable' | 'unknown';
 export type CatalogAction = 'mirror' | 'sync' | 'delete';
@@ -79,6 +80,16 @@ export type TimelineProjection = {
   displayTitle: string;
   displayTitleIsFallback: boolean;
   displaySubtitle?: string;
+  /** Short human label for what the file is: "MP4 video", "HLS video", "Unclassified file". */
+  displayKindLabel: string;
+  /** Best-known mime type: sniffed content beats the server's claim beats the extension. */
+  displayMimeType?: string;
+  /** Playing time in seconds, currently only known for HLS playlists. */
+  displayDurationSeconds?: number;
+  /** "1920×1080", from sniffed image headers or the event's `dim` tag. */
+  displayDimensions?: string;
+  /** How many of `blobCount` are HLS segments rather than things a user picked. */
+  segmentCount?: number;
   searchText: string;
   displayDate: number;
   displayDateSource: 'event' | 'blob-uploaded' | 'first-seen';
@@ -163,6 +174,141 @@ function assetTypeFromMime(mimeType: string | undefined): Asset['assetType'] {
   if (mime.startsWith('audio/')) return 'audio';
   if (mime === 'application/pdf' || mime.startsWith('text/') || mime.startsWith('application/vnd.')) return 'document';
   return 'unknown';
+}
+
+/**
+ * Blossom servers hand out `application/octet-stream` for roughly half of a real
+ * catalog (3 726 of 6 707 blobs in the case that prompted this), so the reported
+ * mime alone leaves thousands of items typed `unknown` with no icon and no
+ * thumbnail. The URL extension is weaker evidence but nearly always present, and
+ * a sniffed content header - when one has been fetched - beats both. Which mimes
+ * count as saying nothing lives in `utils/mimeTypes`, shared with the store.
+ */
+
+const NON_FORMAT_EXTENSIONS: Record<string, true> = { bin: true, data: true, blob: true, tmp: true, dat: true };
+
+const EXTENSION_MIME_TYPES: Record<string, string> = {
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  m4s: 'video/iso.segment',
+  mov: 'video/quicktime',
+  quicktime: 'video/quicktime',
+  webm: 'video/webm',
+  mkv: 'video/x-matroska',
+  avi: 'video/x-msvideo',
+  mpeg: 'video/mpeg',
+  mpg: 'video/mpeg',
+  ts: 'video/mp2t',
+  m3u8: 'application/vnd.apple.mpegurl',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  opus: 'audio/opus',
+  wav: 'audio/wav',
+  flac: 'audio/flac',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  jfif: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  svg: 'image/svg+xml',
+  bmp: 'image/bmp',
+  pdf: 'application/pdf',
+  vtt: 'text/vtt',
+  srt: 'text/plain',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  html: 'text/html',
+  json: 'application/json',
+  zip: 'application/zip',
+};
+
+/** Short, readable format name, preferring the extension over the mime subtype:
+    `video/quicktime` reads as MOV, which is what the file is called everywhere else. */
+const FORMAT_NAMES: Record<string, string> = {
+  'video/mp4': 'MP4',
+  'video/quicktime': 'MOV',
+  'video/webm': 'WebM',
+  'video/x-matroska': 'MKV',
+  'video/mpeg': 'MPEG',
+  'video/mp2t': 'MPEG-TS',
+  'video/iso.segment': 'fMP4',
+  'application/vnd.apple.mpegurl': 'HLS',
+  'audio/mpeg': 'MP3',
+  'audio/mp4': 'M4A',
+  'image/jpeg': 'JPEG',
+  'image/png': 'PNG',
+  'image/webp': 'WebP',
+  'image/gif': 'GIF',
+  'image/svg+xml': 'SVG',
+  'application/pdf': 'PDF',
+  'text/plain': 'Text',
+  'text/vtt': 'Subtitles',
+};
+
+/** `https://host/<hash>.mp4;codecs=avc1` -> `mp4`. Blossom hosts append a
+    mime-derived suffix, parameters and all, so the parameter is stripped too. */
+export function extensionOf(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const name = url.split(/[?#]/, 1)[0].split('/').at(-1) ?? '';
+  const dot = name.lastIndexOf('.');
+  if (dot < 0) return undefined;
+  const extension = name
+    .slice(dot + 1)
+    .split(';', 1)[0]
+    .trim()
+    .toLocaleLowerCase();
+  return extension.length > 0 && extension.length <= 12 ? extension : undefined;
+}
+
+function isSpecificMime(mimeType: string | undefined): boolean {
+  return !!mimeType && !isGenericMimeType(mimeType);
+}
+
+/** Sniffed header, then the server's claim, then the URL extension. A generic claim
+    only wins when nothing better exists, so it never hides a real type. */
+export function effectiveMimeType(candidates: {
+  sniffed?: string;
+  reported?: string;
+  fromEvent?: string;
+  url?: string;
+}): string | undefined {
+  const fromExtension = EXTENSION_MIME_TYPES[extensionOf(candidates.url) ?? ''];
+  const ordered = [candidates.sniffed, candidates.reported, candidates.fromEvent, fromExtension];
+  return ordered.find(isSpecificMime) ?? ordered.find(Boolean);
+}
+
+/** What the card says the thing is. Kept short: it sits on one line next to the size. */
+export function mediaKindLabel(
+  type: Asset['assetType'],
+  mimeType: string | undefined,
+  url: string | undefined,
+  isHls: boolean
+): string {
+  if (isHls) return 'HLS video';
+  const mime = mimeType?.split(';', 1)[0]?.trim().toLocaleLowerCase();
+  const extension = extensionOf(url);
+  const extensionMime = extension ? EXTENSION_MIME_TYPES[extension] : undefined;
+  const format =
+    (mime ? FORMAT_NAMES[mime] : undefined) ??
+    (extensionMime ? FORMAT_NAMES[extensionMime] : undefined) ??
+    // An extension nobody maps is still worth showing when it looks like a format
+    // ("aaf") and not like a placeholder the host invented ("bin", "octet-stream").
+    (extension && /^[a-z0-9]{2,5}$/.test(extension) && !NON_FORMAT_EXTENSIONS[extension]
+      ? extension.toLocaleUpperCase()
+      : undefined);
+  if (type === 'unknown') return format ? `${format} file` : 'Unclassified file';
+  return format ? `${format} ${type}` : `${type[0].toLocaleUpperCase()}${type.slice(1)}`;
+}
+
+/** A file named after its own hash carries no information a human can use, so it is
+    a fallback title, not a title - the card then leads with the kind label instead. */
+export function isHashLikeFileName(fileName: string | undefined): boolean {
+  return !!fileName && /^[0-9a-f]{32,64}(\.[^.]*)?$/i.test(fileName);
 }
 
 export async function refreshReplicaAvailability(
@@ -380,17 +526,31 @@ export async function projectCatalogAssets(
     metadataFacts.filter(fact => fact.namespace === 'audio'),
     fact => fact.subjectId
   );
+  // Everything except audio tags: sniffed mime, image dimensions, playlist duration
+  // and the mime/dim an event declared. One pass, then a per-hash lookup.
+  const mediaFactsByHash = Map.groupBy(
+    metadataFacts.filter(fact => fact.namespace !== 'audio'),
+    fact => fact.subjectId
+  );
   const childrenByParent = Map.groupBy(
     relationships.filter(relationship => relationship.toSha256),
     relationship => relationship.fromSha256
   );
+  // A truncated expansion still proves the parent is a playlist: the segments past
+  // the cap were recorded, just not followed. Excluding them here used to leave the
+  // largest videos - the ones that blow the 200-descendant cap - typed as loose files.
   const hlsPlaylistHashes = new Set(
     relationships
       .filter(
         relationship =>
-          relationship.state === 'active' && ['playlist', 'segment', 'init-segment'].includes(relationship.type)
+          relationship.state !== 'failed' && ['playlist', 'segment', 'init-segment'].includes(relationship.type)
       )
       .map(relationship => relationship.fromSha256)
+  );
+  const segmentHashes = new Set(
+    relationships
+      .filter(relationship => relationship.toSha256 && relationship.type !== 'playlist')
+      .map(relationship => relationship.toSha256!)
   );
   const assigned = new Set<string>();
   const assets: Asset[] = [];
@@ -406,9 +566,16 @@ export async function projectCatalogAssets(
     const identityValue = event.dTag ? `${event.kind}:${event.author}:${event.dTag}` : event.eventId;
     const assetId = `${pubkey}:${identityType}:${identityValue}`;
     const declaredType = assetTypeFromEvent(event);
-    const inferredType = hlsPlaylistHashes.has(primary)
-      ? 'video'
-      : assetTypeFromMime(blobsByHash.get(primary)?.verifiedMimeType);
+    const isHls = hlsPlaylistHashes.has(primary);
+    const primaryUrl = blobUrlFor(primary, urlsByHash);
+    const facts = mediaFactsFor(primary, mediaFactsByHash);
+    const mimeType = effectiveMimeType({
+      sniffed: facts.sniffedMimeType,
+      reported: blobsByHash.get(primary)?.verifiedMimeType,
+      fromEvent: facts.eventMimeType,
+      url: primaryUrl,
+    });
+    const inferredType = isHls ? 'video' : assetTypeFromMime(mimeType);
     const type =
       (declaredType === 'document' || declaredType === 'unknown') && inferredType !== 'unknown'
         ? inferredType
@@ -421,8 +588,12 @@ export async function projectCatalogAssets(
     );
     const preview = eventReferences.find(item => item.role === 'thumbnail' || item.role === 'image')?.sha256;
     const audioMetadata = type === 'audio' ? audioMetadataFor(primary, audioFactsByHash) : undefined;
-    const title = audioMetadata?.title ?? event.title;
+    const kindLabel = mediaKindLabel(type, mimeType, primaryUrl, isHls);
+    const titleIsFallback = !audioMetadata?.title && event.titleIsFallback;
+    // "Video" from the kind table says less than "HLS video" or "MOV video" does.
+    const title = audioMetadata?.title ?? (titleIsFallback ? kindLabel : event.title);
     const subtitle = audioMetadata ? (audioSubtitle(audioMetadata) ?? event.subtitle) : event.subtitle;
+    const segmentCount = blobHashes.filter(hash => segmentHashes.has(hash)).length;
     assets.push({
       id: assetId,
       pubkey,
@@ -483,13 +654,19 @@ export async function projectCatalogAssets(
         eventAuthor: event.author,
         eventAddress,
         title,
-        titleIsFallback: !audioMetadata?.title && event.titleIsFallback,
+        titleIsFallback,
         subtitle,
-        searchText: `${event.searchText} ${title} ${subtitle ?? ''}`.toLocaleLowerCase(),
+        kindLabel,
+        mimeType,
+        durationSeconds:
+          facts.durationSeconds ?? (isHls ? longestPlaylistDuration(blobHashes, mediaFactsByHash) : undefined),
+        dimensions: facts.dimensions,
+        segmentCount: segmentCount > 0 ? segmentCount : undefined,
+        searchText: `${event.searchText} ${title} ${subtitle ?? ''} ${kindLabel} ${mimeType ?? ''}`.toLocaleLowerCase(),
         dateSource: 'event',
       },
       {
-        primaryUrl: blobUrlFor(primary, urlsByHash),
+        primaryUrl,
         previewUrl: preview ? blobUrlFor(preview, urlsByHash) : undefined,
         blobHashes,
         blobsByHash,
@@ -506,8 +683,21 @@ export async function projectCatalogAssets(
   );
   for (const sha256 of activeHashes) {
     if (assigned.has(sha256) || relationshipChildren.has(sha256) || eventSourcedBlobs.has(sha256)) continue;
+    // No blob row means the file was deleted from its last server and purged -
+    // the membership survives only so event assets can render it as unavailable,
+    // it must not keep a standalone card in the timeline on its own.
     const blob = blobsByHash.get(sha256);
-    const type = hlsPlaylistHashes.has(sha256) ? 'video' : assetTypeFromMime(blob?.verifiedMimeType);
+    if (!blob) continue;
+    const isHls = hlsPlaylistHashes.has(sha256);
+    const primaryUrl = blobUrlFor(sha256, urlsByHash);
+    const facts = mediaFactsFor(sha256, mediaFactsByHash);
+    const mimeType = effectiveMimeType({
+      sniffed: facts.sniffedMimeType,
+      reported: blob?.verifiedMimeType,
+      fromEvent: facts.eventMimeType,
+      url: primaryUrl,
+    });
+    const type = isHls ? 'video' : assetTypeFromMime(mimeType);
     const assetId = `${pubkey}:root-blob:${sha256}`;
     assets.push({
       id: assetId,
@@ -542,13 +732,17 @@ export async function projectCatalogAssets(
       ? 'blob-uploaded'
       : 'first-seen';
     const audioMetadata = type === 'audio' ? audioMetadataFor(sha256, audioFactsByHash) : undefined;
-    const fileName = fileNameFromUrl(urlsByHash.get(sha256)?.[0]?.url);
-    const titleIsFallback = !audioMetadata?.title && !fileName;
-    const title =
-      audioMetadata?.title ??
-      fileName ??
-      (type === 'unknown' ? `Unclassified file ${sha256.slice(0, 8)}` : `${type[0].toUpperCase()}${type.slice(1)}`);
+    const fileName = fileNameFromUrl(primaryUrl);
+    const kindLabel = mediaKindLabel(type, mimeType, primaryUrl, isHls);
+    // Blossom URLs are the file's own hash, so `<hash>.mp4` is not a name a person
+    // chose - it reads as noise on every card. The kind label carries more meaning,
+    // and the card still shows a short hash for identification.
+    const namedByHash = isHashLikeFileName(fileName);
+    const titleIsFallback = !audioMetadata?.title && (!fileName || namedByHash);
+    const title = audioMetadata?.title ?? (namedByHash || !fileName ? kindLabel : fileName);
     const subtitle = audioMetadata ? audioSubtitle(audioMetadata) : undefined;
+    const blobHashes = uniqueHashes(attachedHashes);
+    const segmentCount = blobHashes.filter(hash => segmentHashes.has(hash)).length;
     writeProjection(
       projections,
       pubkey,
@@ -562,12 +756,19 @@ export async function projectCatalogAssets(
         title,
         titleIsFallback,
         subtitle,
-        searchText: `${title} ${subtitle ?? ''} ${sha256} ${blob?.verifiedMimeType ?? ''}`.toLocaleLowerCase(),
+        kindLabel,
+        mimeType,
+        durationSeconds:
+          facts.durationSeconds ?? (isHls ? longestPlaylistDuration(blobHashes, mediaFactsByHash) : undefined),
+        dimensions: facts.dimensions,
+        segmentCount: segmentCount > 0 ? segmentCount : undefined,
+        searchText:
+          `${title} ${subtitle ?? ''} ${sha256} ${kindLabel} ${mimeType ?? ''} ${fileName ?? ''}`.toLocaleLowerCase(),
         dateSource: displayDateSource,
       },
       {
-        primaryUrl: blobUrlFor(sha256, urlsByHash),
-        blobHashes: uniqueHashes(attachedHashes),
+        primaryUrl,
+        blobHashes,
         blobsByHash,
       },
       runStamp
@@ -627,6 +828,48 @@ function audioSubtitle(metadata: AudioMetadata): string | undefined {
   return [metadata.artist, album].filter(Boolean).join(' · ') || undefined;
 }
 
+type MediaFacts = {
+  sniffedMimeType?: string;
+  eventMimeType?: string;
+  dimensions?: string;
+  durationSeconds?: number;
+};
+
+/** Facts a card can show without another fetch: sniffed mime, declared mime, pixel
+    size, and the summed `#EXTINF` duration of an HLS playlist. */
+function mediaFactsFor(sha256: string, factsByHash: Map<string, MetadataFact[]>): MediaFacts {
+  const facts = factsByHash.get(sha256);
+  if (!facts) return {};
+  const find = (namespace: string, field: string) =>
+    facts.find(fact => fact.namespace === namespace && fact.field === field)?.value;
+  const text = (value: string | number | undefined) =>
+    typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  const width = find('image', 'width');
+  const height = find('image', 'height');
+  const duration = find('playlist', 'duration');
+  return {
+    sniffedMimeType: text(find('common', 'mime_type')),
+    eventMimeType: text(find('event', 'mime_type')),
+    dimensions:
+      typeof width === 'number' && typeof height === 'number'
+        ? `${width}×${height}`
+        : text(find('event', 'dimensions'))?.replace('x', '×'),
+    durationSeconds: typeof duration === 'number' && duration > 0 ? Math.round(duration) : undefined,
+  };
+}
+
+/** A master playlist carries no `#EXTINF` of its own - the running time lives on the
+    variant playlists below it, and every variant describes the same content, so the
+    longest one is the item's duration rather than their sum. */
+function longestPlaylistDuration(hashes: string[], factsByHash: Map<string, MetadataFact[]>): number | undefined {
+  let longest = 0;
+  for (const hash of hashes) {
+    const duration = mediaFactsFor(hash, factsByHash).durationSeconds ?? 0;
+    if (duration > longest) longest = duration;
+  }
+  return longest > 0 ? longest : undefined;
+}
+
 function collectDescendants(root: string, childrenByParent: Map<string, Relationship[]>): string[] {
   const result: string[] = [root];
   const seen = new Set<string>([root]);
@@ -663,16 +906,54 @@ function blobSummary(blobHashes: string[], blobsByHash: Map<string, Blob>) {
   };
 }
 
-/** Chunked bulk write: one transaction per chunk keeps memory and lock time bounded. */
+/**
+ * Chunked bulk write: one transaction per chunk keeps memory and lock time bounded.
+ *
+ * Assets and their blob lists are derived from evidence that rarely moves, so a
+ * reprojection rewrote ~17 000 identical rows every time anything at all changed -
+ * seconds of worker time per keystroke-sized event. Only rows that actually differ
+ * are written; projections always are, because they carry the run stamp the timeline
+ * query filters on.
+ */
 async function flushWrites(
   catalog: Catalog,
   writes: { assets: Asset[]; assetBlobs: AssetBlob[]; projections: TimelineProjection[] }
 ): Promise<void> {
   const chunk = 2000;
-  for (let i = 0; i < writes.assets.length; i += chunk)
-    await catalog.store.putMany('asset', writes.assets.slice(i, i + chunk));
-  for (let i = 0; i < writes.assetBlobs.length; i += chunk)
-    await catalog.store.putMany('asset_blob', writes.assetBlobs.slice(i, i + chunk));
+  const [storedAssets, storedAssetBlobs] = await Promise.all([
+    catalog.store.getAll<Asset>('asset'),
+    catalog.store.getAll<AssetBlob>('asset_blob'),
+  ]);
+  const assetsById = new Map(storedAssets.map(asset => [asset.id, asset]));
+  const assetBlobsById = new Map(storedAssetBlobs.map(assetBlob => [assetBlob.id, assetBlob]));
+  // `lastProjectedAt` is bookkeeping no reader consults, so it is deliberately left
+  // out of the comparison - otherwise every row differs on every run.
+  const changedAssets = writes.assets.filter(asset => {
+    const stored = assetsById.get(asset.id);
+    return (
+      !stored ||
+      stored.pubkey !== asset.pubkey ||
+      stored.identityType !== asset.identityType ||
+      stored.identityValue !== asset.identityValue ||
+      stored.assetType !== asset.assetType ||
+      stored.state !== asset.state ||
+      stored.firstSeenAt !== asset.firstSeenAt
+    );
+  });
+  const changedAssetBlobs = writes.assetBlobs.filter(assetBlob => {
+    const stored = assetBlobsById.get(assetBlob.id);
+    return (
+      !stored ||
+      stored.assetId !== assetBlob.assetId ||
+      stored.sha256 !== assetBlob.sha256 ||
+      stored.role !== assetBlob.role ||
+      stored.ordinal !== assetBlob.ordinal
+    );
+  });
+  for (let i = 0; i < changedAssets.length; i += chunk)
+    await catalog.store.putMany('asset', changedAssets.slice(i, i + chunk));
+  for (let i = 0; i < changedAssetBlobs.length; i += chunk)
+    await catalog.store.putMany('asset_blob', changedAssetBlobs.slice(i, i + chunk));
   for (let i = 0; i < writes.projections.length; i += chunk)
     await catalog.store.putMany('timeline_projection', writes.projections.slice(i, i + chunk));
 }
@@ -694,6 +975,11 @@ async function writeProjection(
     title: string;
     titleIsFallback: boolean;
     subtitle?: string;
+    kindLabel: string;
+    mimeType?: string;
+    durationSeconds?: number;
+    dimensions?: string;
+    segmentCount?: number;
     searchText: string;
     dateSource: TimelineProjection['displayDateSource'];
   },
@@ -717,6 +1003,11 @@ async function writeProjection(
     displayTitle: display.title,
     displayTitleIsFallback: display.titleIsFallback,
     displaySubtitle: display.subtitle,
+    displayKindLabel: display.kindLabel,
+    displayMimeType: display.mimeType,
+    displayDurationSeconds: display.durationSeconds,
+    displayDimensions: display.dimensions,
+    segmentCount: display.segmentCount,
     searchText: display.searchText,
     displayDate,
     displayDateSource: display.dateSource,

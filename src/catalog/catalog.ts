@@ -2,6 +2,7 @@ import type { BlobDescriptor } from 'blossom-client-sdk';
 import type { NostrEvent } from 'nostr-tools';
 import { extractHashFromUrl } from '../utils/blossom';
 import { isHlsPlaylistBody, parseHlsPlaylist } from '../utils/hlsPlaylist';
+import { GENERIC_MIME_TYPES, isGenericMimeType, PLAYLIST_MIME_TYPES } from '../utils/mimeTypes';
 import { extractEventReferences, EVENT_EXTRACTOR_VERSION, type EventReference } from './eventReferences';
 import { extractTimelineEventMetadata, type TimelineEventMetadata } from './timelineMetadata';
 
@@ -14,6 +15,14 @@ const HASH_PATTERN = /^[a-f0-9]{64}$/;
  * older version is reprojected once, so the query never has to cope with two shapes.
  */
 export const PROJECTION_VERSION = 1;
+
+/** Bumped when the byte sniffer learns a format it used to shrug at: version 2 knows
+    fMP4 media segments (`styp`/`moof`), which is most of an HLS video. */
+const MIME_EXTRACTOR_VERSION = 2;
+
+/** Bumped when the playlist reader changes in a way that makes an earlier expansion
+    wrong: version 2 reads playlists whose host omits `content-range` in full. */
+const HLS_EXTRACTOR_VERSION = 2;
 
 export type CatalogServerType = 'blossom' | 'nip96';
 export type EvidenceType =
@@ -273,6 +282,10 @@ export interface CatalogStore {
   getAll<T>(store: StoreName): Promise<T[]>;
   /** Records whose index key equals `key`. Compound indexes take an array key. */
   getAllFromIndex<T>(store: StoreName, index: string, key: IDBValidKey): Promise<T[]>;
+  /** Removes one record by primary key. */
+  delete(store: StoreName, key: IDBValidKey): Promise<void>;
+  /** Removes every record from every store. */
+  reset(): Promise<void>;
 }
 
 function request<T>(operation: IDBRequest<T>): Promise<T> {
@@ -338,6 +351,27 @@ export class IndexedDbCatalogStore implements CatalogStore {
     const transaction = db.transaction(store, 'readonly');
     return (await request(transaction.objectStore(store).index(index).getAll(key))) as T[];
   }
+  async delete(store: StoreName, key: IDBValidKey): Promise<void> {
+    const db = await this.database;
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const transaction = db.transaction(store, 'readwrite');
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed'));
+    transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
+    transaction.objectStore(store).delete(key);
+    return promise;
+  }
+  async reset(): Promise<void> {
+    const db = await this.database;
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const transaction = db.transaction(Array.from(db.objectStoreNames), 'readwrite');
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed'));
+    transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
+    for (const name of transaction.objectStoreNames) transaction.objectStore(name).clear();
+    return promise;
+  }
+
   private migrate(db: IDBDatabase, transaction: IDBTransaction, oldVersion: number) {
     if (oldVersion < 1) {
       db.createObjectStore('profile', { keyPath: 'pubkey' });
@@ -426,6 +460,22 @@ export class MemoryCatalogStore implements CatalogStore {
     indexDefinition(store, index);
     const entries = this.getIndex(store, index).get(serializeIndexKey(key));
     return entries ? [...entries.values()].map(value => structuredClone(value) as T) : [];
+  }
+  async delete(store: StoreName, key: IDBValidKey): Promise<void> {
+    const previous = this.getStore(store).get(key);
+    if (previous === undefined) return;
+    this.getStore(store).delete(key);
+    for (const definition of CATALOG_INDEXES) {
+      if (definition.store !== store) continue;
+      // `indexKeyOf` returns the serialized bucket key the put path indexed under.
+      const bucketKey = indexKeyOf(previous, definition.keyPath);
+      if (bucketKey === undefined) continue;
+      this.getIndex(store, definition.name).get(bucketKey)?.delete(key);
+    }
+  }
+  async reset(): Promise<void> {
+    this.stores.clear();
+    this.indexes.clear();
   }
 
   private getStore(name: StoreName) {
@@ -569,6 +619,12 @@ export type BlobPrefixLoader = (
 export class Catalog {
   constructor(readonly store: CatalogStore) {}
 
+  /** The rescan button's wipe: every record goes, and the following server-list
+      ingestion rebuilds the catalog from authoritative listings (ADR-0002/0006). */
+  async reset(): Promise<void> {
+    await this.store.reset();
+  }
+
   async ingestServerList(pubkey: string, input: ServerListInput): Promise<void> {
     const now = Date.now();
     const serverId = normalizeServerUrl(input.server.url);
@@ -672,7 +728,61 @@ export class Catalog {
         reason,
       });
     }
-    if (removals.length > 0) this.changed(pubkey);
+    if (removals.length > 0) {
+      for (const sha256 of new Set(removals.map(removal => removal.sha256))) {
+        await this.purgeBlobIfGoneEverywhere(pubkey, sha256);
+      }
+      this.changed(pubkey);
+    }
+  }
+
+  /**
+   * A blob the delete dialog removed from its last known server is no longer in
+   * the user's catalog: its identity and enrichment rows (blob, server-listed
+   * urls, evidence, extractor results, facts) go. Locations stay: their 'absent'
+   * rows are the direct evidence that lets a surviving event asset project as
+   * 'unavailable' rather than 'unknown', and the prober re-derives them from the
+   * membership anyway. The membership stays too, so an event referencing the
+   * hash keeps rendering; the location history stays as the audit trail.
+   */
+  private async purgeBlobIfGoneEverywhere(pubkey: string, sha256: string): Promise<void> {
+    const locations = await this.store.getAllFromIndex<BlobLocationRecord>('blob_location', 'by_sha256', sha256);
+    // An 'unreachable' or 'unauthorized' server knows something we do not; only
+    // when every known location says 'absent' is the file gone everywhere we know of.
+    if (locations.some(location => location.state !== 'absent')) return;
+    await this.store.delete('blob', sha256);
+    for (const url of await this.store.getAllFromIndex<BlobUrlRecord>('blob_url', 'by_sha256', sha256)) {
+      // URLs declared by the blob's own events or playlist survive: they are part
+      // of that content's knowledge, not of the server listing being withdrawn.
+      if (url.sourceType === 'server') await this.store.delete('blob_url', url.id);
+    }
+    for (const evidence of await this.store.getAllFromIndex<EvidenceRecord>(
+      'profile_blob_evidence',
+      'by_profile_hash',
+      [pubkey, sha256]
+    )) {
+      await this.store.delete('profile_blob_evidence', evidence.evidenceId);
+    }
+    for (const result of await this.store.getAllFromIndex<ExtractorResultRecord>(
+      'extractor_result',
+      'by_sha256',
+      sha256
+    )) {
+      await this.store.delete('extractor_result', result.id);
+    }
+    for (const fact of await this.store.getAllFromIndex<MetadataFactRecord>('metadata_fact', 'by_subject', sha256)) {
+      await this.store.delete('metadata_fact', fact.id);
+    }
+    for (const relationship of await this.store.getAllFromIndex<BlobRelationshipRecord>(
+      'blob_relationship',
+      'by_from_sha256',
+      sha256
+    )) {
+      await this.store.delete('blob_relationship', relationship.id);
+    }
+    for (const job of await this.store.getAll<ReverseLookupJobRecord>('reverse_lookup_job')) {
+      if (job.pubkey === pubkey && job.sha256 === sha256) await this.store.delete('reverse_lookup_job', job.id);
+    }
   }
 
   async ingestUpload(
@@ -862,19 +972,31 @@ export class Catalog {
     pubkey: string,
     rootSha256: string,
     loadPlaylist: HlsPlaylistLoader,
-    limits: HlsExpansionLimits = { maxDepth: 3, maxDescendants: 200 }
+    limits: HlsExpansionLimits = { maxDepth: 3, maxDescendants: 1000 }
   ): Promise<void> {
-    const resultId = `${rootSha256}:hls:1`;
+    const resultId = `${rootSha256}:hls:${HLS_EXTRACTOR_VERSION}`;
     const existing = await this.store.get<ExtractorResultRecord>('extractor_result', resultId);
     if (existing?.state === 'complete') return;
-    const urls = (await this.store.getAll<BlobUrlRecord>('blob_url')).filter(item => item.sha256 === rootSha256);
-    const rootUrl = urls[0]?.url;
+    // An earlier reader stopped at the first kilobyte of a playlist whose host sends
+    // no `content-range`, so its videos were expanded into a handful of segments
+    // instead of hundreds. Those have to be read again - but a previous run that
+    // found nothing proved the file is not a playlist at all, and re-probing every
+    // one of those would cost thousands of pointless requests.
+    const priorRun = await this.store.get<ExtractorResultRecord>('extractor_result', `${rootSha256}:hls:1`);
+    if (priorRun?.state === 'complete' && priorRun.payload && JSON.parse(priorRun.payload).descendants === 0) return;
+    // Reading every blob_url row per playlist candidate turned enrichment into an
+    // O(candidates × urls) scan - 11 000 rows re-read for each of hundreds of
+    // candidates, all of it blocking the worker.
+    const urls = await this.store.getAllFromIndex<BlobUrlRecord>('blob_url', 'by_sha256', rootSha256);
+    // A URL from a server listing is one a server answered for; a URL lifted from an
+    // event or a manifest may name a host that never had the file.
+    const rootUrl = (urls.find(url => url.sourceType === 'server') ?? urls[0])?.url;
     if (!rootUrl) {
       await this.store.put<ExtractorResultRecord>('extractor_result', {
         id: resultId,
         sha256: rootSha256,
         name: 'hls',
-        version: 1,
+        version: HLS_EXTRACTOR_VERSION,
         state: 'failed',
         completedAt: Date.now(),
         error: 'No URL is known for this file',
@@ -885,7 +1007,7 @@ export class Catalog {
       id: resultId,
       sha256: rootSha256,
       name: 'hls',
-      version: 1,
+      version: HLS_EXTRACTOR_VERSION,
       state: 'pending',
     });
     const queue: Array<{ url: string; sha256: string; depth: number }> = [
@@ -929,6 +1051,14 @@ export class Catalog {
                 ? 'active'
                 : 'unresolved';
           await this.recordRelationship(current.sha256, childSha256, child.url, child.type, rootSha256, state);
+          if (state === 'truncated') {
+            // Past the cap only the parent link is kept - that alone is what folds the
+            // segment into its video. A long stream reaches a thousand segments, and
+            // giving each one membership and URL bookkeeping made expansion take
+            // minutes of worker time and left playlists stuck half-done.
+            truncated = true;
+            continue;
+          }
           await this.recordBlobUrl(childSha256, child.url, child.type, 'manifest', rootSha256);
           if (childSha256) {
             await this.ingestBlob(
@@ -944,10 +1074,6 @@ export class Catalog {
               }
             );
           }
-          if (state === 'truncated') {
-            truncated = true;
-            continue;
-          }
           if (child.type === 'playlist')
             queue.push({ url: child.url, sha256: childSha256 ?? current.sha256, depth: current.depth + 1 });
         }
@@ -956,7 +1082,7 @@ export class Catalog {
         id: resultId,
         sha256: rootSha256,
         name: 'hls',
-        version: 1,
+        version: HLS_EXTRACTOR_VERSION,
         state: truncated ? 'truncated' : 'complete',
         payload: JSON.stringify({ descendants }),
         completedAt: Date.now(),
@@ -966,38 +1092,76 @@ export class Catalog {
         id: resultId,
         sha256: rootSha256,
         name: 'hls',
-        version: 1,
+        version: HLS_EXTRACTOR_VERSION,
         state: 'failed',
         completedAt: Date.now(),
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     } finally {
-      this.changed(pubkey);
+      // Every generic-typed file is a playlist candidate, so most calls here find
+      // nothing. Announcing a catalog change anyway made the timeline re-project
+      // thousands of times during a first sync, which is what froze Browse.
+      if (descendants > 0) {
+        // The projection skips itself unless the profile is marked mutated, so an
+        // expansion that folded segments would otherwise stay invisible.
+        await this.touchProfileMutation(pubkey);
+        this.changed(pubkey);
+      }
     }
   }
 
+  /** Returns the mime type the bytes proved, so a caller can act on it - a body that
+      turns out to be an HLS playlist still needs expanding. */
   async enrichBlobPrefix(
+    pubkey: string,
     sha256: string,
     url: string,
     loadPrefix: BlobPrefixLoader,
-    maxBytes = 512 * 1024
-  ): Promise<void> {
-    const resultId = `${sha256}:mime-header:1`;
+    maxBytes = 512 * 1024,
+    // A sweep over thousands of files would otherwise announce a catalog change per
+    // file, and each announcement costs a full reprojection. It batches instead.
+    notify = true
+  ): Promise<string | undefined> {
+    const resultId = `${sha256}:mime-header:${MIME_EXTRACTOR_VERSION}`;
     const existing = await this.store.get<ExtractorResultRecord>('extractor_result', resultId);
-    if (existing?.state === 'complete') return;
+    // A repeat call still answers with what the bytes said last time, so a caller
+    // deciding "is this a playlist?" does not have to re-fetch to find out.
+    if (existing?.state === 'complete')
+      return existing.payload ? (JSON.parse(existing.payload).mimeType as string | undefined) : undefined;
     await this.store.put<ExtractorResultRecord>('extractor_result', {
       id: resultId,
       sha256,
       name: 'mime-header',
-      version: 1,
+      version: MIME_EXTRACTOR_VERSION,
       state: 'pending',
     });
+    let recorded = false;
     try {
       const loaded = await loadPrefix(url, maxBytes);
       const bytes = new Uint8Array(loaded.bytes);
-      const mimeType = loaded.mimeType ?? sniffMimeType(bytes);
-      if (mimeType) await this.recordFact(sha256, 'common', 'mime_type', mimeType, 'string', 'content', resultId);
+      // The header is what left half of a real catalog typed `application/octet-stream`
+      // in the first place. Storing it back as a "content" fact only launders the
+      // server's shrug into evidence, so a generic header is discarded outright.
+      const sniffed = sniffMimeType(bytes);
+      const mimeType = sniffed ?? (isGenericMimeType(loaded.mimeType) ? undefined : loaded.mimeType);
+      if (mimeType) {
+        await this.recordFact(sha256, 'common', 'mime_type', mimeType, 'string', 'content', resultId);
+        recorded = true;
+      }
+      // The fact alone is not enough: it feeds display, while the catalog's own
+      // questions - "which of my files are playlists?" - read the blob record. A
+      // playlist proved by its bytes but left typed `application/octet-stream` here
+      // was never offered for expansion again, and its segments stayed loose.
+      if (sniffed) {
+        const blob = await this.store.get<BlobRecord>('blob', sha256);
+        if (blob && blob.verifiedMimeType !== sniffed)
+          await this.store.put<BlobRecord>('blob', {
+            ...blob,
+            verifiedMimeType: sniffed,
+            lastEnrichedAt: Date.now(),
+          });
+      }
       if (loaded.size !== undefined)
         await this.recordFact(sha256, 'common', 'size', loaded.size, 'number', 'content', resultId);
       const dimensions = imageDimensions(bytes, mimeType);
@@ -1009,11 +1173,12 @@ export class Catalog {
         id: resultId,
         sha256,
         name: 'mime-header',
-        version: 1,
+        version: MIME_EXTRACTOR_VERSION,
         state: 'complete',
         payload: JSON.stringify({ mimeType, truncated: loaded.truncated }),
         completedAt: Date.now(),
       });
+      return mimeType;
     } catch (error) {
       await this.store.put<ExtractorResultRecord>('extractor_result', {
         id: resultId,
@@ -1026,7 +1191,13 @@ export class Catalog {
       });
       throw error;
     } finally {
-      this.changed();
+      // Without the mutation stamp the projection considers itself up to date and
+      // skips - so a file whose type was just proved kept showing as unclassified
+      // until some unrelated write happened to move the stamp.
+      if (recorded) await this.touchProfileMutation(pubkey);
+      // A sniff that read nothing usable changed nothing, and a catalog-changed event
+      // costs a full reprojection - too much to spend on a shrug.
+      if (recorded && notify) this.changed(pubkey);
     }
   }
 
@@ -1050,6 +1221,94 @@ export class Catalog {
       completedAt: Date.now(),
     });
     this.changed();
+  }
+
+  /**
+   * Files the catalog itself considers playlists, whatever their server calls them:
+   * a declared playlist mime, one a byte sniff proved, or an `.m3u8` URL.
+   *
+   * Discovery must come from the catalog, not from a server listing. A playlist
+   * known only from an event or from another manifest never appears in any listing,
+   * so scanning listings left those unexpanded - and their segments loose in the
+   * timeline forever.
+   */
+  async queryPlaylistHashes(): Promise<string[]> {
+    const [blobs, urls] = await Promise.all([
+      this.store.getAll<BlobRecord>('blob'),
+      this.store.getAll<BlobUrlRecord>('blob_url'),
+    ]);
+    const byMime = blobs
+      .filter(blob => blob.verifiedMimeType && PLAYLIST_MIME_TYPES[blob.verifiedMimeType.toLowerCase()])
+      .map(blob => blob.sha256);
+    const byExtension = urls.filter(url => url.sha256 && /\.m3u8?($|[?#])/i.test(url.url)).map(url => url.sha256!);
+    return [...new Set([...byMime, ...byExtension])];
+  }
+
+  /**
+   * Files nothing has explained yet: the server called them binary (or said nothing),
+   * and their first bytes have never been read. One read settles both questions a
+   * timeline has about them - what the file is, and whether it is a playlist whose
+   * segments belong folded into it.
+   *
+   * A file that is already some playlist's child is skipped: it is shown as part of
+   * that item, never as an entry of its own, so nothing on screen depends on knowing
+   * what it is. In the catalog this was measured to remove two thirds of the queue.
+   *
+   * Smallest first: a playlist is text and text is small, so the cheap answers and
+   * the ones that can collapse whole groups of entries come back first.
+   */
+  async queryUnidentifiedBlobs(
+    pubkey: string,
+    maxSize = 512 * 1024,
+    limit = 5000
+  ): Promise<Array<{ sha256: string; url: string }>> {
+    const [memberships, blobs, urls, results, relationships] = await Promise.all([
+      this.store.getAll<MembershipRecord>('profile_blob_membership'),
+      this.store.getAll<BlobRecord>('blob'),
+      this.store.getAll<BlobUrlRecord>('blob_url'),
+      this.store.getAll<ExtractorResultRecord>('extractor_result'),
+      this.store.getAll<BlobRelationshipRecord>('blob_relationship'),
+    ]);
+    const folded = new Set(
+      relationships.flatMap(relationship => (relationship.toSha256 ? [relationship.toSha256] : []))
+    );
+    const active = new Set(
+      memberships.filter(item => item.pubkey === pubkey && item.status === 'active').map(item => item.sha256)
+    );
+    // Version matters: a result from an older sniffer is not an answer any more, and
+    // treating it as one is what left already-read files permanently unexplained.
+    const identified = new Set(
+      results
+        .filter(
+          result =>
+            result.name === 'mime-header' && result.state === 'complete' && result.version === MIME_EXTRACTOR_VERSION
+        )
+        .map(result => result.sha256)
+    );
+    const urlsByHash = new Map<string, BlobUrlRecord[]>();
+    for (const url of urls) {
+      if (!url.sha256 || !/^https?:\/\//.test(url.url)) continue;
+      const bucket = urlsByHash.get(url.sha256);
+      if (bucket) bucket.push(url);
+      else urlsByHash.set(url.sha256, [url]);
+    }
+    return blobs
+      .filter(
+        blob =>
+          active.has(blob.sha256) &&
+          !identified.has(blob.sha256) &&
+          !folded.has(blob.sha256) &&
+          (!blob.verifiedMimeType || GENERIC_MIME_TYPES[blob.verifiedMimeType.split(';', 1)[0].trim().toLowerCase()]) &&
+          (blob.verifiedSize === undefined || blob.verifiedSize <= 0 || blob.verifiedSize <= maxSize)
+      )
+      .sort((a, b) => (a.verifiedSize ?? 0) - (b.verifiedSize ?? 0))
+      .flatMap(blob => {
+        const candidates = urlsByHash.get(blob.sha256);
+        if (!candidates) return [];
+        const url = (candidates.find(item => item.sourceType === 'server') ?? candidates[0]).url;
+        return [{ sha256: blob.sha256, url }];
+      })
+      .slice(0, limit);
   }
 
   async getCatalogStatus(pubkey: string): Promise<CatalogStatus> {
@@ -1375,12 +1634,12 @@ export class Catalog {
 
   private async touchProfileSync(pubkey: string) {
     const profile = await this.store.get<ProfileRecord>('profile', pubkey);
-    if (profile)
-      await this.store.put<ProfileRecord>('profile', {
-        ...profile,
-        lastSyncAt: Date.now(),
-        lastMutationAt: Date.now(),
-      });
+    if (!profile) return;
+    await this.store.put<ProfileRecord>('profile', {
+      ...profile,
+      lastSyncAt: Date.now(),
+      lastMutationAt: nextMutationStamp(profile),
+    });
   }
 
   /**
@@ -1436,10 +1695,22 @@ export class Catalog {
 
   private async touchProfileMutation(pubkey: string) {
     const profile = await this.store.get<ProfileRecord>('profile', pubkey);
-    if (profile && (profile.lastMutationAt ?? 0) < Date.now()) {
-      await this.store.put<ProfileRecord>('profile', { ...profile, lastMutationAt: Date.now() });
-    }
+    if (!profile) return;
+    const lastMutationAt = nextMutationStamp(profile);
+    if (lastMutationAt !== profile.lastMutationAt)
+      await this.store.put<ProfileRecord>('profile', { ...profile, lastMutationAt });
   }
+}
+
+/**
+ * A wall-clock millisecond is too coarse to order a mutation against a projection
+ * that starts in the same one: `isProjectionStale` reads `lastMutationAt >
+ * lastProjectedAt`, and `markProjectionComplete` stamps run *start* so mid-run
+ * mutations count as newer. A mutation must therefore outrank not only the last
+ * mutation but also the last projection start, not merely tick with the clock.
+ */
+function nextMutationStamp(profile: ProfileRecord): number {
+  return Math.max(Date.now(), (profile.lastMutationAt ?? 0) + 1, (profile.lastProjectedAt ?? 0) + 1);
 }
 function timestampInMilliseconds(value: number | undefined): number | undefined {
   if (!value || !Number.isFinite(value)) return undefined;
@@ -1450,14 +1721,43 @@ function descriptorFromReference(reference: EventReference): BlobDescriptor {
   return { sha256: reference.sha256!, url: reference.url ?? '', type: '', size: 0, uploaded: 0 };
 }
 
+/** Magic-byte sniffing for the formats a media catalog actually holds. PNG/JPEG/GIF
+    alone left every MP4, fMP4 segment, WebM and WebP typed `unknown`, which is most
+    of what a Blossom server serves as `application/octet-stream`. */
 function sniffMimeType(bytes: Uint8Array): string | undefined {
+  const ascii = (start: number, end: number) => String.fromCharCode(...bytes.slice(start, end));
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
     return 'image/png';
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
-  if (bytes.length >= 6 && String.fromCharCode(...bytes.slice(0, 6)) === 'GIF87a') return 'image/gif';
-  if (bytes.length >= 6 && String.fromCharCode(...bytes.slice(0, 6)) === 'GIF89a') return 'image/gif';
-  if (bytes.length >= 5 && String.fromCharCode(...bytes.slice(0, 5)) === '%PDF-') return 'application/pdf';
-  if (bytes.length >= 3 && String.fromCharCode(...bytes.slice(0, 3)) === 'ID3') return 'audio/mpeg';
+  if (bytes.length >= 6 && (ascii(0, 6) === 'GIF87a' || ascii(0, 6) === 'GIF89a')) return 'image/gif';
+  if (bytes.length >= 5 && ascii(0, 5) === '%PDF-') return 'application/pdf';
+  if (bytes.length >= 3 && ascii(0, 3) === 'ID3') return 'audio/mpeg';
+  // ISO base media: `....ftyp<brand>`. fMP4 HLS segments and MOV land here too.
+  if (bytes.length >= 12 && ascii(4, 8) === 'ftyp') {
+    const brand = ascii(8, 12);
+    if (brand === 'qt  ') return 'video/quicktime';
+    if (brand.startsWith('M4A')) return 'audio/mp4';
+    if (brand === 'avif' || brand === 'avis') return 'image/avif';
+    if (brand.startsWith('hei') || brand.startsWith('hev')) return 'image/heic';
+    return 'video/mp4';
+  }
+  // Only an fMP4 *init* segment carries `ftyp`. A media segment starts at `styp`,
+  // `moof` or `sidx`, which is why 862 of the first 908 sniffs in a real catalog came
+  // back as "still binary" - they were the segments of HLS videos.
+  if (bytes.length >= 8 && ['styp', 'moof', 'sidx', 'mdat'].includes(ascii(4, 8))) return 'video/iso.segment';
+  if (bytes.length >= 8 && ascii(4, 8) === 'moov') return 'video/mp4';
+  if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3)
+    return 'video/webm';
+  if (bytes.length >= 12 && ascii(0, 4) === 'RIFF') {
+    if (ascii(8, 12) === 'WEBP') return 'image/webp';
+    if (ascii(8, 12) === 'WAVE') return 'audio/wav';
+  }
+  if (bytes.length >= 4 && ascii(0, 4) === 'OggS') return 'audio/ogg';
+  if (bytes.length >= 4 && ascii(0, 4) === 'fLaC') return 'audio/flac';
+  if (bytes.length >= 7 && ascii(0, 7) === '#EXTM3U') return 'application/vnd.apple.mpegurl';
+  // MPEG-TS has no magic string; it is 188-byte packets each starting with 0x47.
+  if (bytes.length > 188 && bytes[0] === 0x47 && bytes[188] === 0x47) return 'video/mp2t';
+  if (bytes.length >= 2 && ascii(0, 2) === 'BM') return 'image/bmp';
   return undefined;
 }
 

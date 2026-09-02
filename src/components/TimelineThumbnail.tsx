@@ -20,9 +20,7 @@ function proxiedThumbnailUrl(url: string, authorPubkey?: string, knownServers: r
     // Other servers the user's own listing already confirmed hold this blob. Most
     // useful for a mirrored blob whose event was posted by someone else, where the
     // URL's host is a stranger and the confirmed server is the one worth trying next.
-    const hosts = [...new Set([blossom.host, ...knownServers])].filter(
-      host => !isUnsupportedThumbnailHost(host)
-    );
+    const hosts = [...new Set([blossom.host, ...knownServers])].filter(host => !isUnsupportedThumbnailHost(host));
     // Nothing left to point the proxy at; the plain URL is the next fallback source.
     if (hosts.length === 0) return url;
     const filename = blossom.ext ? `${blossom.sha256}.${blossom.ext}` : blossom.sha256;
@@ -45,7 +43,6 @@ function parseBlossomUrl(url: string): { sha256: string; ext?: string; host: str
   }
 }
 
-
 type ThumbnailSource = {
   url: string;
   kind: 'image' | 'video';
@@ -64,7 +61,12 @@ function sourcesFor(item: ThumbnailItem, knownServersFor: KnownServersFor): Thum
   if (item.displayType === 'image') {
     const imageUrl = item.previewUrl ?? item.primaryUrl;
     const sha256 = item.previewUrl ? item.previewBlobSha256 : item.primaryBlobSha256;
-    return imageUrl ? [{ url: proxied(imageUrl, sha256), kind: 'image' }, { url: imageUrl, kind: 'image' }] : [];
+    return imageUrl
+      ? [
+          { url: proxied(imageUrl, sha256), kind: 'image' },
+          { url: imageUrl, kind: 'image' },
+        ]
+      : [];
   }
   if (item.displayType === 'video') {
     const previewSources = item.previewUrl
@@ -87,9 +89,14 @@ const NO_KNOWN_SERVERS: KnownServersFor = () => [];
 export function TimelineThumbnail({
   item,
   knownServersFor = NO_KNOWN_SERVERS,
+  fill = false,
 }: {
   item: ThumbnailItem & Pick<TimelineProjection, 'displayTitle'>;
   knownServersFor?: KnownServersFor;
+  /** Fill the parent box (square timeline card) instead of rendering the inline
+      16:9 box: the image is contained and a blurred copy of itself backs it, so
+      portrait and landscape media both read as a full-bleed square. */
+  fill?: boolean;
 }) {
   const sources = useMemo(() => sourcesFor(item, knownServersFor), [item, knownServersFor]);
   // Content, not array identity: `item` is rebuilt on every background catalog
@@ -109,14 +116,49 @@ export function TimelineThumbnail({
   // measures this element's height, and a thumbnail that disappears while every
   // source is still being tried (or has failed for good) shrinks the row, which
   // is what was making the list jump and the scroll position drift.
+  if (!fill) {
+    return (
+      <div className="mb-2 flex aspect-video items-center justify-center overflow-hidden border bg-muted">
+        {source ? (
+          <img
+            key={source.url}
+            src={source.url}
+            // Empty on purpose: the card names the item right below this box, so a
+            // decorative preview repeating that name only spills text across the tile
+            // while the image is still loading or has failed.
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            onError={() => setSourceIndex(index => index + 1)}
+          />
+        ) : (
+          <ImageOff className="h-6 w-6 text-muted-foreground/50" aria-label="Thumbnail unavailable" />
+        )}
+      </div>
+    );
+  }
   return (
-    <div className="mb-2 flex aspect-video items-center justify-center overflow-hidden border bg-muted">
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-muted">
+      {/* Blurred copy of the same source fills the square behind the contained
+          image. Same URL as the main image, so the browser fetches it once; no
+          onError here - the main image below drives the fallback chain, and a
+          second handler would skip a source on every failure. */}
+      {source && (
+        <img
+          key={`backdrop-${source.url}`}
+          src={source.url}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
+          loading="lazy"
+        />
+      )}
       {source ? (
         <img
           key={source.url}
           src={source.url}
-          alt={`${item.displayTitle} ${source.kind === 'video' ? 'video frame' : 'thumbnail'}`}
-          className="h-full w-full object-cover"
+          alt=""
+          className="relative h-full w-full object-contain"
           loading="lazy"
           onError={() => setSourceIndex(index => index + 1)}
         />

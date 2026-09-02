@@ -204,7 +204,10 @@ function drainId3Queue() {
   }
 }
 
-export function queueId3Tag(blobHash: string, blobUrl: string): Promise<{ id3: ID3Tag; coverFull?: string } | undefined> {
+export function queueId3Tag(
+  blobHash: string,
+  blobUrl: string
+): Promise<{ id3: ID3Tag; coverFull?: string } | undefined> {
   const existing = queuedId3Loads.get(blobHash);
   if (existing) return existing;
   const pending = new Promise<{ id3: ID3Tag; coverFull?: string } | undefined>((resolve, reject) => {
@@ -232,7 +235,8 @@ export const fetchId3Tag = async (
   if (!file) return undefined;
 
   let id3Tag = await fromFile(file).catch(() => undefined);
-  if (!id3Tag && !localFile && blobUrl) id3Tag = await fromFile(await fullAudioFile(blobUrl, blobHash)).catch(() => undefined);
+  if (!id3Tag && !localFile && blobUrl)
+    id3Tag = await fromFile(await fullAudioFile(blobUrl, blobHash)).catch(() => undefined);
   let imageBlobUrl: string | undefined;
 
   if (id3Tag) {
@@ -252,10 +256,7 @@ export const fetchId3Tag = async (
       }
     }
 
-    
-
     await saveID3TagToDB(db, blobHash, tagResult);
     return { id3: tagResult, coverFull: imageBlobUrl };
   }
-  
 };

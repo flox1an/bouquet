@@ -69,14 +69,14 @@ export async function fetchBlossomList(
   return collectBlossomListPages(
     cursor => listBlobs(serverUrl, pubkey, { auth: listAuthEvent, cursor, limit: BLOSSOM_LIST_PAGE_SIZE }),
     onProgress,
-    BLOSSOM_LIST_PAGE_SIZE,
+    BLOSSOM_LIST_PAGE_SIZE
   );
 }
 
 export async function collectBlossomListPages(
   loadPage: BlossomListPageLoader,
   onProgress?: (progress: BlossomListProgress) => Promise<void> | void,
-  expectedPageSize?: number,
+  expectedPageSize?: number
 ): Promise<BlobDescriptor[]> {
   const allBlobs: BlobDescriptor[] = [];
   const seenHashes = new Set<string>();
@@ -218,7 +218,7 @@ export const mirrordBlossomBlob = async (
   signal?: AbortSignal
 ) => {
   const hash = extractHashFromUrl(sourceUrl);
-  
+
   if (!hash) throw 'The soureUrl does not contain a blossom hash.';
 
   const mirrorAuth = await createMirrorAuth(signEventTemplate, hash);
@@ -232,9 +232,7 @@ export const mirrordBlossomBlob = async (
     `${targetServer}/mirror`,
     { url: sourceUrl },
     {
-      headers: mirrorAuth
-        ? { ...headers, authorization: encodeAuthorizationHeader(mirrorAuth) }
-        : headers,
+      headers: mirrorAuth ? { ...headers, authorization: encodeAuthorizationHeader(mirrorAuth) } : headers,
       signal,
     }
   );

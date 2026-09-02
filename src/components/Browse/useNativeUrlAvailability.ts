@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { getCatalogClient } from '../../catalog/catalogClient';
 import { probeNativeUrl } from '../../catalog/availabilityFetch';
+import { identifyVisibleBlob } from '../../catalog/identifyBlobs';
 import type { TimelineItem } from './browseConstants';
 
 /**
@@ -17,7 +18,7 @@ import type { TimelineItem } from './browseConstants';
  */
 export function useNativeUrlAvailabilityCheck(
   pubkey: string | undefined,
-  item: Pick<TimelineItem, 'primaryBlobSha256' | 'availabilityState'>
+  item: Pick<TimelineItem, 'primaryBlobSha256' | 'availabilityState' | 'displayType' | 'primaryUrl'>
 ): void {
   const checked = useRef(false);
 
@@ -28,4 +29,12 @@ export function useNativeUrlAvailabilityCheck(
       .refreshEventUrlAvailability(pubkey, probeNativeUrl, 5, [item.primaryBlobSha256])
       .catch(() => undefined);
   }, [pubkey, item.primaryBlobSha256, item.availabilityState]);
+
+  // Servers report `application/octet-stream` for most of a real catalog, which is
+  // what leaves a card saying "Unclassified file" with no thumbnail. A background
+  // sweep works through all of them, but what is on screen jumps that queue.
+  useEffect(() => {
+    if (!pubkey || item.displayType !== 'unknown' || !item.primaryBlobSha256 || !item.primaryUrl) return;
+    identifyVisibleBlob(pubkey, item.primaryBlobSha256, item.primaryUrl);
+  }, [pubkey, item.displayType, item.primaryBlobSha256, item.primaryUrl]);
 }

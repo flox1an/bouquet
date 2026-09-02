@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
+import pLimit from 'p-limit';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { useNostr } from '../utils/nostr';
 import { nip19 } from 'nostr-tools';
@@ -8,7 +9,6 @@ import { fetchBlossomList } from './blossom';
 import { fetchNip96List } from './nip96';
 import { getCatalogClient } from '../catalog/catalogClient';
 import { fetchHlsPlaylist } from '../catalog/enrichmentFetch';
-import { isPlaylistCandidate } from './hlsPlaylist';
 
 export interface ServerInfo extends Server {
   virtual: boolean;
@@ -29,6 +29,10 @@ type SupportedFeatures = {
   [key: string]: { mirror?: boolean };
 };
 
+/** Shared by every mount and every run: playlist expansion is worker-bound, and the
+    worker serialises anyway, so more than a few in flight only adds latency. */
+const expansionLimit = pLimit(4);
+
 const mergeBlobs = (
   baseBlobs: BlobDescriptor[],
   newBlobs: BlobDescriptor[],
@@ -44,10 +48,31 @@ const mergeBlobs = (
   return result;
 };
 
+/** Content hash of every server listing plus the rescan counter. The counter makes
+    a rescan that returns byte-identical listings still re-run ingestion and playlist
+    expansion - mandatory once the button has wiped the catalog. */
+const catalogSyncKeyFor = (
+  pubkey: string | undefined,
+  servers: Server[],
+  results: Array<{ error: unknown; isError: boolean; data?: BlobDescriptor[] }>,
+  rescanCount: number
+): string =>
+  JSON.stringify({
+    pubkey,
+    rescanCount,
+    lists: servers.map((server, index) => ({
+      server,
+      error: results[index].error instanceof Error ? results[index].error.message : undefined,
+      isError: results[index].isError,
+      blobs: results[index].data?.map(blob => [blob.sha256, blob.size, blob.type]),
+    })),
+  });
+
 export const useServerInfo = () => {
   const { servers } = useUserServers();
   const { user, signEventTemplate } = useNostr();
   const [features, setFeatures] = useState<SupportedFeatures>({});
+  const [rescanCount, setRescanCount] = useState(0);
 
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string); // TODO validate type
 
@@ -82,58 +107,66 @@ export const useServerInfo = () => {
   });
 
   const catalogSyncKey = useMemo(
-    () =>
-      JSON.stringify({
-        pubkey,
-        lists: servers.map((server, index) => ({
-          server,
-          error: blobs[index].error instanceof Error ? blobs[index].error.message : undefined,
-          isError: blobs[index].isError,
-          blobs: blobs[index].data?.map(blob => [blob.sha256, blob.size, blob.type]),
-        })),
-      }),
-    [blobs, pubkey, servers]
+    () => catalogSyncKeyFor(pubkey, servers, blobs, rescanCount),
+    [blobs, pubkey, rescanCount, servers]
   );
   const ingestedCatalogSyncKey = useRef<string | undefined>(undefined);
+
+  const ingestServerLists = useCallback(
+    (results = blobs) =>
+      Promise.all(
+        servers.map((server, index) => {
+          const result = results[index];
+          const state =
+            server.name === 'nostr.build'
+              ? 'unsupported'
+              : result.isError
+                ? 'failed'
+                : result.data
+                  ? 'complete'
+                  : 'pending';
+          return getCatalogClient().ingestServerList(pubkey!, {
+            server: { url: server.url, type: server.type },
+            blobs: result.data,
+            state,
+            error: result.error instanceof Error ? result.error.message : undefined,
+            full: state === 'complete',
+          });
+        })
+      ),
+    [blobs, pubkey, servers]
+  );
 
   useEffect(() => {
     if (!pubkey || ingestedCatalogSyncKey.current === catalogSyncKey) return;
     ingestedCatalogSyncKey.current = catalogSyncKey;
-    void Promise.all(
-      servers.map((server, index) => {
-        const result = blobs[index];
-        const state =
-          server.name === 'nostr.build'
-            ? 'unsupported'
-            : result.isError
-              ? 'failed'
-              : result.data
-                ? 'complete'
-                : 'pending';
-        return getCatalogClient().ingestServerList(pubkey, {
-          server: { url: server.url, type: server.type },
-          blobs: result.data,
-          state,
-          error: result.error instanceof Error ? result.error.message : undefined,
-          full: state === 'complete',
-        });
-      })
-    );
-  }, [blobs, catalogSyncKey, pubkey, servers]);
+    void ingestServerLists();
+  }, [catalogSyncKey, ingestServerLists, pubkey]);
 
+  const expandedCatalogSyncKey = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (!pubkey) return;
-    const playlistRoots = servers.flatMap((server, index) =>
-      (blobs[index].data ?? []).filter(isPlaylistCandidate).map(blob => ({ blob, server }))
-    );
-    void Promise.all(
-      playlistRoots.map(({ blob }) =>
-        getCatalogClient()
-          .enrichHls(pubkey, blob.sha256, fetchHlsPlaylist)
-          .catch(() => undefined)
-      )
-    );
-  }, [blobs, catalogSyncKey, pubkey, servers]);
+    if (!pubkey || expandedCatalogSyncKey.current === catalogSyncKey) return;
+    expandedCatalogSyncKey.current = catalogSyncKey;
+    // Candidates come from the catalog, not from the listings this hook just ingested:
+    // a playlist known only from an event or from another manifest appears in no
+    // listing, and scanning listings left exactly those unexpanded. Files nothing has
+    // typed yet are handled by the identification sweep, which reads their bytes.
+    //
+    // `useQueries` hands back a fresh array on every render, so without the key guard
+    // this fired on each one and started the whole candidate list again - hundreds of
+    // expansions in flight at once, a saturated worker, and playlists left `pending`
+    // for minutes. The limiter is module-level for the same reason: a per-run limiter
+    // bounds only its own batch.
+    void (async () => {
+      const catalog = getCatalogClient();
+      const playlists = await catalog.queryPlaylistHashes().catch(() => [] as string[]);
+      await Promise.all(
+        playlists.map(sha256 =>
+          expansionLimit(() => catalog.enrichHls(pubkey, sha256, fetchHlsPlaylist).catch(() => undefined))
+        )
+      );
+    })();
+  }, [catalogSyncKey, pubkey]);
 
   const setMirrorSupported = (serverName: string, supported: boolean) => {
     setFeatures(f => ({ ...f, [serverName]: { ...f[serverName], mirror: supported } }));
@@ -210,7 +243,16 @@ export const useServerInfo = () => {
     return dict;
   }, [servers, serverInfo]);
 
-  const rescan = () => Promise.all(blobs.map(query => query.refetch()));
+  const rescan = async () => {
+    await getCatalogClient().reset();
+    const results = await Promise.all(blobs.map(query => query.refetch()));
+    // Rebuild deterministically before announcing: the awaited ingest means the
+    // playlist-expansion effect re-run by the counter below reads a fully
+    // re-ingested catalog instead of racing it.
+    await ingestServerLists(results);
+    ingestedCatalogSyncKey.current = catalogSyncKeyFor(pubkey, servers, results, rescanCount + 1);
+    setRescanCount(count => count + 1);
+  };
 
   return { serverInfo: allServersAggregation, distribution, setMirrorSupported, rescan };
 };

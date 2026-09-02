@@ -292,7 +292,7 @@ describe('user blob catalog', () => {
     new DataView(png.buffer).setUint32(16, 640);
     await catalog.ingestId3(hashC, { title: 'Track', artist: 'Artist' });
     new DataView(png.buffer).setUint32(20, 480);
-    await catalog.enrichBlobPrefix(hashC, `https://cdn.example/${hashC}.png`, async () => ({
+    await catalog.enrichBlobPrefix(pubkey, hashC, `https://cdn.example/${hashC}.png`, async () => ({
       bytes: png.buffer,
       size: 24,
       truncated: false,
@@ -429,6 +429,8 @@ describe('user blob catalog', () => {
     await projectCatalogAssets(catalog, pubkey, { force: true });
     const afterDelete = await queryCatalogTimeline(catalog, pubkey);
     expect(afterDelete[0]).toMatchObject({ replicaCount: 1, availabilityState: 'complete' });
+    // Still present on two.example, so the blob stays in the catalog.
+    expect(await store.get('blob', hashA)).toBeDefined();
 
     // Deleting on the last remaining server drops it to unavailable, not "unknown" -
     // the catalog has direct evidence it is gone everywhere, not merely unchecked.
@@ -436,16 +438,57 @@ describe('user blob catalog', () => {
     await projectCatalogAssets(catalog, pubkey, { force: true });
     const afterBothDeleted = await queryCatalogTimeline(catalog, pubkey);
     expect(afterBothDeleted[0]).toMatchObject({ replicaCount: 0, availabilityState: 'unavailable' });
+    // Gone from every known server: the blob itself leaves the catalog - identity
+    // and enrichment rows go, while the membership keeps the event asset rendering
+    // as unavailable and the locations keep proving it is absent, not unchecked.
+    expect(await store.get('blob', hashA)).toBeUndefined();
+    expect(await store.getAllFromIndex('blob_url', 'by_sha256', hashA)).toHaveLength(0);
+    expect(await store.getAll('profile_blob_evidence')).toHaveLength(0);
+    expect(await store.getAll('profile_blob_membership')).toHaveLength(1);
+    expect(await store.getAllFromIndex('blob_location', 'by_sha256', hashA)).toHaveLength(2);
 
-    const history = await store.getAll<{ sha256: string; serverId: string; previousState?: string; newState: string; reason?: string }>(
-      'blob_location_history'
-    );
+    const history = await store.getAll<{
+      sha256: string;
+      serverId: string;
+      previousState?: string;
+      newState: string;
+      reason?: string;
+    }>('blob_location_history');
     expect(history).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ sha256: hashA, serverId: 'https://one.example', previousState: 'present', newState: 'absent' }),
-        expect.objectContaining({ sha256: hashA, serverId: 'https://two.example', previousState: 'present', newState: 'absent' }),
+        expect.objectContaining({
+          sha256: hashA,
+          serverId: 'https://one.example',
+          previousState: 'present',
+          newState: 'absent',
+        }),
+        expect.objectContaining({
+          sha256: hashA,
+          serverId: 'https://two.example',
+          previousState: 'present',
+          newState: 'absent',
+        }),
       ])
     );
+  });
+  it('drops the timeline card of an unpublished blob deleted from its last server', async () => {
+    const store = new MemoryCatalogStore();
+    const catalog = new Catalog(store);
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://one.example', type: 'blossom' },
+      blobs: [blob(hashA)],
+      state: 'complete',
+    });
+    await projectCatalogAssets(catalog, pubkey, { force: true });
+    expect(await queryCatalogTimeline(catalog, pubkey)).toHaveLength(1);
+
+    await catalog.recordBlobsRemoved(pubkey, [{ sha256: hashA, serverUrl: 'https://one.example' }]);
+    expect(await store.get('blob', hashA)).toBeUndefined();
+
+    // No event references the hash, so with the blob row gone nothing anchors a
+    // card for it anymore: the run stamp retires the root-blob projection.
+    await projectCatalogAssets(catalog, pubkey, { force: true });
+    expect(await queryCatalogTimeline(catalog, pubkey)).toHaveLength(0);
   });
   it('removing a file directly on the server drops it from the filter once the full list is rescanned', async () => {
     const catalog = new Catalog(new MemoryCatalogStore());
@@ -476,6 +519,28 @@ describe('user blob catalog', () => {
     expect(assetIds).toHaveLength(1);
     expect(assetIds[0]).toBe(`${pubkey}:immutable-event:asset-a`);
   });
+  it('resets to an empty catalog and rebuilds from the listings on rescan', async () => {
+    const catalog = new Catalog(new MemoryCatalogStore());
+    const listing = {
+      server: { url: 'https://one.example', type: 'blossom' as const },
+      blobs: [blob(hashA)],
+      state: 'complete' as const,
+      full: true,
+    };
+    await catalog.ingestServerList(pubkey, listing);
+    expect((await catalog.getCatalogStatus(pubkey)).knownHashes).toBe(1);
+
+    await catalog.reset();
+    const wiped = await catalog.getCatalogStatus(pubkey);
+    expect(wiped.knownHashes).toBe(0);
+    expect(wiped.serverLists).toEqual([]);
+    expect(await catalog.queryPlaylistHashes()).toEqual([]);
+
+    // The rescan re-ingests the same listing; the wiped catalog accepts it whole.
+    await catalog.ingestServerList(pubkey, listing);
+    expect((await catalog.getCatalogStatus(pubkey)).knownHashes).toBe(1);
+  });
+
   it('marks a directly referenced native URL as available without treating it as a transferable replica', async () => {
     const catalog = new Catalog(new MemoryCatalogStore());
     const nativeUrl = `https://native.example/${hashA}.mp4`;
@@ -709,8 +774,14 @@ describe('user blob catalog', () => {
       state: 'complete',
     });
     await projectCatalogAssets(catalog, pubkey);
+    // A file named after its own hash is not a name: the kind label stands in until
+    // ID3 supplies a real one.
     expect(await queryCatalogTimeline(catalog, pubkey, { types: ['audio'] })).toEqual([
-      expect.objectContaining({ displayTitle: `${hashA}.mp3` }),
+      expect.objectContaining({
+        displayTitle: 'MP3 audio',
+        displayTitleIsFallback: true,
+        displayKindLabel: 'MP3 audio',
+      }),
     ]);
 
     await catalog.ingestId3(hashA, { title: 'Track title', artist: 'Artist name', album: 'Album name', year: '2026' });
@@ -740,8 +811,119 @@ describe('user blob catalog', () => {
     await projectCatalogAssets(catalog, pubkey);
 
     expect(await queryCatalogTimeline(catalog, pubkey, { types: ['video'] })).toEqual([
-      expect.objectContaining({ displayType: 'video', primaryBlobSha256: hashA, blobCount: 3, totalBlobSize: 600 }),
+      expect.objectContaining({
+        displayType: 'video',
+        primaryBlobSha256: hashA,
+        blobCount: 3,
+        totalBlobSize: 600,
+        displayKindLabel: 'HLS video',
+        // Master playlist + variant playlist + one segment: a card must be able to
+        // say "1 playlist + 1 segment" instead of "3 files".
+        segmentCount: 1,
+        displayDurationSeconds: 4,
+      }),
     ]);
+  });
+
+  it('finds playlist candidates the server listings never mention', async () => {
+    const catalog = new Catalog(new MemoryCatalogStore());
+    // hashA is on a server and typed as binary; hashB is known only from an event's
+    // .m3u8 URL, so a scan over server listings would never offer it for expansion.
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://cdn.example', type: 'blossom' },
+      blobs: [{ sha256: hashA, url: `https://cdn.example/${hashA}`, type: '', size: 300, uploaded: 0 }],
+      state: 'complete',
+    });
+    await catalog.ingestAuthoredEvents(
+      pubkey,
+      [
+        event(
+          'hls-event',
+          100,
+          [
+            ['x', hashB],
+            ['url', `https://cdn.example/${hashB}.m3u8`],
+          ],
+          '',
+          21
+        ),
+      ],
+      'wss://relay.example'
+    );
+
+    expect(await catalog.queryPlaylistHashes()).toEqual([hashB]);
+
+    // Nothing has read hashA's bytes, so it is offered for identification; the
+    // playlist's own segments are not, being neither generic nor unexplained.
+    const unidentified = await catalog.queryUnidentifiedBlobs(pubkey);
+    expect(unidentified.map(item => item.sha256)).toContain(hashA);
+
+    const playlist = new Uint8Array(new TextEncoder().encode('#EXTM3U\n#EXTINF:4,\n'));
+    await catalog.enrichBlobPrefix(pubkey, hashA, `https://cdn.example/${hashA}`, async () => ({
+      bytes: playlist.buffer,
+      mimeType: 'application/octet-stream',
+      size: 300,
+      truncated: false,
+    }));
+
+    // The bytes reclassify it, which is what brings it back as a playlist candidate,
+    // and it drops out of the identification queue.
+    expect((await catalog.queryPlaylistHashes()).sort()).toEqual([hashA, hashB].sort());
+    expect((await catalog.queryUnidentifiedBlobs(pubkey)).map(item => item.sha256)).not.toContain(hashA);
+  });
+
+  it('types and names files the server only describes as application/octet-stream', async () => {
+    const catalog = new Catalog(new MemoryCatalogStore());
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://cdn.example', type: 'blossom' },
+      blobs: [
+        {
+          sha256: hashA,
+          url: `https://cdn.example/${hashA}.mp4`,
+          type: 'application/octet-stream',
+          size: 10,
+          uploaded: 0,
+        },
+        {
+          sha256: hashB,
+          url: `https://cdn.example/${hashB}.bin`,
+          type: 'application/octet-stream',
+          size: 20,
+          uploaded: 0,
+        },
+      ],
+      state: 'complete',
+    });
+    await projectCatalogAssets(catalog, pubkey);
+    const timeline = await queryCatalogTimeline(catalog, pubkey);
+
+    // The extension is enough for the first file; the second says nothing until its
+    // bytes are read, and must not claim a type it cannot back up.
+    const [byExtension, unclassified] = [hashA, hashB].map(hash =>
+      timeline.find(item => item.primaryBlobSha256 === hash)
+    );
+    expect(byExtension).toMatchObject({
+      displayType: 'video',
+      displayKindLabel: 'MP4 video',
+      displayTitle: 'MP4 video',
+    });
+    expect(unclassified).toMatchObject({ displayType: 'unknown', displayKindLabel: 'Unclassified file' });
+
+    const webm = new Uint8Array(64);
+    webm.set([0x1a, 0x45, 0xdf, 0xa3], 0);
+    await catalog.enrichBlobPrefix(pubkey, hashB, `https://cdn.example/${hashB}.bin`, async () => ({
+      bytes: webm.buffer,
+      mimeType: 'application/octet-stream',
+      size: 20,
+      truncated: false,
+    }));
+    // Deliberately not forced: reading a file's bytes must count as a mutation, or
+    // the projection considers itself current and the new type never reaches a card.
+    expect(await catalog.isProjectionStale(pubkey)).toBe(true);
+    await projectCatalogAssets(catalog, pubkey);
+
+    const sniffed = (await queryCatalogTimeline(catalog, pubkey)).find(item => item.primaryBlobSha256 === hashB);
+    expect(sniffed).toMatchObject({ displayType: 'video', displayKindLabel: 'WebM video' });
   });
 
   it('filters the timeline to assets with at least one present blob on the given server', async () => {

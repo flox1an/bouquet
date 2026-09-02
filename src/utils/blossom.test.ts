@@ -20,12 +20,20 @@ describe('Blossom list pagination', () => {
     const cursors: Array<string | undefined> = [];
     const progress: Array<{ blobs: string[]; cursor?: string; received: number; state: string }> = [];
 
-    const blobs = await collectBlossomListPages(async cursor => {
-      cursors.push(cursor);
-      return pages.get(cursor) ?? [];
-    }, update => {
-      progress.push({ blobs: update.blobs.map(blob => blob.sha256), cursor: update.cursor, received: update.received, state: update.state });
-    });
+    const blobs = await collectBlossomListPages(
+      async cursor => {
+        cursors.push(cursor);
+        return pages.get(cursor) ?? [];
+      },
+      update => {
+        progress.push({
+          blobs: update.blobs.map(blob => blob.sha256),
+          cursor: update.cursor,
+          received: update.received,
+          state: update.state,
+        });
+      }
+    );
 
     expect(blobs.map(blob => blob.sha256)).toEqual([hashA, hashB, hashC]);
     expect(cursors).toEqual([undefined, hashB, hashC]);

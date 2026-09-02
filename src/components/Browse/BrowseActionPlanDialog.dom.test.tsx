@@ -66,10 +66,7 @@ const server = (name: string, url: string): ServerInfo =>
     features: {},
   }) as ServerInfo;
 
-const renderDialog = (
-  assets: TimelineItem[],
-  overrides: { serverInfo?: Record<string, ServerInfo> } = {}
-) => {
+const renderDialog = (assets: TimelineItem[], overrides: { serverInfo?: Record<string, ServerInfo> } = {}) => {
   const queryClient = new QueryClient();
   return render(
     h(
@@ -195,7 +192,9 @@ describe('BrowseActionPlanDialog', () => {
         assetId: 'asset-1',
         role: 'main',
         size: 2048,
-        sources: [{ serverId: 'https://almond.slidetr.net', baseUrl: 'https://almond.slidetr.net', serverType: 'blossom' }],
+        sources: [
+          { serverId: 'https://almond.slidetr.net', baseUrl: 'https://almond.slidetr.net', serverType: 'blossom' },
+        ],
         presentOn: ['https://almond.slidetr.net'],
         absentFrom: [],
       },
@@ -215,10 +214,10 @@ describe('BrowseActionPlanDialog', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Delete 1 file/i }));
 
-    await vi.waitFor(() => expect(deleteBlob).toHaveBeenCalledWith('https://almond.slidetr.net', hashA, expect.anything()));
+    await vi.waitFor(() =>
+      expect(deleteBlob).toHaveBeenCalledWith('https://almond.slidetr.net', hashA, expect.anything())
+    );
     await vi.waitFor(() => expect(screen.getByText(/1 deleted, 0 already gone, 0 failed/i)).toBeTruthy());
-    expect(recordBlobsRemoved).toHaveBeenCalledWith('pk', [
-      { sha256: hashA, serverUrl: 'https://almond.slidetr.net' },
-    ]);
+    expect(recordBlobsRemoved).toHaveBeenCalledWith('pk', [{ sha256: hashA, serverUrl: 'https://almond.slidetr.net' }]);
   });
 });

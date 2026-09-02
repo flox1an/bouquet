@@ -106,6 +106,12 @@ export class CatalogClient {
   ingestServerList(pubkey: string, input: ServerListInput): Promise<void> {
     return this.call('ingestServerList', pubkey, input) as Promise<void>;
   }
+  /** Wipes every catalog record. Resolves once the wipe is durable, then announces
+      the change so open views re-query an empty catalog while the rescan refetches. */
+  async reset(): Promise<void> {
+    await this.call('reset');
+    window.dispatchEvent(new Event('bouquet-catalog-changed'));
+  }
   ingestUpload(
     pubkey: string,
     server: ServerRef,
@@ -141,12 +147,28 @@ export class CatalogClient {
     return this.call('enrichHls', pubkey, rootSha256, loadPlaylist, limits) as Promise<void>;
   }
   enrichBlobPrefix(
+    pubkey: string,
     sha256: string,
     url: string,
-    loadPrefix: Parameters<Catalog['enrichBlobPrefix']>[2],
-    maxBytes?: number
-  ): Promise<void> {
-    return this.call('enrichBlobPrefix', sha256, url, loadPrefix, maxBytes) as Promise<void>;
+    loadPrefix: Parameters<Catalog['enrichBlobPrefix']>[3],
+    maxBytes?: number,
+    notify?: boolean
+  ): Promise<string | undefined> {
+    return this.call('enrichBlobPrefix', pubkey, sha256, url, loadPrefix, maxBytes, notify) as Promise<
+      string | undefined
+    >;
+  }
+  queryPlaylistHashes(): Promise<string[]> {
+    return this.call('queryPlaylistHashes') as Promise<string[]>;
+  }
+  queryUnidentifiedBlobs(
+    pubkey: string,
+    maxSize?: number,
+    limit?: number
+  ): Promise<Array<{ sha256: string; url: string }>> {
+    return this.call('queryUnidentifiedBlobs', pubkey, maxSize, limit) as Promise<
+      Array<{ sha256: string; url: string }>
+    >;
   }
   ingestId3(sha256: string, tags: Parameters<Catalog['ingestId3']>[1]): Promise<void> {
     return this.call('ingestId3', sha256, tags) as Promise<void>;

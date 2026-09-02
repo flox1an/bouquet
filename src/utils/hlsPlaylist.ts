@@ -11,19 +11,18 @@ export type ParsedHlsPlaylist = {
   segments: Array<{ url: string; isInit?: boolean; duration?: number }>;
 };
 
-const PLAYLIST_MIME_TYPES: Record<string, true> = {
-  'application/vnd.apple.mpegurl': true,
-  'application/x-mpegurl': true,
-  'audio/mpegurl': true,
-  'audio/x-mpegurl': true,
-};
-
-const MAX_PLAYLIST_SNIFF_BYTES = 512 * 1024;
+/** True for a body that *may* be a playlist, from its first bytes alone - the tags
+    `isHlsPlaylistBody` insists on may sit past the point a probe read. */
+export function isHlsPlaylistStart(body: string): boolean {
+  return body
+    .replace(/^\uFEFF/, '')
+    .trimStart()
+    .startsWith('#EXTM3U');
+}
 
 export function isHlsPlaylistBody(body: string): boolean {
-  const normalized = body.replace(/^\uFEFF/, '').trimStart();
-  if (!normalized.startsWith('#EXTM3U')) return false;
-  return /#EXT-X-STREAM-INF|#EXTINF|#EXT-X-MAP/.test(normalized);
+  if (!isHlsPlaylistStart(body)) return false;
+  return /#EXT-X-STREAM-INF|#EXTINF|#EXT-X-MAP/.test(body);
 }
 
 export function parseHlsPlaylist(url: string, body: string): ParsedHlsPlaylist {
@@ -68,12 +67,4 @@ export function parseHlsPlaylist(url: string, body: string): ParsedHlsPlaylist {
   }
 
   return { playlistUrls, segments };
-}
-
-export function isPlaylistCandidate(value: { url?: string; mimeType?: string; size?: number; type?: string }): boolean {
-  const mimeType = value.mimeType ?? value.type;
-  if (mimeType && PLAYLIST_MIME_TYPES[mimeType.toLowerCase()]) return true;
-  if (value.url?.toLowerCase().split('?')[0].endsWith('.m3u8')) return true;
-  if (value.size !== undefined && value.size > MAX_PLAYLIST_SNIFF_BYTES) return false;
-  return !mimeType || mimeType.toLowerCase().startsWith('text/plain');
 }

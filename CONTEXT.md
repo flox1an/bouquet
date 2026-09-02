@@ -40,6 +40,15 @@ A denormalized view computed from catalog facts for one use case — the timelin
 **Rendition**:
 A concrete representation of an asset: original, thumbnail, video variant, HLS master playlist.
 
+**Segment**:
+One piece of an HLS stream, referenced by a playlist. Segments are an item's contents,
+never items of their own (ADR-0009).
+
+**Kind label**:
+The short answer to "what is this?" — "MP4 video", "HLS video", "Unclassified file".
+Resolved from the strongest available evidence about a blob, and used as the display
+title when the only name a file has is its own hash (ADR-0008).
+
 **Reverse lookup**:
 Querying relays by a known hash (`#x`) to find events describing it. Bounded: a hit admits only clear media companions (thumbnail, fallback, subtitle), never an unbounded crawl.
 

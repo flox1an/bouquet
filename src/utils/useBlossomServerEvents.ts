@@ -12,8 +12,8 @@ const useBlossomServerEvents = () => {
   const blossomServerEvents = useEvents(blossomServerListFilter);
 
   const blossomServers = useMemo(() => {
-    const allRTags = blossomServerEvents.events.flatMap(
-      ev => ev.tags.filter(t => t[0] == 'r' || t[0] == 'server').flatMap(t => ({ name: t[1] }))
+    const allRTags = blossomServerEvents.events.flatMap(ev =>
+      ev.tags.filter(t => t[0] == 'r' || t[0] == 'server').flatMap(t => ({ name: t[1] }))
     );
     const cnt = countBy(
       allRTags.filter(s => !s.name.match(/https?:\/\/localhost/)),
