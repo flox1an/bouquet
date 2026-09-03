@@ -146,16 +146,21 @@ export function BrowseMediaGrid({
       // re-mounts card ranges the whole way.
       virtualizer.scrollToIndex(index, { align: 'start', behavior: 'instant' });
       // Re-align once the target header is mounted: land it below the sticky
-      // TopNav (h-14 + border) instead of at the raw viewport top.
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          const container = containerRef.current;
-          const header = container?.querySelector<HTMLElement>(`[data-month-header="${key}"]`);
-          if (!container || !header) return;
-          const delta = header.getBoundingClientRect().top - container.getBoundingClientRect().top - 64;
-          if (delta !== 0) window.scrollBy({ top: delta, behavior: 'instant' });
-        })
-      );
+      // TopNav (h-14 + border). The delta is viewport-relative; anchoring it to
+      // the container rect instead scrolled by the header's whole distance from
+      // the container start and clamped every jump to the bottom of the list.
+      // Measurements keep settling for a few frames after the instant jump, so
+      // the alignment repeats until the header sits still at the nav's edge.
+      let frames = 0;
+      const settle = () => {
+        const header = containerRef.current?.querySelector<HTMLElement>(`[data-month-header="${key}"]`);
+        if (!header || frames++ > 8) return;
+        const delta = header.getBoundingClientRect().top - 64;
+        if (Math.abs(delta) <= 1) return;
+        window.scrollBy({ top: delta, behavior: 'instant' });
+        requestAnimationFrame(settle);
+      };
+      requestAnimationFrame(settle);
     },
     [rows, virtualizer]
   );
