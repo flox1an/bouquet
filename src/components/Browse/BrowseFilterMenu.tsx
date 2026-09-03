@@ -24,6 +24,8 @@ type BrowseFilterMenuProps = {
   onEventOnlyChange: (value: boolean) => void;
   unlinkedOnly: boolean;
   onUnlinkedOnlyChange: (value: boolean) => void;
+  groupRepeated: boolean;
+  onGroupRepeatedChange: (value: boolean) => void;
   descriptiveOnly: boolean;
   onDescriptiveOnlyChange: (value: boolean) => void;
   availabilityFilter: AvailabilityFilter[];
@@ -35,6 +37,8 @@ export function BrowseFilterMenu({
   onEventOnlyChange,
   unlinkedOnly,
   onUnlinkedOnlyChange,
+  groupRepeated,
+  onGroupRepeatedChange,
   descriptiveOnly,
   onDescriptiveOnlyChange,
   availabilityFilter,
@@ -69,6 +73,9 @@ export function BrowseFilterMenu({
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem checked={unlinkedOnly} onCheckedChange={onUnlinkedOnlyChange}>
           Only unlinked content (no Nostr event)
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem checked={groupRepeated} onCheckedChange={onGroupRepeatedChange}>
+          Group repeated posts of the same file
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem checked={descriptiveOnly} onCheckedChange={onDescriptiveOnlyChange}>
           Only descriptive titles

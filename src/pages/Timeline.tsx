@@ -32,7 +32,12 @@ import { BrowseSelectionBar } from '../components/Browse/BrowseSelectionBar';
 import { BrowseActionPlanDialog } from '../components/Browse/BrowseActionPlanDialog';
 import { useAssetSelection } from '../components/Browse/useAssetSelection';
 import type { AvailabilityFilter } from '../components/Browse/BrowseFilterMenu';
-import { matchesTypeFilter, type TimelineItem, type TypeFilter } from '../components/Browse/browseConstants';
+import {
+  groupRepeatedPosts,
+  matchesTypeFilter,
+  type TimelineItem,
+  type TypeFilter,
+} from '../components/Browse/browseConstants';
 
 type BrowseViewState = {
   anchorAssetId?: string;
@@ -42,6 +47,7 @@ type BrowseViewState = {
   displayMode: BrowseDisplayMode;
   eventOnly: boolean;
   unlinkedOnly: boolean;
+  groupDuplicates: boolean;
   scrollY: number;
   search: string;
   selectedServerName?: string;
@@ -99,6 +105,7 @@ export default function Timeline() {
     if (value) setEventOnlyState(false);
   }, []);
   const [descriptiveOnly, setDescriptiveOnly] = useState(() => initialView.current?.descriptiveOnly ?? false);
+  const [groupDuplicates, setGroupDuplicates] = useState(() => initialView.current?.groupDuplicates ?? true);
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter[]>(
     () => initialView.current?.availabilityFilter ?? []
   );
@@ -325,12 +332,14 @@ export default function Timeline() {
           hashTerms.every(term => item.searchText.includes(term)) ||
           hashMatchAssetIds?.has(item.assetId) === true)
     );
-    return displayMode === 'list' ? sortTimelineProjections(filtered, sort) : filtered;
+    const sorted = displayMode === 'list' ? sortTimelineProjections(filtered, sort) : filtered;
+    return groupDuplicates ? groupRepeatedPosts(sorted) : sorted;
   }, [
     availabilityFilter,
     descriptiveOnly,
     displayMode,
     eventOnly,
+    groupDuplicates,
     unlinkedOnly,
     hashMatchAssetIds,
     hashTerms,
@@ -380,6 +389,7 @@ export default function Timeline() {
           descriptiveOnly,
           displayMode,
           eventOnly,
+          groupDuplicates,
           unlinkedOnly,
           scrollY: window.scrollY,
           search,
@@ -512,6 +522,8 @@ export default function Timeline() {
         onRescan={handleRescan}
         eventOnly={eventOnly}
         onEventOnlyChange={setEventOnly}
+        groupRepeated={groupDuplicates}
+        onGroupRepeatedChange={setGroupDuplicates}
         unlinkedOnly={unlinkedOnly}
         onUnlinkedOnlyChange={setUnlinkedOnly}
         descriptiveOnly={descriptiveOnly}

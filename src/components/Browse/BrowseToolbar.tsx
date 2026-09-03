@@ -29,6 +29,8 @@ type BrowseToolbarProps = {
   onEventOnlyChange: (value: boolean) => void;
   unlinkedOnly: boolean;
   onUnlinkedOnlyChange: (value: boolean) => void;
+  groupRepeated: boolean;
+  onGroupRepeatedChange: (value: boolean) => void;
   descriptiveOnly: boolean;
   onDescriptiveOnlyChange: (value: boolean) => void;
   availabilityFilter: AvailabilityFilter[];
@@ -53,6 +55,8 @@ export function BrowseToolbar({
   eventOnly,
   onEventOnlyChange,
   unlinkedOnly,
+  groupRepeated,
+  onGroupRepeatedChange,
   onUnlinkedOnlyChange,
   descriptiveOnly,
   onDescriptiveOnlyChange,
@@ -184,6 +188,8 @@ export function BrowseToolbar({
             onEventOnlyChange={onEventOnlyChange}
             unlinkedOnly={unlinkedOnly}
             onUnlinkedOnlyChange={onUnlinkedOnlyChange}
+            groupRepeated={groupRepeated}
+            onGroupRepeatedChange={onGroupRepeatedChange}
             descriptiveOnly={descriptiveOnly}
             onDescriptiveOnlyChange={onDescriptiveOnlyChange}
             availabilityFilter={availabilityFilter}

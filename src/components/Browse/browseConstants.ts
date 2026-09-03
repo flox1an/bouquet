@@ -46,3 +46,37 @@ export const SORT_FIELD_OPTIONS: Array<{ id: TimelineSortField; label: string }>
   { id: 'blobCount', label: 'File count' },
   { id: 'replicaCount', label: 'Copies' },
 ];
+
+/**
+ * One file published by one author as several events - a note plus a video event,
+ * or a file descriptor created twice by a re-upload - folds into its richest event:
+ * the one carrying the most files, then a real title, then the newest date. Items
+ * without a file hash or an author (unlinked files) never group.
+ */
+export function groupRepeatedPosts(items: TimelineItem[]): TimelineItem[] {
+  const representative = new Map<string, TimelineItem>();
+  for (const item of items) {
+    if (!item.primaryBlobSha256 || !item.eventAuthor) continue;
+    const key = `${item.primaryBlobSha256}:${item.eventAuthor}`;
+    const current = representative.get(key);
+    if (!current || isRicher(item, current)) representative.set(key, item);
+  }
+  return items.filter(
+    item =>
+      !item.primaryBlobSha256 ||
+      !item.eventAuthor ||
+      representative.get(`${item.primaryBlobSha256}:${item.eventAuthor}`) === item
+  );
+}
+
+function isRicher(candidate: TimelineItem, incumbent: TimelineItem): boolean {
+  const rank = (item: TimelineItem): [number, number, number] => [
+    item.blobCount ?? 0,
+    item.displayTitleIsFallback ? 0 : 1,
+    item.displayDate ?? 0,
+  ];
+  const left = rank(candidate);
+  const right = rank(incumbent);
+  for (let i = 0; i < left.length; i++) if (left[i] !== right[i]) return left[i] > right[i];
+  return false; // full tie: the earlier item in list order stays representative
+}
