@@ -100,35 +100,35 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
       {/* Header bar */}
       <div className={`flex flex-wrap items-center gap-2 ${!title ? 'justify-end' : ''}`}>
         {title && <h2 className="flex-1 text-lg font-semibold">{title}</h2>}
-
-        {selectedCount > 0 && (
-          <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-sm">
-            <span className="text-muted-foreground">{selectedCount} selected</span>
-            {onDelete && (
-              <Button
-                size="sm"
-                variant="destructive"
-                /* 28px is a hard target on a phone, and this one deletes files. */
-                className="h-9 min-w-9"
-                onClick={handleDeleteSelected}
-                aria-label={`Delete ${selectedCount} selected file${selectedCount === 1 ? '' : 's'}`}
-                title="Delete selected files"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 p-0"
-              onClick={() => setSelectedBlobs({})}
-              aria-label="Clear selection"
-            >
-              <X className="h-4 w-4 text-muted-foreground" />
-            </Button>
-          </div>
-        )}
       </div>
+      {/* Pinned so bulk actions stay reachable while a long list scrolls. */}
+      {selectedCount > 0 && (
+        <div className="sticky top-16 z-20 flex items-center gap-2 self-start rounded-lg bg-muted px-3 py-1.5 text-sm shadow-md">
+          <span className="text-muted-foreground">{selectedCount} selected</span>
+          {onDelete && (
+            <Button
+              size="sm"
+              variant="destructive"
+              /* 28px is a hard target on a phone, and this one deletes files. */
+              className="h-9 min-w-9"
+              onClick={handleDeleteSelected}
+              aria-label={`Delete ${selectedCount} selected file${selectedCount === 1 ? '' : 's'}`}
+              title="Delete selected files"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 p-0"
+            onClick={() => setSelectedBlobs({})}
+            aria-label="Clear selection"
+          >
+            <X className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        </div>
+      )}
 
       {/* Safety net: even with the secondary columns hidden, a long title must
           scroll the table rather than the whole page. */}
