@@ -365,9 +365,9 @@ export default function TimelineAssetDetail() {
               </Button>
             )}
             {availableChecked && <p className="mt-3 text-xs text-muted-foreground">Availability checked</p>}
-            <div className="shrink-0 md:w-72">
-              <TimelineThumbnail item={projection} knownServersFor={knownServersFor} />
-            </div>
+          </div>
+          <div className="shrink-0 md:w-72">
+            <TimelineThumbnail item={projection} knownServersFor={knownServersFor} />
           </div>
         </div>
       </header>
