@@ -637,7 +637,7 @@ export default function Timeline() {
 
         {displayMode === 'media' && (
           <aside className="hidden w-36 shrink-0 lg:block">
-            <div className="sticky top-8">
+            <div className="sticky top-16">
               <TimelineNavigation months={monthGroups} activeMonth={activeMonth} onSelect={scrollToMonth} />
             </div>
           </aside>

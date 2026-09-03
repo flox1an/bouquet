@@ -119,13 +119,18 @@ export function BrowseMediaGrid({
 
   const rows = useVirtualRows(monthGroups, itemsByMonth, columns);
 
+  // Exact row estimates keep long-range month jumps honest: the jump scrolls
+  // to an offset computed from these estimates, and rows skipped by the jump
+  // never mount, so they are never measured — every pixel of estimate error
+  // accumulates over the skipped distance. Card rows are py-1 (8px) plus a
+  // square card of the grid track width; headers are pt-3 (12px) plus a
+  // text-xs line (16px).
+  const containerWidth = containerRef.current?.clientWidth ?? 1280;
+  const cardRowSize = 8 + (containerWidth - (columns - 1) * 8) / columns;
+
   const virtualizer = useWindowVirtualizer({
     count: rows.length,
-    // Measured card row at the five-column width a 1280px window gives
-    // (243px square card + the row's own py-1).
-    // Rows are re-measured on mount, so this only has to keep the scrollbar
-    // and the initial jump honest.
-    estimateSize: index => (rows[index].type === 'header' ? 36 : 251),
+    estimateSize: index => (rows[index].type === 'header' ? 28 : cardRowSize),
     scrollMargin: containerRef.current?.offsetTop ?? 0,
     getItemKey: index => rows[index].key,
     // Without a rect the virtualizer renders nothing, which is what a server
@@ -135,7 +140,22 @@ export function BrowseMediaGrid({
   const scrollToMonth = useCallback(
     (key: string) => {
       const index = rows.findIndex(row => row.type === 'header' && row.key === `header:${key}`);
-      if (index >= 0) virtualizer.scrollToIndex(index, { align: 'start' });
+      if (index < 0) return;
+      // 'instant' overrides the html-wide scroll-behavior: smooth, whose
+      // animation would crawl over thousands of rows while the virtualizer
+      // re-mounts card ranges the whole way.
+      virtualizer.scrollToIndex(index, { align: 'start', behavior: 'instant' });
+      // Re-align once the target header is mounted: land it below the sticky
+      // TopNav (h-14 + border) instead of at the raw viewport top.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const container = containerRef.current;
+          const header = container?.querySelector<HTMLElement>(`[data-month-header="${key}"]`);
+          if (!container || !header) return;
+          const delta = header.getBoundingClientRect().top - container.getBoundingClientRect().top - 64;
+          if (delta !== 0) window.scrollBy({ top: delta, behavior: 'instant' });
+        })
+      );
     },
     [rows, virtualizer]
   );
@@ -172,6 +192,7 @@ export function BrowseMediaGrid({
               key={virtualItem.key}
               ref={virtualizer.measureElement}
               data-index={virtualItem.index}
+              data-month-header={row.key.replace('header:', '')}
               className="absolute left-0 top-0 flex w-full items-center gap-3 pt-3"
               style={{ transform: `translateY(${virtualItem.start - virtualizer.options.scrollMargin}px)` }}
             >
