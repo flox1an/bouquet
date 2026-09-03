@@ -97,54 +97,6 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
       <div className={`blob-list-header ${className} ${!title ? 'justify-end' : ''}`}>
         {title && <h2>{title}</h2>}
 
-        {selectedCount > 0 && (
-          <div className="flex bg-base-200 rounded-box gap-2 mr-2 py-2 px-8 align-middle items-center">
-            {selectedCount} blobs selected
-            <div className="dropdown">
-              <div
-                tabIndex={0}
-                role="button"
-                className="btn btn-icon btn-primary btn-sm tooltip flex whitespace-nowrap"
-                data-tip="Add selected blobs to collection"
-              >
-                <PlusIcon />
-                <FolderIcon />
-              </div>
-              <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-[1] w-[30em] p-2 shadow">
-                <li>
-                  <a onClick={() => addSelectedBlobsToCollection('Collection 1')}>
-                    <FolderIcon /> Collection 1 (NOT IMPLEMENTED YET)
-                  </a>
-                </li>
-                <li>
-                  <a onClick={() => addSelectedBlobsToCollection('Collection 2')}>
-                    <FolderIcon /> Collection 2 (NOT IMPLEMENTED YET)
-                  </a>
-                </li>
-                <li className="border-t-2 border-base-300">
-                  <a onClick={() => createNewCollection()}>
-                    <FolderPlusIcon /> new collection (NOT IMPLEMENTED YET)
-                  </a>
-                </li>
-              </ul>
-            </div>
-            {onDelete && (
-              <button
-                className="btn btn-icon btn-primary btn-sm tooltip"
-                onClick={async () => {
-                  await onDelete(blobs.filter(b => selectedBlobs[b.sha256]));
-                  setSelectedBlobs({});
-                }}
-                data-tip="Delete the selected blobs"
-              >
-                <TrashIcon />
-              </button>
-            )}
-            <button className="btn btn-icon btn-sm" onClick={() => setSelectedBlobs({})}>
-              <XMarkIcon className="h-6 w-6 text-gray-500" />
-            </button>
-          </div>
-        )}
         <BlobListTypeMenu
           mode={mode}
           setMode={setMode}
@@ -154,6 +106,54 @@ const BlobList = ({ blobs, onDelete, title, className = '' }: BlobListProps) => 
           hasDocs={docs.length > 0}
         />
       </div>
+      {selectedCount > 0 && (
+        <div className="sticky top-0 z-20 mb-2 flex bg-base-200 rounded-box gap-2 py-2 px-8 align-middle items-center shadow-md">
+          {selectedCount} blobs selected
+          <div className="dropdown">
+            <div
+              tabIndex={0}
+              role="button"
+              className="btn btn-icon btn-primary btn-sm tooltip flex whitespace-nowrap"
+              data-tip="Add selected blobs to collection"
+            >
+              <PlusIcon />
+              <FolderIcon />
+            </div>
+            <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-[1] w-[30em] p-2 shadow">
+              <li>
+                <a onClick={() => addSelectedBlobsToCollection('Collection 1')}>
+                  <FolderIcon /> Collection 1 (NOT IMPLEMENTED YET)
+                </a>
+              </li>
+              <li>
+                <a onClick={() => addSelectedBlobsToCollection('Collection 2')}>
+                  <FolderIcon /> Collection 2 (NOT IMPLEMENTED YET)
+                </a>
+              </li>
+              <li className="border-t-2 border-base-300">
+                <a onClick={() => createNewCollection()}>
+                  <FolderPlusIcon /> new collection (NOT IMPLEMENTED YET)
+                </a>
+              </li>
+            </ul>
+          </div>
+          {onDelete && (
+            <button
+              className="btn btn-icon btn-primary btn-sm tooltip"
+              onClick={async () => {
+                await onDelete(blobs.filter(b => selectedBlobs[b.sha256]));
+                setSelectedBlobs({});
+              }}
+              data-tip="Delete the selected blobs"
+            >
+              <TrashIcon />
+            </button>
+          )}
+          <button className="btn btn-icon btn-sm" onClick={() => setSelectedBlobs({})}>
+            <XMarkIcon className="h-6 w-6 text-gray-500" />
+          </button>
+        </div>
+      )}
 
       {mode === 'gallery' && (
         <ImageBlobList images={images} selectedBlobs={selectedBlobs} handleSelectBlob={handleSelectBlob} />
