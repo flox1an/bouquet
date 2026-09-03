@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { MonthGroup } from '../TimelineNavigation';
-import { AudioTimelinePreview } from '../AudioTimelinePreview';
 import { TimelineThumbnail, type KnownServersFor } from '../TimelineThumbnail';
 import { useNativeUrlAvailabilityCheck } from './useNativeUrlAvailability';
 import { formatDate, formatFileSize } from '../../utils/utils';
@@ -26,7 +25,6 @@ type BrowseMediaGridProps = {
   selectedAssetIds: Record<string, boolean>;
   onSelect: (assetId: string, event?: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>) => void;
   onOpen: (assetId: string, anchorOffset?: number) => void;
-  audioMetadataVersion: Record<string, number>;
   onAudioVisible: (item: TimelineItem) => void;
   onPlayAudio: (item: TimelineItem) => void;
   onAction: (item: TimelineItem, action: CatalogAction) => void;
@@ -94,7 +92,6 @@ export function BrowseMediaGrid({
   selectedAssetIds,
   onSelect,
   onOpen,
-  audioMetadataVersion,
   onAudioVisible,
   onPlayAudio,
   onAction,
@@ -204,7 +201,6 @@ export function BrowseMediaGrid({
                 selected={!!selectedAssetIds[item.assetId]}
                 onSelect={onSelect}
                 onOpen={onOpen}
-                metadataVersion={audioMetadataVersion[item.assetId]}
                 onAudioVisible={onAudioVisible}
                 onPlayAudio={onPlayAudio}
                 onAction={onAction}
@@ -248,7 +244,6 @@ function MediaCard({
   selected,
   onSelect,
   onOpen,
-  metadataVersion,
   onAudioVisible,
   onPlayAudio,
   onAction,
@@ -260,7 +255,6 @@ function MediaCard({
   selected: boolean;
   onSelect: BrowseMediaGridProps['onSelect'];
   onOpen: BrowseMediaGridProps['onOpen'];
-  metadataVersion: number | undefined;
   onAudioVisible: (item: TimelineItem) => void;
   onPlayAudio: (item: TimelineItem) => void;
   onAction: (item: TimelineItem, action: CatalogAction) => void;
@@ -268,6 +262,14 @@ function MediaCard({
   pubkey?: string;
 }) {
   useNativeUrlAvailabilityCheck(pubkey, item);
+  // The virtualizer mounts cards only near the viewport, so mount is the
+  // visibility signal; the id3 cache turns any remount into a no-op.
+  const audioRequested = useRef(false);
+  useEffect(() => {
+    if (audioRequested.current || item.displayType !== 'audio') return;
+    audioRequested.current = true;
+    onAudioVisible(item);
+  }, [item, onAudioVisible]);
   const Icon = TYPE_ICON[item.displayType];
   const dateLabel =
     item.displayDateSource === 'event'
@@ -312,17 +314,7 @@ function MediaCard({
         className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         aria-label={`Open details for ${item.displayTitle}`}
       >
-        {item.displayType === 'audio' ? (
-          <AudioTimelinePreview
-            item={item}
-            metadataVersion={metadataVersion}
-            sourceUrl={item.primaryUrl}
-            onVisible={() => onAudioVisible(item)}
-            fill
-          />
-        ) : (
-          <TimelineThumbnail item={item} knownServersFor={knownServersFor} fill />
-        )}
+        <TimelineThumbnail item={item} knownServersFor={knownServersFor} fill />
         {/* Kind first: at column width the line truncates, and losing the clock
             time costs less than losing "Unlinked file". */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2 pb-1.5 pt-10">

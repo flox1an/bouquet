@@ -49,7 +49,6 @@ const row = (over = {}) =>
       selected: false,
       onSelect: () => {},
       onOpen: () => {},
-      audioMetadataVersion: undefined,
       onAudioVisible: () => {},
     })
   );
@@ -94,7 +93,6 @@ describe('plain vocabulary renders as real words', () => {
         selectedAssetIds: {},
         onSelect: () => {},
         onOpen: () => {},
-        audioMetadataVersion: {},
         onAudioVisible: () => {},
         onPlayAudio: () => {},
         onAction: () => {},

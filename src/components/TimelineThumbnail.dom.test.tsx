@@ -119,4 +119,46 @@ describe('TimelineThumbnail', () => {
     expect(proxyUrl.pathname).toBe(`/v1/preset/feed-preview-v1/${hashA}.mp4`);
     expect(proxyUrl.searchParams.getAll('xs')).toEqual(['nostr.download']);
   });
+
+  it('proxies extensionless audio for cover art and hints only confirmed servers', () => {
+    const { container } = render(
+      h(TimelineThumbnail, {
+        item: {
+          ...item(),
+          displayType: 'audio',
+          displayMimeType: 'audio/mpeg',
+          previewUrl: undefined,
+          primaryUrl: `https://24242.io/${hashA}`,
+          previewBlobSha256: undefined,
+          primaryBlobSha256: hashA,
+        },
+        knownServersFor: () => ['nostr.download'],
+      })
+    );
+
+    const proxyUrl = new URL((container.querySelector('img') as HTMLImageElement).src);
+    expect(proxyUrl.pathname).toBe(`/v1/preset/feed-preview-v1/${hashA}.mp3`);
+    expect(proxyUrl.searchParams.getAll('xs')).toEqual(['nostr.download']);
+  });
+
+  it('falls back to a music placeholder when the audio cover never loads', () => {
+    const { container } = render(
+      h(TimelineThumbnail, {
+        item: {
+          ...item(),
+          displayType: 'audio',
+          displayMimeType: 'audio/flac',
+          previewUrl: undefined,
+          primaryUrl: `https://24242.io/${hashA}`,
+          previewBlobSha256: undefined,
+          primaryBlobSha256: hashA,
+        },
+      })
+    );
+    const box = container.firstElementChild as HTMLElement;
+    fireEvent.error(box.querySelector('img') as HTMLImageElement);
+
+    expect(box.querySelector('img')).toBeNull();
+    expect(box.querySelector('svg')).toBeTruthy();
+  });
 });

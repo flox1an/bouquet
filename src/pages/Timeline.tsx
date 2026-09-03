@@ -85,7 +85,6 @@ export default function Timeline() {
   const scrollRestored = useRef(false);
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [audioMetadata, setAudioMetadata] = useState<Record<string, ID3Tag>>({});
-  const [audioMetadataVersion, setAudioMetadataVersion] = useState<Record<string, number>>({});
   const audioProjectionTimer = useRef<number | undefined>(undefined);
   const [projectionState, setProjectionState] = useState<'idle' | 'projecting' | 'complete' | 'failed'>('idle');
 
@@ -423,7 +422,6 @@ export default function Timeline() {
         if (!result) return;
         await getCatalogClient().ingestId3(item.primaryBlobSha256!, result.id3);
         setAudioMetadata(current => ({ ...current, [item.primaryBlobSha256!]: result.id3 }));
-        setAudioMetadataVersion(current => ({ ...current, [item.assetId]: (current[item.assetId] ?? 0) + 1 }));
         scheduleAudioProjection();
       })
       .catch(() => undefined);
@@ -617,7 +615,6 @@ export default function Timeline() {
               selectedAssetIds={selectedAssetIds}
               onSelect={handleSelectAsset}
               onOpen={openAsset}
-              audioMetadataVersion={audioMetadataVersion}
               onAudioVisible={loadAudioMetadata}
               onPlayAudio={playAudio}
               onAction={(item, action) => setCardAction({ item, action })}
@@ -633,7 +630,6 @@ export default function Timeline() {
               selectedAssetIds={selectedAssetIds}
               onSelect={handleSelectAsset}
               onOpen={assetId => openAsset(assetId)}
-              audioMetadataVersion={audioMetadataVersion}
               onAudioVisible={loadAudioMetadata}
             />
           )}

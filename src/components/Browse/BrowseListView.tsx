@@ -10,7 +10,6 @@ type BrowseListViewProps = {
   selectedAssetIds: Record<string, boolean>;
   onSelect: (assetId: string, event?: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>) => void;
   onOpen: (assetId: string) => void;
-  audioMetadataVersion: Record<string, number>;
   onAudioVisible: (item: TimelineItem) => void;
   knownServersFor?: KnownServersFor;
   pubkey?: string;
@@ -22,7 +21,6 @@ export function BrowseListView({
   selectedAssetIds,
   onSelect,
   onOpen,
-  audioMetadataVersion,
   onAudioVisible,
   knownServersFor,
   pubkey,
@@ -57,7 +55,6 @@ export function BrowseListView({
               selected={!!selectedAssetIds[item.assetId]}
               onSelect={onSelect}
               onOpen={() => onOpen(item.assetId)}
-              audioMetadataVersion={audioMetadataVersion[item.assetId]}
               onAudioVisible={() => onAudioVisible(item)}
               knownServersFor={knownServersFor}
               pubkey={pubkey}

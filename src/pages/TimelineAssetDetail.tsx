@@ -13,7 +13,6 @@ import {
 import { nip19 } from 'nostr-tools';
 import { getCatalogClient } from '../catalog/catalogClient';
 import type { TimelineAssetDetail as TimelineAssetDetailType } from '../catalog/advanced';
-import { AudioTimelinePreview } from '../components/AudioTimelinePreview';
 import { TimelineThumbnail } from '../components/TimelineThumbnail';
 import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -366,13 +365,9 @@ export default function TimelineAssetDetail() {
               </Button>
             )}
             {availableChecked && <p className="mt-3 text-xs text-muted-foreground">Availability checked</p>}
-          </div>
-          <div className="shrink-0 md:w-72">
-            {projection.displayType === 'audio' ? (
-              <AudioTimelinePreview item={projection} />
-            ) : (
+            <div className="shrink-0 md:w-72">
               <TimelineThumbnail item={projection} knownServersFor={knownServersFor} />
-            )}
+            </div>
           </div>
         </div>
       </header>

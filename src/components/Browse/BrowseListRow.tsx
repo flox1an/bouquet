@@ -5,7 +5,6 @@ import { getCatalogClient } from '../../catalog/catalogClient';
 import type { TimelineAssetContents } from '../../catalog/advanced';
 import { TimelineThumbnail, type KnownServersFor } from '../TimelineThumbnail';
 import { useNativeUrlAvailabilityCheck } from './useNativeUrlAvailability';
-import { AudioTimelinePreview } from '../AudioTimelinePreview';
 import { formatDate, formatFileSize } from '../../utils/utils';
 import { AVAILABILITY_LABEL, TYPE_ICON, type TimelineItem } from './browseConstants';
 import { eventKindLabel } from '../../catalog/eventKinds';
@@ -18,7 +17,6 @@ type BrowseListRowProps = {
   selected: boolean;
   onSelect: (assetId: string, event?: React.MouseEvent<HTMLElement> | React.ChangeEvent<HTMLInputElement>) => void;
   onOpen: () => void;
-  audioMetadataVersion?: number;
   onAudioVisible: () => void;
   knownServersFor?: KnownServersFor;
   pubkey?: string;
@@ -30,7 +28,6 @@ export function BrowseListRow({
   selected,
   onSelect,
   onOpen,
-  audioMetadataVersion,
   onAudioVisible,
   knownServersFor,
   pubkey,
@@ -78,6 +75,15 @@ export function BrowseListRow({
     // The asset id already carries the profile, so no pubkey is needed to scope it.
   }, [item.assetId]);
 
+  // Rows mount only near the viewport (the list is virtualized), so mount is
+  // the visibility signal; the id3 cache turns any remount into a no-op.
+  const audioRequested = useRef(false);
+  useEffect(() => {
+    if (audioRequested.current || item.displayType !== 'audio') return;
+    audioRequested.current = true;
+    onAudioVisible();
+  }, [item, onAudioVisible]);
+
   return (
     <div
       ref={rootRef}
@@ -108,16 +114,7 @@ export function BrowseListRow({
           aria-label={`Open details for ${item.displayTitle}`}
         >
           <div className="w-full sm:w-32">
-            {item.displayType === 'audio' ? (
-              <AudioTimelinePreview
-                item={item}
-                metadataVersion={audioMetadataVersion}
-                sourceUrl={item.primaryUrl}
-                onVisible={onAudioVisible}
-              />
-            ) : (
-              <TimelineThumbnail item={item} knownServersFor={knownServersFor} />
-            )}
+            <TimelineThumbnail item={item} knownServersFor={knownServersFor} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center justify-between gap-2">

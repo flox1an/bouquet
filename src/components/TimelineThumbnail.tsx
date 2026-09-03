@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ImageOff } from 'lucide-react';
+import { ImageOff, Music2 } from 'lucide-react';
 import type { TimelineProjection } from '../catalog/advanced';
 
 const IMGPROXY_BASE_URL = 'https://imgproxy.nostu.be';
@@ -10,17 +10,27 @@ function isUnsupportedThumbnailHost(host: string): boolean {
   return /\.fips(:|$)/i.test(host);
 }
 
-const VIDEO_EXTENSION_BY_MIME: Record<string, string> = {
+/** imgproxy keys its fetch on the file extension; the hint fills in URLs that
+    lack one. Cover art for audio comes from the same preset route since the
+    proxy extracts embedded artwork from mp3/flac/... alongside video frames. */
+const EXTENSION_BY_MIME: Record<string, string> = {
   'video/mp4': 'mp4',
   'video/quicktime': 'mov',
   'video/webm': 'webm',
   'video/x-matroska': 'mkv',
   'video/x-msvideo': 'avi',
   'video/3gpp': '3gp',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'aac',
+  'audio/ogg': 'ogg',
+  'audio/opus': 'opus',
+  'audio/wav': 'wav',
+  'audio/flac': 'flac',
 };
 
-const videoExtensionFor = (mimeType: string | undefined) =>
-  VIDEO_EXTENSION_BY_MIME[mimeType?.split(';', 1)[0].trim().toLowerCase() ?? ''];
+const extensionFor = (mimeType: string | undefined) =>
+  EXTENSION_BY_MIME[mimeType?.split(';', 1)[0].trim().toLowerCase() ?? ''];
 
 /** Build the fixed preset URL for hash-addressed Blossom media; anything else
     falls back to the unsigned /insecure/ route with the same visual output
@@ -104,12 +114,22 @@ function sourcesFor(item: ThumbnailItem, knownServersFor: KnownServersFor): Thum
       item.primaryUrl && item.primaryUrl !== item.previewUrl
         ? [
             {
-              url: proxied(item.primaryUrl, item.primaryBlobSha256, videoExtensionFor(item.displayMimeType)),
+              url: proxied(item.primaryUrl, item.primaryBlobSha256, extensionFor(item.displayMimeType)),
               kind: 'video' as const,
             },
           ]
         : [];
     return [...previewSources, ...videoFrame];
+  }
+  if (item.displayType === 'audio') {
+    return item.primaryUrl
+      ? [
+          {
+            url: proxied(item.primaryUrl, item.primaryBlobSha256, extensionFor(item.displayMimeType)),
+            kind: 'image' as const,
+          },
+        ]
+      : [];
   }
   return [];
 }
@@ -137,6 +157,8 @@ export function TimelineThumbnail({
   const sourcesKey = sources.map(source => source.url).join('|');
   const [sourceIndex, setSourceIndex] = useState(0);
   const source = sources[sourceIndex];
+  // A coverless audio file reads as broken under the generic "unavailable" icon.
+  const PlaceholderIcon = item.displayType === 'audio' ? Music2 : ImageOff;
 
   useEffect(() => {
     setSourceIndex(0);
@@ -162,7 +184,7 @@ export function TimelineThumbnail({
             onError={() => setSourceIndex(index => index + 1)}
           />
         ) : (
-          <ImageOff className="h-6 w-6 text-muted-foreground/50" aria-label="Thumbnail unavailable" />
+          <PlaceholderIcon className="h-6 w-6 text-muted-foreground/50" aria-label="Thumbnail unavailable" />
         )}
       </div>
     );
@@ -193,7 +215,7 @@ export function TimelineThumbnail({
           onError={() => setSourceIndex(index => index + 1)}
         />
       ) : (
-        <ImageOff className="h-6 w-6 text-muted-foreground/50" aria-label="Thumbnail unavailable" />
+        <PlaceholderIcon className="h-6 w-6 text-muted-foreground/50" aria-label="Thumbnail unavailable" />
       )}
     </div>
   );

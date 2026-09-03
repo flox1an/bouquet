@@ -53,7 +53,6 @@ describe('browse presentation smoke', () => {
           selected: false,
           onSelect: () => {},
           onOpen: () => {},
-          audioMetadataVersion: undefined,
           onAudioVisible: () => {},
         })
       );
@@ -76,7 +75,6 @@ describe('browse presentation smoke', () => {
         selected: false,
         onSelect: () => {},
         onOpen: () => {},
-        audioMetadataVersion: undefined,
         onAudioVisible: () => {},
       })
     );
@@ -116,7 +114,6 @@ describe('browse presentation smoke', () => {
         selectedAssetIds: {},
         onSelect: () => {},
         onOpen: () => {},
-        audioMetadataVersion: {},
         onAudioVisible: () => {},
         onPlayAudio: () => {},
         onAction: () => {},
@@ -172,7 +169,6 @@ describe('browse presentation smoke', () => {
         selectedAssetIds: {},
         onSelect: () => {},
         onOpen: () => {},
-        audioMetadataVersion: {},
         onAudioVisible: () => {},
         onPlayAudio: () => {},
         onAction: () => {},
