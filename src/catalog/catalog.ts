@@ -7,7 +7,7 @@ import { extractEventReferences, EVENT_EXTRACTOR_VERSION, type EventReference } 
 import { extractTimelineEventMetadata, type TimelineEventMetadata } from './timelineMetadata';
 
 const DATABASE_NAME = 'bouquet-user-blob-catalog';
-const DATABASE_VERSION = 9;
+const DATABASE_VERSION = 10;
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 
 /**
@@ -29,6 +29,7 @@ export type EvidenceType =
   | 'server-list'
   | 'authored-event'
   | 'event-reference'
+  | 'additional-event'
   | 'reverse-event'
   | 'upload'
   | 'mirror'
@@ -45,6 +46,15 @@ type ProfileRecord = {
   projectionVersion?: number;
   catalogVersion: number;
   eventExtractorVersion?: number;
+};
+export type AdditionalPubkey = {
+  pubkey: string;
+  relayHints: string[];
+  addedAt: number;
+};
+type AdditionalPubkeyRecord = AdditionalPubkey & {
+  id: string;
+  ownerPubkey: string;
 };
 type ServerRecord = {
   serverId: string;
@@ -117,7 +127,7 @@ type ProfileEventRecord = {
   eventId: string;
   firstSeenAt: number;
   lastSeenAt: number;
-  source: 'authored' | 'reverse';
+  source: 'authored' | 'additional' | 'reverse';
   rootSha256?: string;
 };
 type EventRelayRecord = {
@@ -144,6 +154,7 @@ type EventSyncRunRecord = {
   pubkey: string;
   relayUrl: string;
   cursor?: number;
+  sourcePubkey?: string;
   state: 'pending' | 'complete' | 'failed';
   startedAt: number;
   completedAt?: number;
@@ -208,6 +219,7 @@ type TimelineEventRecord = TimelineEventMetadata & { id: string; pubkey: string 
 
 export type StoreName =
   | 'profile'
+  | 'additional_pubkey'
   | 'server'
   | 'profile_server'
   | 'blob'
@@ -239,6 +251,7 @@ export type StoreName =
 export type CatalogIndexDefinition = { store: StoreName; name: string; keyPath: string | string[]; since: number };
 
 export const CATALOG_INDEXES: readonly CatalogIndexDefinition[] = [
+  { store: 'additional_pubkey', name: 'by_owner', keyPath: 'ownerPubkey', since: 10 },
   { store: 'profile_server', name: 'by_pubkey', keyPath: 'pubkey', since: 3 },
   { store: 'profile_blob_membership', name: 'by_pubkey', keyPath: 'pubkey', since: 3 },
   { store: 'profile_blob_evidence', name: 'by_profile_hash', keyPath: ['pubkey', 'sha256'], since: 3 },
@@ -406,6 +419,7 @@ export class IndexedDbCatalogStore implements CatalogStore {
       db.createObjectStore('timeline_projection', { keyPath: 'id' });
     }
     if (oldVersion < 8) db.createObjectStore('timeline_event', { keyPath: 'id' });
+    if (oldVersion < 10) db.createObjectStore('additional_pubkey', { keyPath: 'id' });
 
     // Indexes come from the shared registry so that this schema and the in-memory
     // store cannot disagree about what is indexed.
@@ -519,6 +533,7 @@ function indexKeyOf(record: unknown, keyPath: string | string[]): string | undef
 
 const KEY_FIELD_BY_STORE: Record<StoreName, string> = {
   profile: 'pubkey',
+  additional_pubkey: 'id',
   server: 'serverId',
   profile_server: 'id',
   blob: 'sha256',
@@ -619,10 +634,106 @@ export type BlobPrefixLoader = (
 export class Catalog {
   constructor(readonly store: CatalogStore) {}
 
-  /** The rescan button's wipe: every record goes, and the following server-list
-      ingestion rebuilds the catalog from authoritative listings (ADR-0002/0006). */
+  /** Wipes derived catalog data while preserving the account's configured
+      read-only pubkeys, so Rescan can rebuild their content too. */
   async reset(): Promise<void> {
+    const additionalPubkeys = await this.store.getAll<AdditionalPubkeyRecord>('additional_pubkey');
     await this.store.reset();
+    await this.store.putMany('additional_pubkey', additionalPubkeys);
+  }
+
+  async listAdditionalPubkeys(ownerPubkey: string): Promise<AdditionalPubkey[]> {
+    return (await this.store.getAllFromIndex<AdditionalPubkeyRecord>('additional_pubkey', 'by_owner', ownerPubkey))
+      .map(({ pubkey, relayHints, addedAt }) => ({ pubkey, relayHints, addedAt }))
+      .sort((a, b) => a.addedAt - b.addedAt);
+  }
+
+  async addAdditionalPubkey(ownerPubkey: string, source: Omit<AdditionalPubkey, 'addedAt'>): Promise<void> {
+    const owner = ownerPubkey.toLowerCase();
+    const pubkey = source.pubkey.toLowerCase();
+    if (!HASH_PATTERN.test(owner) || !HASH_PATTERN.test(pubkey)) throw new Error('Invalid pubkey');
+    if (owner === pubkey) throw new Error('The signed-in pubkey is already included');
+    const id = `${owner}:${pubkey}`;
+    const existing = await this.store.get<AdditionalPubkeyRecord>('additional_pubkey', id);
+    await this.store.put<AdditionalPubkeyRecord>('additional_pubkey', {
+      id,
+      ownerPubkey: owner,
+      pubkey,
+      relayHints: [...new Set(source.relayHints.map(url => url.trim()).filter(Boolean))],
+      addedAt: existing?.addedAt ?? Date.now(),
+    });
+    this.changed(owner);
+  }
+
+  async removeAdditionalPubkey(ownerPubkey: string, pubkey: string): Promise<void> {
+    const owner = ownerPubkey.toLowerCase();
+    const source = pubkey.toLowerCase();
+    await this.store.delete('additional_pubkey', `${owner}:${source}`);
+
+    const affectedHashes = new Set<string>();
+    const removedEventIds: string[] = [];
+    const profileEvents = await this.store.getAllFromIndex<ProfileEventRecord>('profile_event', 'by_pubkey', owner);
+    for (const profileEvent of profileEvents) {
+      if (profileEvent.source !== 'additional') continue;
+      const event = await this.store.get<CatalogEventRecord>('catalog_event', profileEvent.eventId);
+      if (event?.pubkey !== source) continue;
+      removedEventIds.push(profileEvent.eventId);
+      await this.store.delete('profile_event', profileEvent.id);
+      await this.store.delete('timeline_event', profileEvent.id);
+      for (const reference of await this.store.getAllFromIndex<EventReferenceRecord>(
+        'event_reference',
+        'by_profile_event',
+        [owner, profileEvent.eventId]
+      )) {
+        if (reference.sha256) affectedHashes.add(reference.sha256);
+        await this.store.delete('event_reference', reference.id);
+      }
+      for (const observation of await this.store.getAllFromIndex<EventRelayRecord>(
+        'event_relay_observation',
+        'by_profile_event',
+        [owner, profileEvent.eventId]
+      )) {
+        await this.store.delete('event_relay_observation', observation.id);
+      }
+      for (const evidence of await this.store.getAllFromIndex<EvidenceRecord>(
+        'profile_blob_evidence',
+        'by_source',
+        ['additional-event', profileEvent.eventId]
+      )) {
+        if (evidence.pubkey !== owner) continue;
+        affectedHashes.add(evidence.sha256);
+        await this.store.delete('profile_blob_evidence', evidence.evidenceId);
+      }
+    }
+
+    for (const run of await this.store.getAllFromIndex<EventSyncRunRecord>('event_sync_run', 'by_pubkey', owner)) {
+      if (run.sourcePubkey === source) await this.store.delete('event_sync_run', run.id);
+    }
+    for (const sha256 of affectedHashes) {
+      const remaining = await this.store.getAllFromIndex<EvidenceRecord>(
+        'profile_blob_evidence',
+        'by_profile_hash',
+        [owner, sha256]
+      );
+      if (remaining.length === 0) await this.store.delete('profile_blob_membership', `${owner}:${sha256}`);
+    }
+
+    const remainingProfileEvents = await this.store.getAll<ProfileEventRecord>('profile_event');
+    for (const eventId of removedEventIds) {
+      if (remainingProfileEvents.some(event => event.eventId === eventId)) continue;
+      for (const url of await this.store.getAll<BlobUrlRecord>('blob_url')) {
+        if (url.sourceType === 'event' && (url.sourceId === eventId || url.sourceId.startsWith(`${eventId}:`))) {
+          await this.store.delete('blob_url', url.id);
+        }
+      }
+      for (const fact of await this.store.getAll<MetadataFactRecord>('metadata_fact')) {
+        if (fact.sourceType === 'event' && fact.sourceId === eventId) {
+          await this.store.delete('metadata_fact', fact.id);
+        }
+      }
+    }
+    await this.touchProfileMutation(owner);
+    this.changed(owner);
   }
 
   async ingestServerList(pubkey: string, input: ServerListInput): Promise<void> {
@@ -812,27 +923,76 @@ export class Catalog {
     this.changed(pubkey);
   }
 
+  async ingestAdditionalEvents(
+    ownerPubkey: string,
+    sourcePubkey: string,
+    events: NostrEvent[],
+    relayUrl: string,
+    serverUrls: string[] = []
+  ): Promise<void> {
+    const now = Date.now();
+    await this.ensureProfile(ownerPubkey, now);
+    for (const event of events.filter(event => event.pubkey === sourcePubkey)) {
+      await this.persistEvent(ownerPubkey, event, relayUrl, now, 'additional', undefined, serverUrls);
+    }
+    this.changed(ownerPubkey);
+  }
+
   async syncAuthoredEvents(pubkey: string, relayUrl: string, loadPage: EventPageLoader, limit = 500): Promise<void> {
-    const id = `${pubkey}:${relayUrl}:authored-events`;
+    return this.syncEventSource(pubkey, pubkey, 'authored', relayUrl, loadPage, [], limit);
+  }
+
+  async syncAdditionalEvents(
+    ownerPubkey: string,
+    sourcePubkey: string,
+    relayUrl: string,
+    loadPage: EventPageLoader,
+    serverUrls: string[] = [],
+    limit = 500
+  ): Promise<void> {
+    return this.syncEventSource(ownerPubkey, sourcePubkey, 'additional', relayUrl, loadPage, serverUrls, limit);
+  }
+
+  private async syncEventSource(
+    pubkey: string,
+    sourcePubkey: string,
+    source: 'authored' | 'additional',
+    relayUrl: string,
+    loadPage: EventPageLoader,
+    serverUrls: string[],
+    limit: number
+  ): Promise<void> {
+    const id =
+      source === 'authored'
+        ? `${pubkey}:${relayUrl}:authored-events`
+        : `${pubkey}:${sourcePubkey}:${relayUrl}:additional-events`;
     const previous = await this.store.get<EventSyncRunRecord>('event_sync_run', id);
     let until = previous?.state === 'pending' ? previous.cursor : undefined;
     let received = previous?.state === 'pending' ? previous.received : 0;
     const startedAt = previous?.state === 'pending' ? previous.startedAt : Date.now();
+    const record = (
+      state: EventSyncRunRecord['state'],
+      extra: Partial<Pick<EventSyncRunRecord, 'cursor' | 'completedAt' | 'error'>> = {}
+    ) =>
+      this.store.put<EventSyncRunRecord>('event_sync_run', {
+        id,
+        pubkey,
+        sourcePubkey: source === 'additional' ? sourcePubkey : undefined,
+        relayUrl,
+        state,
+        startedAt,
+        received,
+        ...extra,
+      });
 
-    await this.store.put<EventSyncRunRecord>('event_sync_run', {
-      id,
-      pubkey,
-      relayUrl,
-      cursor: until,
-      state: 'pending',
-      startedAt,
-      received,
-    });
+    await record('pending', { cursor: until });
     try {
       while (true) {
         const page = await loadPage({ until, limit });
-        const authored = page.filter(event => event.pubkey === pubkey);
-        await this.ingestAuthoredEvents(pubkey, authored, relayUrl);
+        const authored = page.filter(event => event.pubkey === sourcePubkey);
+        if (source === 'additional')
+          await this.ingestAdditionalEvents(pubkey, sourcePubkey, authored, relayUrl, serverUrls);
+        else await this.ingestAuthoredEvents(pubkey, authored, relayUrl);
         received += authored.length;
         const oldest = page.reduce<number | undefined>(
           (value, event) => (value === undefined ? event.created_at : Math.min(value, event.created_at)),
@@ -840,38 +1000,13 @@ export class Catalog {
         );
         if (page.length < limit || oldest === undefined) break;
         until = oldest - 1;
-        await this.store.put<EventSyncRunRecord>('event_sync_run', {
-          id,
-          pubkey,
-          relayUrl,
-          cursor: until,
-          state: 'pending',
-          startedAt,
-          received,
-        });
+        await record('pending', { cursor: until });
       }
-      await this.store.put<EventSyncRunRecord>('event_sync_run', {
-        id,
-        pubkey,
-        relayUrl,
-        state: 'complete',
-        startedAt,
-        completedAt: Date.now(),
-        received,
-      });
+      await record('complete', { completedAt: Date.now() });
       await this.touchProfileSync(pubkey);
       this.changed(pubkey);
     } catch (error) {
-      await this.store.put<EventSyncRunRecord>('event_sync_run', {
-        id,
-        pubkey,
-        relayUrl,
-        cursor: until,
-        state: 'failed',
-        startedAt,
-        error: error instanceof Error ? error.message : String(error),
-        received,
-      });
+      await record('failed', { cursor: until, error: error instanceof Error ? error.message : String(error) });
       this.changed(pubkey);
       throw error;
     }
@@ -976,12 +1111,18 @@ export class Catalog {
   ): Promise<void> {
     const resultId = `${rootSha256}:hls:${HLS_EXTRACTOR_VERSION}`;
     const existing = await this.store.get<ExtractorResultRecord>('extractor_result', resultId);
-    if (existing?.state === 'complete') return;
+    // A completed expansion that moved descendants is final. A completed one that
+    // moved none proved nothing: a single transient error page answered 200 once and
+    // wedged the playlist behind it forever. Every caller here is already gated on
+    // playlist evidence, so re-proving a zero-descendant candidate costs one ranged
+    // GET, not a sweep.
+    if (existing?.state === 'complete' && (!existing.payload || JSON.parse(existing.payload).descendants > 0))
+      return;
     // An earlier reader stopped at the first kilobyte of a playlist whose host sends
     // no `content-range`, so its videos were expanded into a handful of segments
-    // instead of hundreds. Those have to be read again - but a previous run that
-    // found nothing proved the file is not a playlist at all, and re-probing every
-    // one of those would cost thousands of pointless requests.
+    // instead of hundreds. Those have to be read again - and a version-1 run that
+    // found nothing keeps its veto: those were probed en masse, and re-reading all
+    // of them would cost thousands of pointless requests.
     const priorRun = await this.store.get<ExtractorResultRecord>('extractor_result', `${rootSha256}:hls:1`);
     if (priorRun?.state === 'complete' && priorRun.payload && JSON.parse(priorRun.payload).descendants === 0) return;
     // Reading every blob_url row per playlist candidate turned enrichment into an
@@ -1233,15 +1374,30 @@ export class Catalog {
    * timeline forever.
    */
   async queryPlaylistHashes(): Promise<string[]> {
-    const [blobs, urls] = await Promise.all([
+    const [blobs, urls, results] = await Promise.all([
       this.store.getAll<BlobRecord>('blob'),
       this.store.getAll<BlobUrlRecord>('blob_url'),
+      this.store.getAll<ExtractorResultRecord>('extractor_result'),
     ]);
     const byMime = blobs
       .filter(blob => blob.verifiedMimeType && PLAYLIST_MIME_TYPES[blob.verifiedMimeType.toLowerCase()])
       .map(blob => blob.sha256);
+    // The sniff result, not the blob record, is what proves a generically-typed
+    // file: a primal-style `.txt` playlist whose bytes said `#EXTM3U` stayed
+    // `text/plain` in the record and was invisible to both checks below, so its
+    // segments never folded.
+    const bySniff = results
+      .filter(
+        result =>
+          result.name === 'mime-header' &&
+          result.state === 'complete' &&
+          result.version === MIME_EXTRACTOR_VERSION &&
+          !!result.payload &&
+          !!PLAYLIST_MIME_TYPES[JSON.parse(result.payload).mimeType?.toLowerCase()]
+      )
+      .map(result => result.sha256);
     const byExtension = urls.filter(url => url.sha256 && /\.m3u8?($|[?#])/i.test(url.url)).map(url => url.sha256!);
-    return [...new Set([...byMime, ...byExtension])];
+    return [...new Set([...byMime, ...bySniff, ...byExtension])];
   }
 
   /**
@@ -1518,8 +1674,9 @@ export class Catalog {
     event: NostrEvent,
     relayUrl: string | undefined,
     now: number,
-    source: 'authored' | 'reverse' = 'authored',
-    rootSha256?: string
+    source: 'authored' | 'additional' | 'reverse' = 'authored',
+    rootSha256?: string,
+    readOnlyServerUrls: string[] = []
   ) {
     const existing = await this.store.get<CatalogEventRecord>('catalog_event', event.id);
     await this.store.put<CatalogEventRecord>('catalog_event', {
@@ -1541,7 +1698,7 @@ export class Catalog {
       eventId: event.id,
       firstSeenAt: profileEvent?.firstSeenAt ?? now,
       lastSeenAt: now,
-      source,
+      source: source === 'additional' && profileEvent ? profileEvent.source : source,
       rootSha256,
     });
     const timelineEvent = extractTimelineEventMetadata(event);
@@ -1558,7 +1715,10 @@ export class Catalog {
         lastSeenAt: now,
       });
     }
-    const serverUrls = await this.loadServerBaseUrls(pubkey);
+    const serverUrls = normalizeHttpServerUrls([
+      ...(source === 'additional' ? readOnlyServerUrls : await this.loadServerBaseUrls(pubkey)),
+      ...event.tags.filter(tag => tag[0] === 'server').map(tag => tag[1]),
+    ]);
     const references = extractEventReferences(event, serverUrls);
     for (const [index, reference] of references.entries()) {
       await this.persistEventReference(pubkey, event.id, reference, index, now);
@@ -1577,9 +1737,25 @@ export class Catalog {
         );
       }
       if (reference.url) await this.recordBlobUrl(reference.sha256, reference.url, reference.role, 'event', event.id);
-      if (source === 'authored' && reference.sha256) {
+      if (source === 'additional' && reference.sha256) {
+        for (const serverUrl of serverUrls) {
+          await this.recordBlobUrl(
+            reference.sha256,
+            `${serverUrl}/${reference.sha256}`,
+            reference.role,
+            'event',
+            `${event.id}:${serverUrl}`
+          );
+        }
+      }
+      if ((source === 'authored' || source === 'additional') && reference.sha256) {
         await this.ingestBlob(pubkey, descriptorFromReference(reference), {
-          evidenceType: reference.isDirect ? 'authored-event' : 'event-reference',
+          evidenceType:
+            source === 'additional'
+              ? 'additional-event'
+              : reference.isDirect
+                ? 'authored-event'
+                : 'event-reference',
           sourceId: event.id,
           relationRole: reference.role,
           depth: reference.isDirect ? 0 : 1,
@@ -1741,6 +1917,7 @@ function sniffMimeType(bytes: Uint8Array): string | undefined {
     if (brand.startsWith('hei') || brand.startsWith('hev')) return 'image/heic';
     return 'video/mp4';
   }
+
   // Only an fMP4 *init* segment carries `ftyp`. A media segment starts at `styp`,
   // `moof` or `sidx`, which is why 862 of the first 908 sniffs in a real catalog came
   // back as "still binary" - they were the segments of HLS videos.
@@ -1791,4 +1968,17 @@ export function normalizeServerUrl(value: string): string {
   url.search = '';
   url.pathname = url.pathname.replace(/\/+$/, '');
   return url.toString().replace(/\/$/, '');
+}
+function normalizeHttpServerUrls(values: Array<string | undefined>): string[] {
+  const urls = new Set<string>();
+  for (const value of values) {
+    if (!value) continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'http:' || url.protocol === 'https:') urls.add(normalizeServerUrl(value));
+    } catch {
+      // Ignore malformed server hints from untrusted events.
+    }
+  }
+  return [...urls];
 }

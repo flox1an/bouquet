@@ -2,7 +2,7 @@ import { FileText, Image, Music2, Video } from 'lucide-react';
 import type { TimelineProjection, TimelineSortField } from '../../catalog/advanced';
 
 export type TimelineItem = TimelineProjection;
-export type TypeFilter = 'all' | 'media' | TimelineItem['displayType'];
+export type TypeFilter = 'all' | 'media' | 'website' | TimelineItem['displayType'];
 
 export const TYPE_ICON = {
   image: Image,
@@ -15,12 +15,22 @@ export const TYPE_ICON = {
 export const TYPE_FILTERS: Array<{ id: TypeFilter; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'media', label: 'Media' },
+  { id: 'website', label: 'Website' },
   { id: 'image', label: 'Images' },
   { id: 'video', label: 'Video' },
   { id: 'audio', label: 'Audio' },
   { id: 'document', label: 'Documents' },
   { id: 'unknown', label: 'Unclassified' },
 ];
+
+const WEBSITE_EVENT_KINDS = new Set([5128, 15128, 34128, 35128]);
+
+export function matchesTypeFilter(item: TimelineItem, filter: TypeFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'media') return item.displayType !== 'unknown';
+  if (filter === 'website') return item.eventKind !== undefined && WEBSITE_EVENT_KINDS.has(item.eventKind);
+  return item.displayType === filter;
+}
 
 export const AVAILABILITY_LABEL = {
   complete: '✅ Available',

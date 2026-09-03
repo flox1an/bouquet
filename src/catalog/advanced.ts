@@ -162,7 +162,7 @@ function assetTypeFromEvent(event: Pick<NostrEvent, 'kind'>): Asset['assetType']
   if (event.kind === 20) return 'image';
   if (event.kind === 21 || event.kind === 22 || event.kind === 34235 || event.kind === 34236) return 'video';
   if (event.kind === 31337) return 'audio';
-  if ([1063, 30563, 15128, 35128, 5128].includes(event.kind)) return 'document';
+  if ([1063, 30563, 15128, 34128, 35128, 5128].includes(event.kind)) return 'document';
   return 'unknown';
 }
 

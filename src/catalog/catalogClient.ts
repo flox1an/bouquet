@@ -1,4 +1,5 @@
 import type {
+  AdditionalPubkey,
   BlobRemoval,
   CatalogServerType,
   EventPageLoader,
@@ -112,6 +113,15 @@ export class CatalogClient {
     await this.call('reset');
     window.dispatchEvent(new Event('bouquet-catalog-changed'));
   }
+  listAdditionalPubkeys(ownerPubkey: string): Promise<AdditionalPubkey[]> {
+    return this.call('listAdditionalPubkeys', ownerPubkey) as Promise<AdditionalPubkey[]>;
+  }
+  addAdditionalPubkey(ownerPubkey: string, source: Omit<AdditionalPubkey, 'addedAt'>): Promise<void> {
+    return this.call('addAdditionalPubkey', ownerPubkey, source) as Promise<void>;
+  }
+  removeAdditionalPubkey(ownerPubkey: string, pubkey: string): Promise<void> {
+    return this.call('removeAdditionalPubkey', ownerPubkey, pubkey) as Promise<void>;
+  }
   ingestUpload(
     pubkey: string,
     server: ServerRef,
@@ -125,6 +135,24 @@ export class CatalogClient {
   }
   syncAuthoredEvents(pubkey: string, relayUrl: string, loadPage: EventPageLoader, limit?: number): Promise<void> {
     return this.call('syncAuthoredEvents', pubkey, relayUrl, loadPage, limit) as Promise<void>;
+  }
+  syncAdditionalEvents(
+    ownerPubkey: string,
+    sourcePubkey: string,
+    relayUrl: string,
+    loadPage: EventPageLoader,
+    serverUrls?: string[],
+    limit?: number
+  ): Promise<void> {
+    return this.call(
+      'syncAdditionalEvents',
+      ownerPubkey,
+      sourcePubkey,
+      relayUrl,
+      loadPage,
+      serverUrls,
+      limit
+    ) as Promise<void>;
   }
   syncReverseLookups(
     pubkey: string,

@@ -8,6 +8,7 @@ import Login from './Login';
 import { Suspense, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import useLocalStorageState from '../../utils/useLocalStorageState';
+import { DiagnosticsNotice } from '../DiagnosticsNotice';
 
 export const Layout = () => {
   const { user, loginWithExtension } = useCurrentUser();
@@ -37,6 +38,7 @@ export const Layout = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <TopNav />
+      <DiagnosticsNotice />
       <main className={`flex-1 container py-4 md:py-5 ${hasAudioPlayer ? 'pb-24' : ''}`}>
         {user ? (
           <Suspense

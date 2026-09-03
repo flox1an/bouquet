@@ -10,20 +10,39 @@ function isUnsupportedThumbnailHost(host: string): boolean {
   return /\.fips(:|$)/i.test(host);
 }
 
+const VIDEO_EXTENSION_BY_MIME: Record<string, string> = {
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+  'video/x-matroska': 'mkv',
+  'video/x-msvideo': 'avi',
+  'video/3gpp': '3gp',
+};
+
+const videoExtensionFor = (mimeType: string | undefined) =>
+  VIDEO_EXTENSION_BY_MIME[mimeType?.split(';', 1)[0].trim().toLowerCase() ?? ''];
+
 /** Build the fixed preset URL for hash-addressed Blossom media; anything else
     falls back to the unsigned /insecure/ route with the same visual output
     (fit 480x480, q82, webp) — mirrors nostube's preset-thumbnail-url.ts. */
-function proxiedThumbnailUrl(url: string, authorPubkey?: string, knownServers: readonly string[] = []): string {
+function proxiedThumbnailUrl(
+  url: string,
+  authorPubkey?: string,
+  knownServers: readonly string[] = [],
+  extensionHint?: string
+): string {
   if (url.startsWith('data:')) return url;
   const blossom = parseBlossomUrl(url);
   if (blossom) {
-    // Other servers the user's own listing already confirmed hold this blob. Most
-    // useful for a mirrored blob whose event was posted by someone else, where the
-    // URL's host is a stranger and the confirmed server is the one worth trying next.
-    const hosts = [...new Set([blossom.host, ...knownServers])].filter(host => !isUnsupportedThumbnailHost(host));
+    // A listing is direct evidence that a server has this hash. Prefer that
+    // evidence over the event URL's host, which may have deleted the file since.
+    const hosts = [...new Set(knownServers.length > 0 ? knownServers : [blossom.host])].filter(
+      host => !isUnsupportedThumbnailHost(host)
+    );
     // Nothing left to point the proxy at; the plain URL is the next fallback source.
     if (hosts.length === 0) return url;
-    const filename = blossom.ext ? `${blossom.sha256}.${blossom.ext}` : blossom.sha256;
+    const extension = blossom.ext ?? extensionHint;
+    const filename = extension ? `${blossom.sha256}.${extension}` : blossom.sha256;
     const proxyUrl = new URL(`${IMGPROXY_BASE_URL}/v1/preset/feed-preview-v1/${filename}`);
     for (const host of hosts) proxyUrl.searchParams.append('xs', host);
     if (authorPubkey) proxyUrl.searchParams.set('as', authorPubkey);
@@ -50,14 +69,20 @@ type ThumbnailSource = {
 
 type ThumbnailItem = Pick<
   TimelineProjection,
-  'displayType' | 'previewUrl' | 'primaryUrl' | 'eventAuthor' | 'previewBlobSha256' | 'primaryBlobSha256'
+  | 'displayType'
+  | 'displayMimeType'
+  | 'previewUrl'
+  | 'primaryUrl'
+  | 'eventAuthor'
+  | 'previewBlobSha256'
+  | 'primaryBlobSha256'
 >;
 /** Servers already confirmed (via the user's own server listing) to hold a blob. */
 export type KnownServersFor = (sha256: string | undefined) => readonly string[];
 
 function sourcesFor(item: ThumbnailItem, knownServersFor: KnownServersFor): ThumbnailSource[] {
-  const proxied = (url: string, sha256: string | undefined) =>
-    proxiedThumbnailUrl(url, item.eventAuthor, knownServersFor(sha256));
+  const proxied = (url: string, sha256: string | undefined, extensionHint?: string) =>
+    proxiedThumbnailUrl(url, item.eventAuthor, knownServersFor(sha256), extensionHint);
   if (item.displayType === 'image') {
     const imageUrl = item.previewUrl ?? item.primaryUrl;
     const sha256 = item.previewUrl ? item.previewBlobSha256 : item.primaryBlobSha256;
@@ -77,7 +102,12 @@ function sourcesFor(item: ThumbnailItem, knownServersFor: KnownServersFor): Thum
       : [];
     const videoFrame =
       item.primaryUrl && item.primaryUrl !== item.previewUrl
-        ? [{ url: proxied(item.primaryUrl, item.primaryBlobSha256), kind: 'video' as const }]
+        ? [
+            {
+              url: proxied(item.primaryUrl, item.primaryBlobSha256, videoExtensionFor(item.displayMimeType)),
+              kind: 'video' as const,
+            },
+          ]
         : [];
     return [...previewSources, ...videoFrame];
   }

@@ -87,14 +87,23 @@ export function BrowseListRow({
       <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_minmax(18rem,0.9fr)]">
         <Checkbox
           checked={selected}
-          onCheckedChange={() => onSelect(item.assetId)}
-          onClick={event => event.stopPropagation()}
+          onClick={event => {
+            event.stopPropagation();
+            onSelect(item.assetId, event);
+          }}
           aria-label={`Select ${item.displayTitle}`}
           className="mt-1 self-start"
         />
         <Link
           to={to}
-          onClick={onOpen}
+          onClick={event => {
+            if (event.shiftKey) {
+              event.preventDefault();
+              onSelect(item.assetId, event);
+              return;
+            }
+            onOpen();
+          }}
           className="grid min-w-0 gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:grid-cols-[8rem_minmax(0,1fr)]"
           aria-label={`Open details for ${item.displayTitle}`}
         >

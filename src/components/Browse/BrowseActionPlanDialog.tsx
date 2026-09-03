@@ -16,6 +16,13 @@ import { probeReplica } from '../../catalog/availabilityFetch';
 import { transferBlob, type TransferPhase } from '../../utils/transfer';
 import { runTasks } from '../../utils/run';
 import { deleteNip96File } from '../../utils/nip96';
+import {
+  finishDiagnosticRun,
+  recordDiagnosticError,
+  startDiagnosticRun,
+  updateDiagnosticRun,
+  type DiagnosticRun,
+} from '../../utils/diagnostics';
 import type { ServerInfo } from '../../utils/useServerInfo';
 import { ServerSelect } from '../ServerList/ServerSelect';
 import type { TimelineItem } from './browseConstants';
@@ -71,6 +78,7 @@ export function BrowseActionPlanDialog({
   const cancelledRef = useRef(false);
   const deleteAbortRef = useRef<AbortController | undefined>(undefined);
   const failedRef = useRef(false);
+  const diagnosticRunRef = useRef<DiagnosticRun | undefined>(undefined);
 
   // Background catalog updates (a server-list refresh, a projection re-run) give
   // Timeline a freshly-built `items` array on every change, so `assets` is a new
@@ -81,6 +89,7 @@ export function BrowseActionPlanDialog({
   const assetIdsKey = assets.map(item => item.assetId).join(',');
   useEffect(() => {
     if (!open) return;
+    diagnosticRunRef.current = action === 'delete' ? startDiagnosticRun(assets.length) : undefined;
     setPhase('planning');
     setFailureMessage(undefined);
     setPlans(undefined);
@@ -103,6 +112,9 @@ export function BrowseActionPlanDialog({
     )
       .then(async result => {
         setPlans(result);
+        if (diagnosticRunRef.current) {
+          updateDiagnosticRun(diagnosticRunRef.current.id, { phase: 'loading-replica-maps' });
+        }
         const allowed = result.filter(plan => plan.allowed);
         const maps = await Promise.all(
           allowed.map(plan => getCatalogClient().getAssetReplicaMap(pubkey, plan.item.assetId))
@@ -110,8 +122,15 @@ export function BrowseActionPlanDialog({
         setReplicaMaps(maps);
         if (action === 'sync') setSyncGapCount(maps.flatMap(map => buildReplicaOps(map)).length);
         setPhase('reviewing');
+        if (diagnosticRunRef.current) {
+          updateDiagnosticRun(diagnosticRunRef.current.id, { phase: 'reviewing' });
+        }
       })
       .catch(error => {
+        if (diagnosticRunRef.current) {
+          recordDiagnosticError('bulk-delete.planning', error);
+          finishDiagnosticRun(diagnosticRunRef.current.id);
+        }
         setFailureMessage(errorMessage(error));
         setPhase('failed');
       });
@@ -221,6 +240,10 @@ export function BrowseActionPlanDialog({
     // order to retry.
     if (!failedRef.current && !result?.cancelled) onDeleted();
   };
+  const closeDialog = () => {
+    if (diagnosticRunRef.current && phase !== 'running') finishDiagnosticRun(diagnosticRunRef.current.id);
+    onClose();
+  };
   const runDelete = () => {
     const rowKey = (hash: string, serverId: string) => `${hash}:${serverId}`;
     setRows(
@@ -237,9 +260,15 @@ export function BrowseActionPlanDialog({
     const controller = new AbortController();
     deleteAbortRef.current = controller;
     const removed: BlobRemoval[] = [];
+    const diagnosticRunId = diagnosticRunRef.current?.id;
+    let completedCount = 0;
+    let failedCount = 0;
+    if (diagnosticRunId) {
+      updateDiagnosticRun(diagnosticRunId, { phase: 'deleting', total: deleteTasks.length });
+    }
     void runTasks(
       deleteTasks,
-      async task => {
+      async (task, index) => {
         const key = rowKey(task.hash, task.serverId);
         const live = liveServerByServerId.get(task.serverId);
         const dropFromLiveCache = () => {
@@ -249,6 +278,8 @@ export function BrowseActionPlanDialog({
           );
         };
         updateRow(key, { state: 'running', message: undefined });
+        let taskFailed = false;
+        let lastError: string | undefined;
         try {
           if (task.serverType === 'blossom') {
             const auth = await createDeleteAuth(signEventTemplate, task.hash);
@@ -269,16 +300,37 @@ export function BrowseActionPlanDialog({
             removed.push({ sha256: task.hash, serverUrl: task.baseUrl, reason: 'not found on server' });
             updateRow(key, { state: 'not_found', message: 'Already gone from this server.' });
           } else {
-            updateRow(key, { state: 'error', message: errorMessage(error) });
+            taskFailed = true;
+            failedCount += 1;
+            lastError = errorMessage(error);
+            updateRow(key, { state: 'error', message: lastError });
             // Re-throw so runTasks counts the task as failed and the run verdict
             // keeps the selection alive for a retry.
             throw error;
+          }
+        } finally {
+          completedCount += 1;
+          if (diagnosticRunId && (taskFailed || completedCount % 25 === 0 || completedCount === deleteTasks.length)) {
+            updateDiagnosticRun(diagnosticRunId, {
+              completed: completedCount,
+              failed: failedCount,
+              lastTask: index,
+              lastServer: hostOf(task.baseUrl),
+              lastError,
+            });
           }
         }
       },
       { concurrency: CONCURRENCY, signal: controller.signal }
     )
       .then(async result => {
+        if (diagnosticRunId) {
+          updateDiagnosticRun(diagnosticRunId, {
+            phase: 'updating-catalog',
+            completed: completedCount,
+            failed: failedCount,
+          });
+        }
         // Every server that confirmed the blob gone - deleted just now, or already a
         // 404 - stops counting as a replica immediately, instead of waiting for the
         // next probe to notice the file it just watched disappear.
@@ -287,8 +339,13 @@ export function BrowseActionPlanDialog({
           await getCatalogClient().projectCatalogAssets(pubkey, { force: true });
         }
         complete(result);
+        if (diagnosticRunId) finishDiagnosticRun(diagnosticRunId);
       })
       .catch(error => {
+        if (diagnosticRunId) {
+          recordDiagnosticError('bulk-delete.catalog-update', error);
+          finishDiagnosticRun(diagnosticRunId);
+        }
         setFailureMessage(errorMessage(error));
         setPhase('failed');
       });
@@ -548,7 +605,7 @@ export function BrowseActionPlanDialog({
           <div className="mt-6 flex justify-end gap-2">
             {phase === 'reviewing' && (
               <>
-                <Button variant="outline" size="sm" onClick={onClose}>
+                <Button variant="outline" size="sm" onClick={closeDialog}>
                   Cancel
                 </Button>
                 <Button
@@ -571,15 +628,18 @@ export function BrowseActionPlanDialog({
                 size="sm"
                 onClick={() => {
                   cancelledRef.current = true;
+                  if (diagnosticRunRef.current) {
+                    updateDiagnosticRun(diagnosticRunRef.current.id, { phase: 'cancelling' });
+                  }
                   deleteAbortRef.current?.abort();
-                  onClose();
+                  closeDialog();
                 }}
               >
                 Cancel
               </Button>
             )}
             {(phase === 'complete' || phase === 'failed') && (
-              <Button size="sm" onClick={onClose}>
+              <Button size="sm" onClick={closeDialog}>
                 Close
               </Button>
             )}

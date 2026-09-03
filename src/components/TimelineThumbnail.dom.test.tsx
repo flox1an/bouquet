@@ -12,6 +12,7 @@ afterEach(cleanup);
 type Item = Pick<
   TimelineProjection,
   | 'displayType'
+  | 'displayMimeType'
   | 'previewUrl'
   | 'primaryUrl'
   | 'eventAuthor'
@@ -24,6 +25,7 @@ const hashA = 'a'.repeat(64);
 
 const item = (): Item => ({
   displayType: 'image',
+  displayMimeType: 'image/jpeg',
   previewUrl: 'https://media.example/pic.jpg',
   primaryUrl: undefined,
   eventAuthor: undefined,
@@ -95,5 +97,26 @@ describe('TimelineThumbnail', () => {
     fireEvent.error(imgs()[1]);
     expect(box.querySelector('img')).toBeNull();
     expect(box.querySelector('svg')).toBeTruthy();
+  });
+
+  it('marks extensionless videos for range extraction and hints only confirmed servers', () => {
+    const { container } = render(
+      h(TimelineThumbnail, {
+        item: {
+          ...item(),
+          displayType: 'video',
+          displayMimeType: 'video/mp4',
+          previewUrl: undefined,
+          primaryUrl: `https://24242.io/${hashA}`,
+          previewBlobSha256: undefined,
+          primaryBlobSha256: hashA,
+        },
+        knownServersFor: () => ['nostr.download'],
+      })
+    );
+
+    const proxyUrl = new URL((container.querySelector('img') as HTMLImageElement).src);
+    expect(proxyUrl.pathname).toBe(`/v1/preset/feed-preview-v1/${hashA}.mp4`);
+    expect(proxyUrl.searchParams.getAll('xs')).toEqual(['nostr.download']);
   });
 });

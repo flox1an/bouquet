@@ -12,7 +12,11 @@ import {
   type CatalogAction,
   type TimelineSort,
 } from '../catalog/advanced';
-import { syncAuthoredEventsFromRelays, syncReverseLookupsFromRelays } from '../catalog/catalogNostr';
+import {
+  syncAdditionalPubkeyFromRelays,
+  syncAuthoredEventsFromRelays,
+  syncReverseLookupsFromRelays,
+} from '../catalog/catalogNostr';
 import { useNostr } from '../utils/nostr';
 import { useCatalogStatus } from '../catalog/useCatalogStatus';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -28,7 +32,7 @@ import { BrowseSelectionBar } from '../components/Browse/BrowseSelectionBar';
 import { BrowseActionPlanDialog } from '../components/Browse/BrowseActionPlanDialog';
 import { useAssetSelection } from '../components/Browse/useAssetSelection';
 import type { AvailabilityFilter } from '../components/Browse/BrowseFilterMenu';
-import type { TimelineItem, TypeFilter } from '../components/Browse/browseConstants';
+import { matchesTypeFilter, type TimelineItem, type TypeFilter } from '../components/Browse/browseConstants';
 
 type BrowseViewState = {
   anchorAssetId?: string;
@@ -109,6 +113,7 @@ export default function Timeline() {
   const [lookupError, setLookupError] = useState<string>();
   const [projectionError, setProjectionError] = useState<string>();
   const [projectionAttempt, setProjectionAttempt] = useState(0);
+  const [eventSyncGeneration, setEventSyncGeneration] = useState(0);
   const [activeMonth, setActiveMonth] = useState<string>();
   const [bulkAction, setBulkAction] = useState<CatalogAction>();
   const [cardAction, setCardAction] = useState<{ action: CatalogAction; item: TimelineItem }>();
@@ -121,19 +126,23 @@ export default function Timeline() {
   useEffect(() => {
     if (!user?.pubkey || !relaysReady) return;
     const relayUrls = user.relayUrls ?? [];
-    const key = `${user.pubkey}:${relayUrls.join(',')}`;
+    const key = `${user.pubkey}:${relayUrls.join(',')}:${eventSyncGeneration}`;
     if (syncedRelayKey.current === key) return;
     syncedRelayKey.current = key;
     const catalog = getCatalogClient();
     const pubkey = user.pubkey;
     void (async () => {
+      const additionalPubkeys = (await catalog.listAdditionalPubkeys(pubkey)) ?? [];
       await syncAuthoredEventsFromRelays(catalog, pubkey, relayUrls);
+      for (const source of additionalPubkeys) {
+        await syncAdditionalPubkeyFromRelays(catalog, pubkey, source, relayUrls);
+      }
       await syncReverseLookupsFromRelays(catalog, pubkey, relayUrls);
     })().catch(() => {
       // Every per-relay failure is already recorded in the catalog's sync runs, and
       // the timeline stays usable from the files it knows about.
     });
-  }, [relaysReady, user?.pubkey, user?.relayUrls]);
+  }, [eventSyncGeneration, relaysReady, user?.pubkey, user?.relayUrls]);
 
   useEffect(() => {
     if (!user?.pubkey) {
@@ -306,8 +315,7 @@ export default function Timeline() {
         (!eventOnly || item.eventId !== undefined) &&
         (!unlinkedOnly || item.eventId === undefined) &&
         (!descriptiveOnly || !item.displayTitleIsFallback) &&
-        (typeFilter === 'all' ||
-          (typeFilter === 'media' ? item.displayType !== 'unknown' : item.displayType === typeFilter)) &&
+        matchesTypeFilter(item, typeFilter) &&
         (availabilityFilter.length === 0 || availabilityFilter.includes(item.availabilityState)) &&
         (!serverId || serverAssetIds?.has(item.assetId)) &&
         textTerms.every(term => item.searchText.includes(term)) &&
@@ -438,6 +446,11 @@ export default function Timeline() {
     await storeUserServers(newServers);
   };
 
+  const handleRescan = useCallback(async () => {
+    await rescan();
+    setEventSyncGeneration(generation => generation + 1);
+  }, [rescan]);
+
   if (!user?.pubkey) {
     return (
       <main className="mx-auto flex min-h-[55vh] max-w-2xl flex-col justify-center px-6">
@@ -496,7 +509,7 @@ export default function Timeline() {
         selectedServerName={selectedServerName}
         onServerChange={setSelectedServerName}
         onManageServers={() => setIsServerListDialogOpen(true)}
-        onRescan={rescan}
+        onRescan={handleRescan}
         eventOnly={eventOnly}
         onEventOnlyChange={setEventOnly}
         unlinkedOnly={unlinkedOnly}

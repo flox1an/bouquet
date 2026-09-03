@@ -220,4 +220,40 @@ describe('BrowseActionPlanDialog', () => {
     await vi.waitFor(() => expect(screen.getByText(/1 deleted, 0 already gone, 0 failed/i)).toBeTruthy());
     expect(recordBlobsRemoved).toHaveBeenCalledWith('pk', [{ sha256: hashA, serverUrl: 'https://almond.slidetr.net' }]);
   });
+
+  it('completes a 700-file delete run', async () => {
+    const hashFor = (assetId: string) => Number(assetId.slice(6)).toString(16).padStart(64, '0');
+    planCatalogAction.mockImplementation(async (_pubkey: string, assetId: string) => ({
+      allowed: true,
+      targets: [hashFor(assetId)],
+    }));
+    getAssetReplicaMap.mockImplementation(async (_pubkey: string, assetId: string) => {
+      const hash = hashFor(assetId);
+      return [
+        {
+          sha256: hash,
+          assetId,
+          role: 'main',
+          size: 10,
+          sources: [{ serverId: 'https://media.example', baseUrl: 'https://media.example', serverType: 'blossom' }],
+          presentOn: ['https://media.example'],
+          absentFrom: [],
+        },
+      ];
+    });
+    recordBlobsRemoved.mockResolvedValue(undefined);
+    projectCatalogAssets.mockResolvedValue(undefined);
+    createDeleteAuth.mockResolvedValue({ id: 'auth-event' });
+    deleteBlob.mockResolvedValue(true);
+
+    renderDialog(Array.from({ length: 700 }, (_, index) => item(`asset-${index}`)));
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /Delete 700 files/i })).toBeTruthy(), {
+      timeout: 10_000,
+    });
+    await userEvent.click(screen.getByRole('button', { name: /Delete 700 files/i }));
+    await vi.waitFor(() => expect(screen.getByText(/700 deleted, 0 already gone, 0 failed/i)).toBeTruthy(), {
+      timeout: 30_000,
+    });
+    expect(deleteBlob).toHaveBeenCalledTimes(700);
+  });
 });

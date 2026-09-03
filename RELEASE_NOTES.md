@@ -80,6 +80,14 @@ escape while running always offer a way out when they stop, and a failure after
 a successful transfer says the transfer happened and only the local view is
 stale, rather than implying data was lost.
 
+Bulk deletes now leave a local diagnostic checkpoint with their phase,
+progress, last server and JavaScript heap use. If the tab dies, the next load
+offers that report for download instead of losing the only useful evidence.
+
+Extensionless video URLs now carry their known container type into thumbnail
+requests, so large videos use range-based frame extraction instead of a full
+download. Server hints prefer listings that actually confirmed the file.
+
 ### Accessibility and small screens
 
 Logout is reachable on a phone, icon-only controls have names, the theme

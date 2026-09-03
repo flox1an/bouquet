@@ -15,11 +15,13 @@ import { Layout } from './components/Layout/Layout.tsx';
 import { GlobalProvider } from './GlobalState.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PasswordPromptProvider } from './components/PasswordPromptProvider';
+import { initializeDiagnostics } from './utils/diagnostics';
 
 const Transfer = React.lazy(() => import('./pages/Transfer.tsx').then(m => ({ default: m.Transfer })));
 const Upload = React.lazy(() => import('./pages/Upload.tsx'));
 const Timeline = React.lazy(() => import('./pages/Timeline.tsx'));
 const TimelineAssetDetail = React.lazy(() => import('./pages/TimelineAssetDetail.tsx'));
+const Settings = React.lazy(() => import('./pages/Settings.tsx'));
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -32,6 +34,7 @@ const router = createBrowserRouter(
       <Route path="/transfer/:source" element={<Transfer />} />
       <Route path="/sync" element={<Transfer />} />
       <Route path="/upload" element={<Upload />} />
+      <Route path="/settings" element={<Settings />} />
       <Route path="/timeline" element={<Navigate to="/browse" replace />} />
       <Route path="/timeline/:assetId" element={<RedirectToBrowseAsset />} />
     </Route>
@@ -54,6 +57,7 @@ const queryClient = new QueryClient({
 const ReactQueryDevtools = import.meta.env.DEV
   ? React.lazy(() => import('@tanstack/react-query-devtools').then(module => ({ default: module.ReactQueryDevtools })))
   : null;
+initializeDiagnostics();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

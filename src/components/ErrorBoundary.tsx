@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { downloadDiagnosticReport, recordDiagnosticError } from '../utils/diagnostics';
 
 interface Props {
   children: ReactNode;
@@ -24,6 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Uncaught error during render:', error, info);
+    recordDiagnosticError('react.error-boundary', error);
   }
 
   handleReload = () => {
@@ -57,6 +59,13 @@ export class ErrorBoundary extends Component<Props, State> {
           >
             <RefreshCw className="h-4 w-4" />
             Reload
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadDiagnosticReport()}
+            className="mt-2 inline-flex w-full items-center justify-center rounded-md border px-4 py-2 text-sm font-medium"
+          >
+            Download diagnostic report
           </button>
         </div>
       </div>

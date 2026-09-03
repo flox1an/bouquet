@@ -6,7 +6,7 @@ import { BrowseSelectionBar } from './BrowseSelectionBar';
 import { BrowseListRow } from './BrowseListRow';
 import { BrowseMediaGrid } from './BrowseMediaGrid';
 import { groupByMonth } from '../TimelineNavigation';
-import type { TimelineItem } from './browseConstants';
+import { matchesTypeFilter, TYPE_FILTERS, type TimelineItem } from './browseConstants';
 
 const item = (over: Partial<TimelineItem> = {}): TimelineItem =>
   ({
@@ -35,6 +35,15 @@ const item = (over: Partial<TimelineItem> = {}): TimelineItem =>
 const render = (node: Parameters<typeof renderToString>[0]) => renderToString(h(MemoryRouter, null, node));
 
 describe('browse presentation smoke', () => {
+  it('offers a Website filter for nsite v1, v2, and snapshots', () => {
+    expect(TYPE_FILTERS).toContainEqual({ id: 'website', label: 'Website' });
+    for (const eventKind of [34128, 15128, 35128, 5128]) {
+      expect(matchesTypeFilter(item({ eventKind }), 'website')).toBe(true);
+    }
+    expect(matchesTypeFilter(item({ eventKind: 30563 }), 'website')).toBe(false);
+    expect(matchesTypeFilter(item({ eventId: undefined, eventKind: undefined }), 'website')).toBe(false);
+  });
+
   it('renders a list row for every availability state and both title kinds', () => {
     for (const availabilityState of ['complete', 'partial', 'unavailable', 'unknown'] as const) {
       const html = render(

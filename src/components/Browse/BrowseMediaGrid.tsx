@@ -301,7 +301,14 @@ function MediaCard({
     >
       <Link
         to={toFor(item.assetId)}
-        onClick={event => onOpen(item.assetId, event.currentTarget.closest('article')?.getBoundingClientRect().top)}
+        onClick={event => {
+          if (event.shiftKey) {
+            event.preventDefault();
+            onSelect(item.assetId, event);
+            return;
+          }
+          onOpen(item.assetId, event.currentTarget.closest('article')?.getBoundingClientRect().top);
+        }}
         className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         aria-label={`Open details for ${item.displayTitle}`}
       >
@@ -346,8 +353,10 @@ function MediaCard({
       <div className="pointer-events-none absolute inset-0">
         <Checkbox
           checked={selected}
-          onCheckedChange={() => onSelect(item.assetId)}
-          onClick={event => event.stopPropagation()}
+          onClick={event => {
+            event.stopPropagation();
+            onSelect(item.assetId, event);
+          }}
           aria-label={`Select ${item.displayTitle}`}
           className="pointer-events-auto absolute left-1 top-1 bg-background"
         />

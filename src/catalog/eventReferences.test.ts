@@ -24,8 +24,24 @@ describe('extractEventReferences', () => {
     expect(refs).toContainEqual(expect.objectContaining({ sha256: hashA, role: 'main', isDirect: true }));
     expect(refs).toContainEqual(expect.objectContaining({ sha256: hashB, role: 'original', isDirect: true }));
   });
+  it('extracts the blob hash from a v1 nsite file event', () => {
+    const refs = extractEventReferences(
+      event(
+        'nsite-v1',
+        100,
+        [
+          ['d', '/index.html'],
+          ['x', hashA],
+        ],
+        '',
+        34128
+      )
+    );
+
+    expect(refs).toContainEqual(expect.objectContaining({ sha256: hashA, role: 'main', isDirect: true }));
+  });
   it.each([30563, 15128, 35128, 5128])(
-    'extracts file hashes from kind %i nsite path tags without treating the aggregate as a file',
+    'extracts file hashes from kind %i path tags without treating the aggregate as a file',
     kind => {
       const refs = extractEventReferences(
         event(

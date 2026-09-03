@@ -5,6 +5,7 @@ import { useNostr } from '../utils/nostr';
 import { groupEventsByHash } from './fileMetaEventIndex';
 export const KIND_FILE_META = 1063;
 export const KIND_BLOSSOM_DRIVE = 30563;
+export const KIND_NSITE_FILE = 34128;
 export const KIND_NSITE_SNAPSHOT = 5128;
 export const KIND_NSITE_ROOT = 15128;
 export const KIND_NSITE_NAMED = 35128;
@@ -27,6 +28,7 @@ const useFileMetaEventsByHash = () => {
         kinds: [
           KIND_FILE_META,
           KIND_BLOSSOM_DRIVE,
+          KIND_NSITE_FILE,
           KIND_NSITE_SNAPSHOT,
           KIND_NSITE_ROOT,
           KIND_NSITE_NAMED,

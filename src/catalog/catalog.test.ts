@@ -53,11 +53,21 @@ describe('user blob catalog', () => {
     expect(bare).toMatchObject({ title: 'Untitled picture', titleIsFallback: true });
     expect(bare.title.startsWith('Nostr event')).toBe(false);
   });
-  it('projects legacy and current nsite manifests from path-tagged files', async () => {
+  it('projects v1 file events and current nsite manifests', async () => {
     const catalog = new Catalog(new MemoryCatalogStore());
     const manifests = [
       event(
-        'legacy-nsite',
+        'nsite-v1-file',
+        99,
+        [
+          ['d', '/index.html'],
+          ['x', hashA],
+        ],
+        '',
+        34128
+      ),
+      event(
+        'blossom-drive',
         100,
         [
           ['path', '/index.html', hashA],
@@ -104,7 +114,8 @@ describe('user blob catalog', () => {
 
     expect(await queryCatalogTimeline(catalog, pubkey, { types: ['document'] })).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ eventId: 'legacy-nsite', primaryBlobSha256: hashA }),
+        expect.objectContaining({ eventId: 'nsite-v1-file', primaryBlobSha256: hashA }),
+        expect.objectContaining({ eventId: 'blossom-drive', primaryBlobSha256: hashA }),
         expect.objectContaining({ eventId: 'root-nsite', primaryBlobSha256: hashB }),
         expect.objectContaining({ eventId: 'named-nsite', primaryBlobSha256: hashC }),
         expect.objectContaining({ eventId: 'snapshot-nsite', primaryBlobSha256: hashD }),
@@ -324,6 +335,42 @@ describe('user blob catalog', () => {
       expect.objectContaining({ displayType: 'video', primaryBlobSha256: hashA, blobCount: 2 }),
     ]);
   });
+  it('re-expands a playlist wedged behind a zero-descendant expansion', async () => {
+    const store = new MemoryCatalogStore();
+    const catalog = new Catalog(store);
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://cdn.example', type: 'blossom' },
+      blobs: [{ ...blob(hashA), url: 'https://cdn.example/master.txt', type: 'text/plain' }],
+      state: 'complete',
+    });
+    // Identification sniffed the bytes and proved a playlist; the record itself
+    // stays generic, which is how a `.txt` playlist is typed once server and HEAD
+    // evidence are all a catalog has beside the sniff payload.
+    const prefix = new TextEncoder().encode('#EXTM3U\n#EXTINF:4,\n');
+    await catalog.enrichBlobPrefix(pubkey, hashA, 'https://cdn.example/master.txt', async () => ({
+      bytes: prefix.buffer,
+      mimeType: 'text/plain',
+      size: prefix.byteLength,
+      truncated: false,
+    }));
+    await store.put('blob', { ...(await store.get('blob', hashA))!, verifiedMimeType: 'text/plain' });
+    // One transient error page answered 200, and the expansion recorded itself done.
+    await catalog.enrichHls(pubkey, hashA, async () => '<html>502 gateway</html>');
+
+    // The sniff payload still proves the playlist, and the poisoned result no
+    // longer vetoes a retry: the sweep offers the hash and expansion actually runs.
+    expect(await catalog.queryPlaylistHashes()).toContain(hashA);
+    await catalog.enrichHls(pubkey, hashA, async url => {
+      if (url.endsWith('master.txt')) return `#EXTM3U\n#EXTINF:4,\nhttps://cdn.example/${hashB}.ts`;
+      return '#EXTM3U\n';
+    });
+    expect(await store.getAll('blob_relationship')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ fromSha256: hashA, toSha256: hashB, type: 'segment' })])
+    );
+    const result = await store.get<{ state: string; payload?: string }>('extractor_result', `${hashA}:hls:2`);
+    expect(result?.state).toBe('complete');
+    expect(JSON.parse(result?.payload ?? '{}').descendants).toBeGreaterThan(0);
+  });
   it('replaces a standalone blob projection when an event references that blob', async () => {
     const catalog = new Catalog(new MemoryCatalogStore());
     await catalog.ingestServerList(pubkey, {
@@ -539,6 +586,64 @@ describe('user blob catalog', () => {
     // The rescan re-ingests the same listing; the wiped catalog accepts it whole.
     await catalog.ingestServerList(pubkey, listing);
     expect((await catalog.getCatalogStatus(pubkey)).knownHashes).toBe(1);
+  });
+
+  it('stores additional pubkeys per account and preserves them across catalog rescans', async () => {
+    const catalog = new Catalog(new MemoryCatalogStore());
+    await catalog.addAdditionalPubkey(hashA, {
+      pubkey: hashB,
+      relayHints: ['wss://one.example', 'wss://one.example'],
+    });
+
+    await catalog.reset();
+    expect(await catalog.listAdditionalPubkeys(hashA)).toEqual([
+      expect.objectContaining({ pubkey: hashB, relayHints: ['wss://one.example'] }),
+    ]);
+    expect(await catalog.listAdditionalPubkeys(hashC)).toEqual([]);
+
+    await catalog.removeAdditionalPubkey(hashA, hashB);
+    expect(await catalog.listAdditionalPubkeys(hashA)).toEqual([]);
+  });
+
+  it('imports a selected pubkey as read-only content with its Blossom source', async () => {
+    const catalog = new Catalog(new MemoryCatalogStore());
+    await catalog.addAdditionalPubkey(hashA, { pubkey: hashB, relayHints: [] });
+    const website = {
+      ...event('external-site', 100, [['d', '/index.html'], ['x', hashC]], '', 34128),
+      pubkey: hashB,
+    };
+    const unrelated = { ...event('unrelated', 100, [['x', hashD]]), pubkey: hashD };
+
+    await catalog.syncAdditionalEvents(
+      hashA,
+      hashB,
+      'wss://relay.example',
+      async () => [website, unrelated],
+      ['https://files.example/']
+    );
+    await projectCatalogAssets(catalog, hashA, { force: true });
+
+    const imported = (await queryCatalogTimeline(catalog, hashA)).find(
+      item => item.eventId === 'external-site'
+    );
+    expect(imported).toMatchObject({
+      eventAuthor: hashB,
+      primaryBlobSha256: hashC,
+      primaryUrl: `https://files.example/${hashC}`,
+    });
+
+    await catalog.ingestServerList(hashA, {
+      server: { url: 'https://owned.example', type: 'blossom' },
+      blobs: [blob(hashC)],
+      state: 'complete',
+      full: true,
+    });
+    await catalog.removeAdditionalPubkey(hashA, hashB);
+    await projectCatalogAssets(catalog, hashA, { force: true });
+    const remaining = await queryCatalogTimeline(catalog, hashA);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]).toMatchObject({ primaryBlobSha256: hashC });
+    expect(remaining[0].eventId).toBeUndefined();
   });
 
   it('marks a directly referenced native URL as available without treating it as a transferable replica', async () => {

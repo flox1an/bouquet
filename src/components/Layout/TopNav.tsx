@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, Upload, FolderOpen, RefreshCw, User } from 'lucide-react';
+import { FolderOpen, Menu, RefreshCw, Settings as SettingsIcon, Upload, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
@@ -62,6 +62,12 @@ export function TopNav() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link to="/settings" className="flex items-center gap-2">
+                    <SettingsIcon className="h-4 w-4" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -110,6 +116,12 @@ function MobileNav({ onLogout }: { onLogout: () => void }) {
       </div>
       <div className="border-t pt-4">
         <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Account</p>
+        <Button variant="ghost" className="mb-2 w-full justify-start" asChild>
+          <Link to="/settings">
+            <SettingsIcon className="mr-2 h-4 w-4" />
+            Settings
+          </Link>
+        </Button>
         <Button variant="outline" className="w-full" onClick={onLogout}>
           Logout
         </Button>
