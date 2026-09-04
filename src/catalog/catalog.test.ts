@@ -566,6 +566,34 @@ describe('user blob catalog', () => {
     expect(assetIds).toHaveLength(1);
     expect(assetIds[0]).toBe(`${pubkey}:immutable-event:asset-a`);
   });
+  it('a listing cannot resurrect presence that a probe observed gone', async () => {
+    const store = new MemoryCatalogStore();
+    const catalog = new Catalog(store);
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://one.example', type: 'blossom' },
+      blobs: [blob(hashA)],
+      state: 'complete',
+      full: true,
+    });
+    await refreshReplicaAvailability(catalog, pubkey, async () => ({ status: 404 }));
+
+    // A Primal-style stale listing still carries the deleted blob; the re-claim
+    // must not overwrite the probe's absence.
+    await catalog.ingestServerList(pubkey, {
+      server: { url: 'https://one.example', type: 'blossom' },
+      blobs: [blob(hashA)],
+      state: 'complete',
+      full: true,
+    });
+
+    const locations = await store.getAllFromIndex<{ state: string }>('blob_location', 'by_sha256', hashA);
+    expect(locations.map(location => location.state)).toEqual(['absent']);
+    await projectCatalogAssets(catalog, pubkey, { force: true });
+    expect((await queryCatalogTimeline(catalog, pubkey))[0]).toMatchObject({
+      availabilityState: 'unavailable',
+      replicaCount: 0,
+    });
+  });
   it('resets to an empty catalog and rebuilds from the listings on rescan', async () => {
     const catalog = new Catalog(new MemoryCatalogStore());
     const listing = {

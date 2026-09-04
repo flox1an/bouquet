@@ -767,8 +767,12 @@ export class Catalog {
       // The server just told us it holds this blob - that's direct, authoritative
       // presence evidence, not something the HTTP-probe replica check should have
       // to rediscover before the server filter (or replica count) can see it.
+      // One exception: a probe-observed 404/410 outranks the listing's claim
+      // (Primal keeps listing blobs it has already deleted), and only a fresh
+      // probe may flip absence back - the claim here must not resurrect it.
       const id = `${descriptor.sha256}:${serverId}`;
       const previous = await this.store.get<BlobLocationRecord>('blob_location', id);
+      if (previous?.state === 'absent') continue;
       await this.store.put<BlobLocationRecord>('blob_location', {
         id,
         sha256: descriptor.sha256,

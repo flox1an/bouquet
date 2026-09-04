@@ -24,7 +24,7 @@ _Avoid_: library, database, cache
 A stored record explaining why a blob belongs to a user's context — server list, authored event, upload, mirror, rescan. Every membership must be explainable by at least one evidence record.
 
 **Replica**:
-The observed presence of a blob on one server, with state and history. Absence is a time-bound observation, never a permanent truth — except when a full server listing (rescan) or a direct delete confirms removal (ADR-0006).
+The observed presence of a blob on one server, with state and history. Absence is a time-bound observation, never a permanent truth — except when a full server listing (rescan) or a direct delete confirms removal (ADR-0006). A listing claiming a blob is back cannot override a probe-observed 404; only a fresh probe can.
 _Avoid_: copy (in code)
 
 **Asset**:

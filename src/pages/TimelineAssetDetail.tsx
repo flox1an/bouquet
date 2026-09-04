@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Code2, ExternalLink, FileText, Image, Loader2, MoreVertical, Music2, Video } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -57,54 +57,60 @@ export default function TimelineAssetDetail() {
     Record<string, Array<{ serverId: string; state: string; httpStatus?: number }>>
   >({});
   const [rawEventOpen, setRawEventOpen] = useState(false);
+  const availabilityStarted = useRef(false);
 
-  const checkAvailability = useCallback(async () => {
-    if (!user?.pubkey || !assetId) return;
-    setCheckingAvailability(true);
-    setServerResults({});
-    const probe = async (server: { id: string; baseUrl: string }, sha256: string) => {
-      const url = `${server.baseUrl}/${sha256}`;
-      try {
-        const response = await fetch(url, { method: 'HEAD' });
-        return {
-          status: response.status,
-          size: response.status === 200 ? Number(response.headers.get('content-length') ?? 0) : undefined,
-          mimeType: response.headers.get('content-type') ?? undefined,
-        };
-      } catch {
-        return { status: 0 };
-      }
-    };
-    const blobHashes = detail?.blobs?.map(b => b.sha256);
-    if (!blobHashes || blobHashes.length === 0) {
-      setCheckingAvailability(false);
-      return;
-    }
-    await Promise.all([
-      getCatalogClient().refreshReplicaAvailability(
-        user.pubkey,
-        probe,
-        1_000_000,
-        blobHashes,
-        (sha256, serverId, state, httpStatus) => {
-          setServerResults(prev => ({
-            ...prev,
-            [sha256]: [...(prev[sha256] ?? []), { serverId, state, httpStatus }],
-          }));
+  const checkAvailability = useCallback(
+    async (blobHashes: string[]) => {
+      if (!user?.pubkey || !assetId || availabilityStarted.current) return;
+      availabilityStarted.current = true;
+      setCheckingAvailability(true);
+      setServerResults({});
+      const probe = async (server: { id: string; baseUrl: string }, sha256: string) => {
+        const url = `${server.baseUrl}/${sha256}`;
+        try {
+          const response = await fetch(url, { method: 'HEAD' });
+          return {
+            status: response.status,
+            size: response.status === 200 ? Number(response.headers.get('content-length') ?? 0) : undefined,
+            mimeType: response.headers.get('content-type') ?? undefined,
+          };
+        } catch {
+          return { status: 0 };
         }
-      ),
-      getCatalogClient().refreshEventUrlAvailability(user.pubkey, probeNativeUrl, 1_000_000, blobHashes),
-    ]).catch(() => undefined);
-    setCheckingAvailability(false);
-    setAvailableChecked(true);
-    if (assetId)
+      };
+      try {
+        await Promise.all([
+          getCatalogClient().refreshReplicaAvailability(
+            user.pubkey,
+            probe,
+            1_000_000,
+            blobHashes,
+            (sha256, serverId, state, httpStatus) => {
+              setServerResults(prev => ({
+                ...prev,
+                [sha256]: [...(prev[sha256] ?? []), { serverId, state, httpStatus }],
+              }));
+            }
+          ),
+          getCatalogClient().refreshEventUrlAvailability(user.pubkey, probeNativeUrl, 1_000_000, blobHashes),
+        ]);
+        // The probes rewrote blob_location rows; reproject so the header's
+        // availability reflects what the servers answered, not the last listing.
+        await getCatalogClient().projectCatalogAssets(user.pubkey, { force: true });
+      } catch {
+        // Show whatever the catalog holds now; the check can run again next visit.
+      }
+      setCheckingAvailability(false);
+      setAvailableChecked(true);
       getCatalogClient()
         .getCatalogTimelineAsset(user.pubkey, assetId)
         .then(result => {
           if (result) setDetail(result);
         })
         .catch(() => undefined);
-  }, [user?.pubkey, assetId, detail?.blobs]);
+    },
+    [user?.pubkey, assetId]
+  );
 
   useEffect(() => {
     if (!user?.pubkey || !assetId) return;
@@ -122,61 +128,9 @@ export default function TimelineAssetDetail() {
         if (!active) return;
         setDetail(result);
         setState(result ? 'ready' : 'missing');
-        // Auto-check availability for assets with <10 blobs
-        if (
-          result &&
-          result.blobs.length < 10 &&
-          user?.pubkey &&
-          assetId &&
-          !availableChecked &&
-          !checkingAvailability
-        ) {
-          const blobHashes = result.blobs.map(b => b.sha256);
-          setCheckingAvailability(true);
-          const probe = async (server: { id: string; baseUrl: string }, sha256: string) => {
-            const url = `${server.baseUrl}/${sha256}`;
-            try {
-              const response = await fetch(url, { method: 'HEAD' });
-              return {
-                status: response.status,
-                size: response.status === 200 ? Number(response.headers.get('content-length') ?? 0) : undefined,
-                mimeType: response.headers.get('content-type') ?? undefined,
-              };
-            } catch {
-              return { status: 0 };
-            }
-          };
-          Promise.all([
-            getCatalogClient().refreshReplicaAvailability(
-              user.pubkey,
-              probe,
-              1_000_000,
-              blobHashes,
-              (sha256, serverId, state, httpStatus) => {
-                setServerResults(prev => ({
-                  ...prev,
-                  [sha256]: [...(prev[sha256] ?? []), { serverId, state, httpStatus }],
-                }));
-              }
-            ),
-            getCatalogClient().refreshEventUrlAvailability(user.pubkey, probeNativeUrl, 1_000_000, blobHashes),
-          ])
-            .then(() => {
-              if (!active) return;
-              setCheckingAvailability(false);
-              setAvailableChecked(true);
-              if (assetId)
-                getCatalogClient()
-                  .getCatalogTimelineAsset(user.pubkey, assetId)
-                  .then(r => {
-                    if (r && active) setDetail(r);
-                  })
-                  .catch(() => undefined);
-            })
-            .catch(() => {
-              if (active) setCheckingAvailability(false);
-            });
-        }
+        // Auto-check availability for small assets; the check ends with a forced
+        // reprojection so the header agrees with the per-blob states.
+        if (result && result.blobs.length < 10) void checkAvailability(result.blobs.map(b => b.sha256));
       })
       .catch(() => {
         if (active) setState('failed');
@@ -184,7 +138,7 @@ export default function TimelineAssetDetail() {
     return () => {
       active = false;
     };
-  }, [assetId, user?.pubkey, loadAttempt]);
+  }, [assetId, user?.pubkey, loadAttempt, checkAvailability]);
 
   const returnToTimeline = () => {
     const timelineLocationKey = (location.state as DetailReturnState | null)?.timelineLocationKey;
@@ -357,7 +311,7 @@ export default function TimelineAssetDetail() {
                 size="sm"
                 variant="outline"
                 disabled={checkingAvailability}
-                onClick={() => void checkAvailability()}
+                onClick={() => void checkAvailability(blobs.map(b => b.sha256))}
                 className="mt-5"
               >
                 {checkingAvailability ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}Check availability (

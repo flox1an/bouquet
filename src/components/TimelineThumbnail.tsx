@@ -46,9 +46,11 @@ function proxiedThumbnailUrl(
   if (blossom) {
     // A listing is direct evidence that a server has this hash. Prefer that
     // evidence over the event URL's host, which may have deleted the file since.
-    const hosts = [...new Set(knownServers.length > 0 ? knownServers : [blossom.host])].filter(
-      host => !isUnsupportedThumbnailHost(host)
-    );
+    // Canonical order: the xs list is part of the proxy URL, and browser plus
+    // CDN cache per exact URL - a reordered host list would bust every cache.
+    const hosts = [...new Set(knownServers.length > 0 ? knownServers : [blossom.host])]
+      .filter(host => !isUnsupportedThumbnailHost(host))
+      .sort();
     // Nothing left to point the proxy at; the plain URL is the next fallback source.
     if (hosts.length === 0) return url;
     const extension = blossom.ext ?? extensionHint;
