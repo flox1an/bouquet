@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowDownAZ, ArrowUpAZ, LayoutGrid, List, Loader2, RefreshCw, Search, Settings } from 'lucide-react';
+import { ArrowDownAZ, ArrowUpAZ, LayoutGrid, List, Loader2, RefreshCw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,7 +23,6 @@ type BrowseToolbarProps = {
   servers: ServerInfo[];
   selectedServerName?: string;
   onServerChange: (name: string | undefined) => void;
-  onManageServers: () => void;
   onRescan: () => Promise<unknown>;
   eventOnly: boolean;
   onEventOnlyChange: (value: boolean) => void;
@@ -36,6 +35,7 @@ type BrowseToolbarProps = {
   availabilityFilter: AvailabilityFilter[];
   onAvailabilityFilterChange: (value: AvailabilityFilter[]) => void;
   matchingCount: number;
+  knownCount: number;
 };
 
 export function BrowseToolbar({
@@ -50,7 +50,6 @@ export function BrowseToolbar({
   servers,
   selectedServerName,
   onServerChange,
-  onManageServers,
   onRescan,
   eventOnly,
   onEventOnlyChange,
@@ -63,12 +62,16 @@ export function BrowseToolbar({
   availabilityFilter,
   onAvailabilityFilterChange,
   matchingCount,
+  knownCount,
 }: BrowseToolbarProps) {
   const realServers = servers.filter(server => !server.virtual);
   const [isRescanning, setIsRescanning] = useState(false);
 
   return (
-    <section className="mb-6 border bg-card p-4 shadow-[3px_3px_0_hsl(var(--border))]" aria-label="Browse toolbar">
+    <section
+      className="mb-4 border bg-card px-4 py-3 shadow-[3px_3px_0_hsl(var(--border))]"
+      aria-label="Browse toolbar"
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
         <label className="relative block min-w-0 flex-1 basis-64">
           <Search
@@ -163,11 +166,6 @@ export function BrowseToolbar({
           </SelectContent>
         </Select>
 
-        <Button variant="outline" size="sm" onClick={onManageServers} className="shrink-0">
-          <Settings className="h-4 w-4" />
-          Manage servers
-        </Button>
-
         <Button
           variant="outline"
           size="sm"
@@ -197,8 +195,9 @@ export function BrowseToolbar({
           />
         </div>
       </div>
-      <p className="mt-3 font-mono text-xs text-muted-foreground">
-        {matchingCount === 1 ? '1 matching item' : `${matchingCount.toLocaleString()} matching items`}
+      <p className="mt-2 font-mono text-xs text-muted-foreground">
+        {matchingCount === 1 ? '1 matching item' : `${matchingCount.toLocaleString()} matching items`} ·{' '}
+        {knownCount.toLocaleString()} known blobs · offline index
       </p>
     </section>
   );

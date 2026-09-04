@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ComponentProps } from 'react';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Server as ServerIcon, Trash2 } from 'lucide-react';
 import { nip19 } from 'nostr-tools';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getCatalogClient } from '../catalog/catalogClient';
 import type { AdditionalPubkey } from '../catalog/catalog';
+import ServerListPopup from '../components/ServerListPopup';
+import { useUserServers } from '../utils/useUserServers';
 import { syncAdditionalPubkeyFromRelays } from '../catalog/catalogNostr';
 import { useProfile } from '../hooks/useProfile';
 import { parseAdditionalPubkey } from '../utils/additionalPubkeys';
@@ -20,7 +22,9 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [syncing, setSyncing] = useState<Set<string>>(new Set());
+  const [serversOpen, setServersOpen] = useState(false);
   const [error, setError] = useState<string>();
+  const { servers, serversLoading, storeUserServers } = useUserServers();
 
   const load = useCallback(async () => {
     if (!user?.pubkey) return;
@@ -83,10 +87,44 @@ export default function Settings() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Media servers</CardTitle>
+          <CardDescription>
+            The blossom and NIP-96 servers your media lives on. Rescanning reads these listings to build your catalog,
+            so configure them before you scan.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {serversLoading ? (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading servers…
+            </p>
+          ) : (
+            <>
+              <p className="font-mono text-xs text-muted-foreground" aria-label="Configured servers">
+                {servers.length === 0 ? 'No servers configured yet.' : servers.map(server => server.name).join(' · ')}
+              </p>
+              <Button variant="outline" className="mt-3" onClick={() => setServersOpen(true)}>
+                <ServerIcon className="h-4 w-4" />
+                Manage servers
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <ServerListPopup
+        isOpen={serversOpen}
+        onClose={() => setServersOpen(false)}
+        onSave={servers => void storeUserServers(servers)}
+        initialServers={servers}
+      />
+
+      <Card>
+        <CardHeader>
           <CardTitle>Additional content</CardTitle>
           <CardDescription>
-            Scan supported media and websites published by other Nostr identities. These sources are read-only;
-            Bouquet never publishes as them or deletes their blobs.
+            Scan supported media and websites published by other Nostr identities. These sources are read-only; Bouquet
+            never publishes as them or deletes their blobs.
           </CardDescription>
         </CardHeader>
         <CardContent>

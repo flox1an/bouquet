@@ -490,20 +490,7 @@ export default function Timeline() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col px-4 py-8">
-      <header className="mb-8 border-b-2 border-primary pb-5">
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Browse catalog</p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-black tracking-tight">Browse</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {status?.knownHashes ?? 0} known blobs, arranged as explainable media.
-            </p>
-          </div>
-          <p className="rounded-full bg-primary px-3 py-1 font-mono text-xs text-primary-foreground">offline index</p>
-        </div>
-      </header>
-
+    <main className="mx-auto flex w-full max-w-7xl flex-col px-4 pb-8 pt-4">
       <BrowseToolbar
         search={search}
         onSearchChange={setSearch}
@@ -516,7 +503,6 @@ export default function Timeline() {
         servers={Object.values(serverInfo)}
         selectedServerName={selectedServerName}
         onServerChange={setSelectedServerName}
-        onManageServers={() => setIsServerListDialogOpen(true)}
         onRescan={handleRescan}
         eventOnly={eventOnly}
         onEventOnlyChange={setEventOnly}
@@ -529,13 +515,7 @@ export default function Timeline() {
         availabilityFilter={availabilityFilter}
         onAvailabilityFilterChange={setAvailabilityFilter}
         matchingCount={filteredItems.length}
-      />
-
-      <ServerListPopup
-        isOpen={isServerListDialogOpen}
-        onClose={() => setIsServerListDialogOpen(false)}
-        onSave={handleSaveServers}
-        initialServers={Object.values(serverInfo).filter(s => !s.virtual)}
+        knownCount={status?.knownHashes ?? 0}
       />
 
       {items.length > 0 && projectionState === 'failed' && (
