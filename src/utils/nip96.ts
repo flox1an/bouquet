@@ -3,6 +3,7 @@ import { Server } from './useUserServers';
 import dayjs from 'dayjs';
 import axios, { AxiosProgressEvent } from 'axios';
 
+import type { ServerListProgress } from './server';
 type MediaTransformation = 'resizing' | 'format_conversion' | 'compression' | 'metadata_stripping';
 
 interface Plan {
@@ -83,50 +84,55 @@ const getValueByTag = (tags: string[][] | undefined, t: string) => tags && tags.
 export async function fetchNip96List(
   server: Server,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
-  onProgress?: (progressEvent: AxiosProgressEvent) => void
-) {
-  const count = 100; // Page size
+  onProgress?: (progress: ServerListProgress) => void | Promise<void>
+): Promise<BlobDescriptor[]> {
+  const count = 100;
   const baseUrl = server.nip96?.api_url || server.url;
-  let allFiles: Nip96BlobDescriptor[] = [];
+  const allFiles: Nip96BlobDescriptor[] = [];
   let page = 0;
-  let hasMore = true;
 
-  // Fetch all pages
-  while (hasMore) {
-    const listUrl = `${baseUrl}?page=${page}&count=${count}`;
-
-    const response = await axios.get(listUrl, {
-      headers: { Authorization: `Nostr ${await createNip98UploadAuthToken(listUrl, 'GET', signEventTemplate)}` },
-      onDownloadProgress: onProgress,
-    });
-
-    const list = response.data as Nip96ListResponse;
-
-    if (list.files.length === 0) {
-      break;
-    }
-
-    allFiles = [...allFiles, ...list.files];
-
-    // Check if we've fetched all files
-    if (allFiles.length >= list.total) {
-      hasMore = false;
-    } else {
-      page++;
-    }
-  }
-
-  return allFiles.map(
-    file =>
-      ({
+  try {
+    while (true) {
+      const listUrl = `${baseUrl}?page=${page}&count=${count}`;
+      const response = await axios.get(listUrl, {
+        headers: { Authorization: `Nostr ${await createNip98UploadAuthToken(listUrl, 'GET', signEventTemplate)}` },
+      });
+      const list = response.data as Nip96ListResponse;
+      if (list.files.length === 0) break;
+      allFiles.push(...list.files);
+      const blobs = list.files.map(file => ({
         created: file.created_at * 1000,
         uploaded: file.created_at * 1000,
         type: getValueByTag(file.tags, 'm'),
         sha256: getValueByTag(file.tags, 'x'),
         size: parseInt(getValueByTag(file.tags, 'size') || '0', 10),
         url: getValueByTag(file.tags, 'url') || baseUrl + '/' + getValueByTag(file.tags, 'ox'),
-      }) as BlobDescriptor
-  );
+      })) as BlobDescriptor[];
+      await onProgress?.({ blobs, cursor: String(page), received: allFiles.length, state: 'pending' });
+      if (allFiles.length >= list.total) break;
+      page++;
+    }
+  } catch (error) {
+    await onProgress?.({
+      blobs: [],
+      cursor: String(page),
+      received: allFiles.length,
+      state: 'failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+
+  const blobs = allFiles.map(file => ({
+    created: file.created_at * 1000,
+    uploaded: file.created_at * 1000,
+    type: getValueByTag(file.tags, 'm'),
+    sha256: getValueByTag(file.tags, 'x'),
+    size: parseInt(getValueByTag(file.tags, 'size') || '0', 10),
+    url: getValueByTag(file.tags, 'url') || baseUrl + '/' + getValueByTag(file.tags, 'ox'),
+  })) as BlobDescriptor[];
+  await onProgress?.({ blobs: [], received: blobs.length, state: 'complete' });
+  return blobs;
 }
 
 /*

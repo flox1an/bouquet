@@ -5,8 +5,7 @@ import { BlobDescriptor } from 'blossom-client-sdk';
 import { useNostr } from '../utils/nostr';
 import { nip19 } from 'nostr-tools';
 import { Server, useUserServers } from './useUserServers';
-import { fetchBlossomList } from './blossom';
-import { fetchNip96List } from './nip96';
+import { mediaServer } from './server';
 import { getCatalogClient } from '../catalog/catalogClient';
 import { fetchHlsPlaylist } from '../catalog/enrichmentFetch';
 
@@ -80,24 +79,17 @@ export const useServerInfo = () => {
     queries: servers.map(server => ({
       queryKey: ['blobs', server.name],
       queryFn: async () => {
-        if (server.name == 'nostr.build') {
-          return []; // nostr.build does not support list atm
-        }
-        if (server.type === 'blossom') {
-          return fetchBlossomList(server.url, pubkey!, signEventTemplate, progress =>
-            getCatalogClient().ingestServerList(pubkey!, {
-              server: { url: server.url, type: server.type },
-              blobs: progress.blobs,
-              cursor: progress.cursor,
-              state: progress.state,
-              error: progress.error,
-              received: progress.received,
-            })
-          );
-        } else if (server.type === 'nip96') {
-          return fetchNip96List(server, signEventTemplate);
-        }
-        return [];
+        const protocol = mediaServer(server);
+        return protocol.list(pubkey!, signEventTemplate, progress =>
+          getCatalogClient().ingestServerList(pubkey!, {
+            server: { url: server.url, type: server.type },
+            blobs: progress.blobs,
+            cursor: progress.cursor,
+            state: progress.state,
+            error: progress.error,
+            received: progress.received,
+          })
+        );
       },
       enabled: !!pubkey && servers.length > 0,
       staleTime: Infinity,
