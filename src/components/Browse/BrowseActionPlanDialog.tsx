@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { BlobDescriptor, EventTemplate, SignedEvent } from 'blossom-client-sdk';
-import { createDeleteAuth } from 'blossom-client-sdk/auth';
-import { deleteBlob as deleteBlobFromServer } from 'blossom-client-sdk/actions/delete';
 import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, CircleSlash, Loader2, ShieldAlert, Trash2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,7 +13,7 @@ import { buildReplicaOps, type AssetReplica, type CatalogAction, type ReplicaOp 
 import { probeReplica } from '../../catalog/availabilityFetch';
 import { transferBlob, type TransferPhase } from '../../utils/transfer';
 import { runTasks } from '../../utils/run';
-import { deleteNip96File } from '../../utils/nip96';
+import { mediaServer } from '../../utils/server';
 import {
   finishDiagnosticRun,
   recordDiagnosticError,
@@ -281,16 +279,10 @@ export function BrowseActionPlanDialog({
         let taskFailed = false;
         let lastError: string | undefined;
         try {
-          if (task.serverType === 'blossom') {
-            const auth = await createDeleteAuth(signEventTemplate, task.hash);
-            await deleteBlobFromServer(task.baseUrl, task.hash, { auth });
-          } else {
-            await deleteNip96File(
-              live ?? { type: 'nip96', name: hostOf(task.baseUrl), url: task.baseUrl },
-              task.hash,
-              signEventTemplate
-            );
-          }
+          await mediaServer(live ?? { type: task.serverType, name: hostOf(task.baseUrl), url: task.baseUrl }).delete(
+            task.hash,
+            signEventTemplate
+          );
           dropFromLiveCache();
           removed.push({ sha256: task.hash, serverUrl: task.baseUrl });
           updateRow(key, { state: 'done' });

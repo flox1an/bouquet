@@ -20,8 +20,11 @@ const createDeleteAuth = vi.fn();
 vi.mock('../../catalog/catalogClient', () => ({
   getCatalogClient: () => ({ planCatalogAction, getAssetReplicaMap, recordBlobsRemoved, projectCatalogAssets }),
 }));
-vi.mock('blossom-client-sdk/actions/delete', () => ({ deleteBlob: (...args: unknown[]) => deleteBlob(...args) }));
-vi.mock('blossom-client-sdk/auth', () => ({ createDeleteAuth: (...args: unknown[]) => createDeleteAuth(...args) }));
+vi.mock('../../utils/server', () => ({
+  mediaServer: (server: { url: string }) => ({
+    delete: async (hash: string) => deleteBlob(server.url, hash, {}),
+  }),
+}));
 
 afterEach(() => {
   cleanup();
