@@ -1,6 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
+// Reachable deletion coverage lives here; BlobList is transfer-only.
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -13,15 +14,15 @@ import { BrowseActionPlanDialog } from './BrowseActionPlanDialog';
 const planCatalogAction = vi.fn();
 const getAssetReplicaMap = vi.fn();
 const recordBlobsRemoved = vi.fn();
-const projectCatalogAssets = vi.fn();
 const deleteBlob = vi.fn();
 const createDeleteAuth = vi.fn();
 
 vi.mock('../../catalog/catalogClient', () => ({
-  getCatalogClient: () => ({ planCatalogAction, getAssetReplicaMap, recordBlobsRemoved, projectCatalogAssets }),
+  getCatalogClient: () => ({ planCatalogAction, getAssetReplicaMap, recordBlobsRemoved }),
 }));
 vi.mock('../../utils/server', () => ({
   mediaServer: (server: { url: string }) => ({
+    capabilities: { mirror: true },
     delete: async (hash: string) => deleteBlob(server.url, hash, {}),
   }),
 }));
@@ -31,7 +32,6 @@ afterEach(() => {
   planCatalogAction.mockReset();
   getAssetReplicaMap.mockReset();
   recordBlobsRemoved.mockReset();
-  projectCatalogAssets.mockReset();
   deleteBlob.mockReset();
   createDeleteAuth.mockReset();
 });
@@ -142,7 +142,6 @@ describe('BrowseActionPlanDialog', () => {
       },
     ]);
     recordBlobsRemoved.mockResolvedValue(undefined);
-    projectCatalogAssets.mockResolvedValue(undefined);
     createDeleteAuth.mockResolvedValue({ id: 'auth-event' });
     // one.example deletes cleanly; two.example already 404s - both count as gone,
     // neither is a failure the user needs to retry.
@@ -178,7 +177,6 @@ describe('BrowseActionPlanDialog', () => {
         expect.objectContaining({ sha256: hashA, serverUrl: 'https://two.example' }),
       ])
     );
-    expect(projectCatalogAssets).toHaveBeenCalledWith('pk', { force: true });
   });
 
   it('deletes from a server the catalog confirms present even when its live blob list is not loaded', async () => {
@@ -203,7 +201,6 @@ describe('BrowseActionPlanDialog', () => {
       },
     ]);
     recordBlobsRemoved.mockResolvedValue(undefined);
-    projectCatalogAssets.mockResolvedValue(undefined);
     createDeleteAuth.mockResolvedValue({ id: 'auth-event' });
     deleteBlob.mockResolvedValue(true);
 
@@ -245,7 +242,6 @@ describe('BrowseActionPlanDialog', () => {
       ];
     });
     recordBlobsRemoved.mockResolvedValue(undefined);
-    projectCatalogAssets.mockResolvedValue(undefined);
     createDeleteAuth.mockResolvedValue({ id: 'auth-event' });
     deleteBlob.mockResolvedValue(true);
 

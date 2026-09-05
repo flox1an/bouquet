@@ -18,15 +18,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getCatalogClient } from '../catalog/catalogClient';
 import ServerListPopup from '../components/ServerListPopup';
 import { useUserServers, type Server } from '../utils/useUserServers';
+import { mediaServer } from '../utils/server';
+import { runTasks } from '../utils/run';
+import { formatTransferError } from '../utils/upload';
 
-type TransferError = {
-  name?: string;
-  message?: string;
-  code?: string;
-  response?: {
-    status?: number;
-  };
-};
 
 type TransferStatus = {
   [key: string]: {
@@ -134,11 +129,9 @@ export const Transfer = () => {
     const controller = new AbortController();
     setAbortController(controller);
     setStarted(true);
-
-    for (const b of blobs) {
-      if (controller.signal.aborted) break;
-
-      try {
+    await runTasks(
+      blobs,
+      async b => {
         setTransferLog(ts => ({
           ...ts,
           [b.sha256]: {
@@ -153,93 +146,70 @@ export const Transfer = () => {
           },
         }));
 
-        await transferBlob(`${serverInfo[sourceServer].url}/${b.sha256}`, serverInfo[targetServer], signEventTemplate, {
-          signal: controller.signal,
-          timeout: 120000,
-          maxRetries: 2,
-          allowMirror: mirrorSupport[targetServer] !== false,
-          onMirrorUnsupported: () => {
-            setMirrorSupport(ms => ({ ...ms, [targetServer]: false }));
-          },
-          onPhaseChange: phase => {
-            setTransferLog(ts => ({
-              ...ts,
-              [b.sha256]: {
-                ...ts[b.sha256],
-                phase,
-              },
-            }));
-          },
-          onProgress: progressEvent => {
-            setTransferLog(ts => ({
-              ...ts,
-              [b.sha256]: {
-                ...ts[b.sha256],
-                uploaded: progressEvent.loaded,
-                downloaded: progressEvent.loaded,
-                rate: progressEvent.rate || 0,
-              },
-            }));
-          },
-          onCompleted: (blob, method) => {
-            if (!user?.pubkey) return;
-            return getCatalogClient()
-              .ingestUpload(
-                user.pubkey,
-                { url: serverInfo[targetServer].url, type: serverInfo[targetServer].type },
-                blob,
-                method === 'mirror'
-              )
-              .catch(() => undefined);
-          },
-        });
-
-        setTransferLog(ts => ({
-          ...ts,
-          [b.sha256]: {
-            ...ts[b.sha256],
-            phase: 'completed',
-            rate: 0,
-            uploaded: ts[b.sha256].size,
-            downloaded: ts[b.sha256].size,
-            status: 'done',
-          },
-        }));
-      } catch (error: unknown) {
-        const e = error as TransferError;
-        console.error(`Transfer failed for ${b.sha256}:`, e);
-
-        let errorMessage = 'Unknown error';
-        if (e.message?.includes('cancelled')) {
-          errorMessage = 'Transfer cancelled';
-        } else if (e.message?.includes('timeout')) {
-          errorMessage = 'Operation timed out';
-        } else if (e.name === 'SourceBlobNotFoundError') {
-          errorMessage = `Missing on source server (${sourceServer})`;
-        } else if (e.response?.status === 404) {
-          errorMessage = 'File not found (404)';
-        } else if (e.response?.status === 401 || e.response?.status === 403) {
-          errorMessage = 'Authentication failed';
-        } else if ((e.response?.status ?? 0) >= 500) {
-          errorMessage = `Server error (${e.response?.status ?? 'unknown'})`;
-        } else if (e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT') {
-          errorMessage = 'Network error';
-        } else if (e.message) {
-          errorMessage = e.message;
+        try {
+          await transferBlob(`${serverInfo[sourceServer].url}/${b.sha256}`, serverInfo[targetServer], signEventTemplate, {
+            signal: controller.signal,
+            timeout: 120000,
+            maxRetries: 2,
+            allowMirror: mirrorSupport[targetServer] !== false,
+            onMirrorUnsupported: () => {
+              setMirrorSupport(ms => ({ ...ms, [targetServer]: false }));
+            },
+            onPhaseChange: phase => {
+              setTransferLog(ts => ({
+                ...ts,
+                [b.sha256]: { ...ts[b.sha256], phase },
+              }));
+            },
+            onProgress: progressEvent => {
+              setTransferLog(ts => ({
+                ...ts,
+                [b.sha256]: {
+                  ...ts[b.sha256],
+                  uploaded: progressEvent.loaded,
+                  downloaded: progressEvent.loaded,
+                  rate: progressEvent.rate || 0,
+                },
+              }));
+            },
+            onCompleted: (blob, method) => {
+              if (!user?.pubkey) return;
+              return getCatalogClient()
+                .ingestUpload(
+                  user.pubkey,
+                  { url: serverInfo[targetServer].url, type: serverInfo[targetServer].type },
+                  blob,
+                  method === 'mirror'
+                )
+                .catch(() => undefined);
+            },
+          });
+          setTransferLog(ts => ({
+            ...ts,
+            [b.sha256]: {
+              ...ts[b.sha256],
+              phase: 'completed',
+              rate: 0,
+              uploaded: ts[b.sha256].size,
+              downloaded: ts[b.sha256].size,
+              status: 'done',
+            },
+          }));
+        } catch (error) {
+          setTransferLog(ts => ({
+            ...ts,
+            [b.sha256]: {
+              ...ts[b.sha256],
+              status: 'error',
+              phase: 'error',
+              message: formatTransferError(error, sourceServer),
+            },
+          }));
+          throw error;
         }
-
-        setTransferLog(ts => ({
-          ...ts,
-          [b.sha256]: {
-            ...ts[b.sha256],
-            status: 'error',
-            phase: 'error',
-            message: errorMessage,
-          },
-        }));
-      }
-    }
-
+      },
+      { concurrency: 1, signal: controller.signal }
+    );
     setAbortController(null);
   };
 
@@ -287,9 +257,9 @@ export const Transfer = () => {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const targetServers = Object.values(serverInfo)
-    .filter(s => s.type === 'blossom')
-    .filter(s => s.name !== transferSource)
-    .filter(s => !s.virtual)
+    .filter(server => mediaServer(server).capabilities.mirror)
+    .filter(server => server.name !== transferSource)
+    .filter(server => !server.virtual)
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const hasConfiguredServers = sourceServers.length > 0;

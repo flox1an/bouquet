@@ -16,7 +16,7 @@ import { useNativeUrlAvailabilityCheck } from './useNativeUrlAvailability';
 import { formatDate, formatFileSize } from '../../utils/utils';
 import { AVAILABILITY_LABEL, TYPE_ICON, type TimelineItem } from './browseConstants';
 import { eventKindLabel } from '../../catalog/eventKinds';
-import type { CatalogAction } from '../../catalog/advanced';
+import type { CatalogAction } from '../../catalog/catalog'
 
 type BrowseMediaGridProps = {
   monthGroups: MonthGroup[];

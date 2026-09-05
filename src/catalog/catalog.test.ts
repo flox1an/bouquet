@@ -4,19 +4,7 @@ import type { NostrEvent } from 'nostr-tools';
 import { Catalog, MemoryCatalogStore } from './catalog';
 import { eventKindLabel, fallbackEventTitle } from './eventKinds';
 import { extractTimelineEventMetadata } from './timelineMetadata';
-import {
-  buildReplicaOps,
-  getAssetReplicaMap,
-  getCatalogTimelineAsset,
-  isHashSearchTerm,
-  planCatalogAction,
-  projectCatalogAssets,
-  queryCatalogAssetIds,
-  queryCatalogTimeline,
-  refreshReplicaAvailability,
-  refreshEventUrlAvailability,
-  splitSearchTerms,
-} from './advanced';
+import { buildReplicaOps, isHashSearchTerm, splitSearchTerms } from './advanced';
 
 const pubkey = 'p'.repeat(64);
 const hashA = 'a'.repeat(64);
@@ -110,9 +98,9 @@ describe('user blob catalog', () => {
     ];
 
     await catalog.ingestAuthoredEvents(pubkey, manifests, 'wss://relay.example');
-    await projectCatalogAssets(catalog, pubkey, { force: true });
+    await catalog.queryCatalogTimeline(pubkey);
 
-    expect(await queryCatalogTimeline(catalog, pubkey, { types: ['document'] })).toEqual(
+    expect(await catalog.queryCatalogTimeline(pubkey, { types: ['document'] })).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ eventId: 'nsite-v1-file', primaryBlobSha256: hashA }),
         expect.objectContaining({ eventId: 'blossom-drive', primaryBlobSha256: hashA }),
@@ -330,8 +318,8 @@ describe('user blob catalog', () => {
       hashA
     );
     await store.put('blob', { ...playlistBlob!, verifiedMimeType: 'text/plain' });
-    await projectCatalogAssets(catalog, pubkey);
-    expect(await queryCatalogTimeline(catalog, pubkey)).toEqual([
+    await catalog.queryCatalogTimeline(pubkey);
+    expect(await catalog.queryCatalogTimeline(pubkey)).toEqual([
       expect.objectContaining({ displayType: 'video', primaryBlobSha256: hashA, blobCount: 2 }),
     ]);
   });
@@ -378,8 +366,8 @@ describe('user blob catalog', () => {
       blobs: [blob(hashA)],
       state: 'complete',
     });
-    await projectCatalogAssets(catalog, pubkey);
-    expect(await queryCatalogTimeline(catalog, pubkey)).toEqual([
+    await catalog.queryCatalogTimeline(pubkey);
+    expect(await catalog.queryCatalogTimeline(pubkey)).toEqual([
       expect.objectContaining({ assetId: `${pubkey}:root-blob:${hashA}`, primaryBlobSha256: hashA }),
     ]);
 
@@ -388,9 +376,9 @@ describe('user blob catalog', () => {
       [event('first-referencing-event', 100, [['x', hashA]]), event('second-referencing-event', 200, [['x', hashA]])],
       'wss://relay.example'
     );
-    await projectCatalogAssets(catalog, pubkey, { force: true });
+    await catalog.queryCatalogTimeline(pubkey);
 
-    const timeline = await queryCatalogTimeline(catalog, pubkey);
+    const timeline = await catalog.queryCatalogTimeline(pubkey);
     expect(timeline).toHaveLength(2);
     expect(timeline.map(item => item.eventId)).toEqual(['second-referencing-event', 'first-referencing-event']);
     expect(timeline).toEqual(
@@ -406,9 +394,9 @@ describe('user blob catalog', () => {
       blobs: [blob(hashA)],
       state: 'complete',
     });
-    await refreshReplicaAvailability(catalog, pubkey, async () => ({ status: 200, size: 42, mimeType: 'image/jpeg' }));
-    await refreshReplicaAvailability(catalog, pubkey, async () => ({ status: 200, size: 42, mimeType: 'image/jpeg' }));
-    await refreshReplicaAvailability(catalog, pubkey, async () => ({ status: 404 }));
+    await catalog.refreshReplicaAvailability(pubkey, async () => ({ status: 200, size: 42, mimeType: 'image/jpeg' }));
+    await catalog.refreshReplicaAvailability(pubkey, async () => ({ status: 200, size: 42, mimeType: 'image/jpeg' }));
+    await catalog.refreshReplicaAvailability(pubkey, async () => ({ status: 404 }));
 
     const history = await store.getAll<{ newState: string }>('blob_location_history');
     // Presence is already known from the server list itself, so the first probe
@@ -416,16 +404,16 @@ describe('user blob catalog', () => {
     expect(history.map(item => item.newState)).toEqual(['absent']);
 
     await catalog.ingestAuthoredEvents(pubkey, [event('asset-event', 100, [['x', hashA]])], 'wss://relay.example');
-    await projectCatalogAssets(catalog, pubkey);
-    const timeline = await queryCatalogTimeline(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
+    const timeline = await catalog.queryCatalogTimeline(pubkey);
     expect(timeline).toHaveLength(1);
     expect(timeline[0]).toMatchObject({ primaryBlobSha256: hashA, displayDate: 100_000 });
-    await refreshReplicaAvailability(catalog, pubkey, async () => ({ status: 200 }));
-    expect(await planCatalogAction(catalog, pubkey, timeline[0].assetId, 'mirror')).toMatchObject({
+    await catalog.refreshReplicaAvailability(pubkey, async () => ({ status: 200 }));
+    expect(await catalog.planCatalogAction(pubkey, timeline[0].assetId, 'mirror')).toMatchObject({
       allowed: true,
       targets: [hashA],
     });
-    expect(await planCatalogAction(catalog, pubkey, timeline[0].assetId, 'delete')).toMatchObject({
+    expect(await catalog.planCatalogAction(pubkey, timeline[0].assetId, 'delete')).toMatchObject({
       allowed: true,
       targets: [hashA],
     });
@@ -442,11 +430,11 @@ describe('user blob catalog', () => {
       [event('asset-a', 100, [['x', hashA]]), event('asset-b', 200, [['x', hashB]])],
       'wss://relay.example'
     );
-    await projectCatalogAssets(catalog, pubkey, { force: true });
+    await catalog.queryCatalogTimeline(pubkey);
 
-    const assetIds = await queryCatalogAssetIds(catalog, { serverId: 'https://almond.slidetr.net' });
+    const assetIds = await catalog.queryCatalogAssetIds({ serverId: 'https://almond.slidetr.net' });
     expect(assetIds).toHaveLength(2);
-    const timeline = await queryCatalogTimeline(catalog, pubkey, { serverId: 'https://almond.slidetr.net' });
+    const timeline = await catalog.queryCatalogTimeline(pubkey, { serverId: 'https://almond.slidetr.net' });
     expect(timeline).toHaveLength(2);
   });
   it('removes a server from the filter and replica count once a delete confirms it is gone', async () => {
@@ -463,18 +451,17 @@ describe('user blob catalog', () => {
       state: 'complete',
     });
     await catalog.ingestAuthoredEvents(pubkey, [event('asset-a', 100, [['x', hashA]])], 'wss://relay.example');
-    await projectCatalogAssets(catalog, pubkey, { force: true });
-    expect(await queryCatalogAssetIds(catalog, { serverId: 'https://one.example' })).toHaveLength(1);
-    const beforeDelete = await queryCatalogTimeline(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
+    expect(await catalog.queryCatalogAssetIds({ serverId: 'https://one.example' })).toHaveLength(1);
+    const beforeDelete = await catalog.queryCatalogTimeline(pubkey);
     expect(beforeDelete[0]).toMatchObject({ replicaCount: 2 });
 
     await catalog.recordBlobsRemoved(pubkey, [{ sha256: hashA, serverUrl: 'https://one.example' }]);
 
     // Gone from the deleted server's filter, still present on the other one.
-    expect(await queryCatalogAssetIds(catalog, { serverId: 'https://one.example' })).toHaveLength(0);
-    expect(await queryCatalogAssetIds(catalog, { serverId: 'https://two.example' })).toHaveLength(1);
-    await projectCatalogAssets(catalog, pubkey, { force: true });
-    const afterDelete = await queryCatalogTimeline(catalog, pubkey);
+    expect(await catalog.queryCatalogAssetIds({ serverId: 'https://one.example' })).toHaveLength(0);
+    expect(await catalog.queryCatalogAssetIds({ serverId: 'https://two.example' })).toHaveLength(1);
+    const afterDelete = await catalog.queryCatalogTimeline(pubkey);
     expect(afterDelete[0]).toMatchObject({ replicaCount: 1, availabilityState: 'complete' });
     // Still present on two.example, so the blob stays in the catalog.
     expect(await store.get('blob', hashA)).toBeDefined();
@@ -482,8 +469,8 @@ describe('user blob catalog', () => {
     // Deleting on the last remaining server drops it to unavailable, not "unknown" -
     // the catalog has direct evidence it is gone everywhere, not merely unchecked.
     await catalog.recordBlobsRemoved(pubkey, [{ sha256: hashA, serverUrl: 'https://two.example' }]);
-    await projectCatalogAssets(catalog, pubkey, { force: true });
-    const afterBothDeleted = await queryCatalogTimeline(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
+    const afterBothDeleted = await catalog.queryCatalogTimeline(pubkey);
     expect(afterBothDeleted[0]).toMatchObject({ replicaCount: 0, availabilityState: 'unavailable' });
     // Gone from every known server: the blob itself leaves the catalog - identity
     // and enrichment rows go, while the membership keeps the event asset rendering
@@ -526,16 +513,16 @@ describe('user blob catalog', () => {
       blobs: [blob(hashA)],
       state: 'complete',
     });
-    await projectCatalogAssets(catalog, pubkey, { force: true });
-    expect(await queryCatalogTimeline(catalog, pubkey)).toHaveLength(1);
+    await catalog.queryCatalogTimeline(pubkey);
+    expect(await catalog.queryCatalogTimeline(pubkey)).toHaveLength(1);
 
     await catalog.recordBlobsRemoved(pubkey, [{ sha256: hashA, serverUrl: 'https://one.example' }]);
     expect(await store.get('blob', hashA)).toBeUndefined();
 
     // No event references the hash, so with the blob row gone nothing anchors a
     // card for it anymore: the run stamp retires the root-blob projection.
-    await projectCatalogAssets(catalog, pubkey, { force: true });
-    expect(await queryCatalogTimeline(catalog, pubkey)).toHaveLength(0);
+    await catalog.queryCatalogTimeline(pubkey);
+    expect(await catalog.queryCatalogTimeline(pubkey)).toHaveLength(0);
   });
   it('removing a file directly on the server drops it from the filter once the full list is rescanned', async () => {
     const catalog = new Catalog(new MemoryCatalogStore());
@@ -550,8 +537,8 @@ describe('user blob catalog', () => {
       [event('asset-a', 100, [['x', hashA]]), event('asset-b', 100, [['x', hashB]])],
       'wss://relay.example'
     );
-    await projectCatalogAssets(catalog, pubkey, { force: true });
-    expect(await queryCatalogAssetIds(catalog, { serverId: 'https://one.example' })).toHaveLength(2);
+    await catalog.queryCatalogTimeline(pubkey);
+    expect(await catalog.queryCatalogAssetIds({ serverId: 'https://one.example' })).toHaveLength(2);
 
     // hashB was deleted outside the app - the next full rescan no longer sees it.
     await catalog.ingestServerList(pubkey, {
@@ -560,9 +547,9 @@ describe('user blob catalog', () => {
       state: 'complete',
       full: true,
     });
-    await projectCatalogAssets(catalog, pubkey, { force: true });
+    await catalog.queryCatalogTimeline(pubkey);
 
-    const assetIds = await queryCatalogAssetIds(catalog, { serverId: 'https://one.example' });
+    const assetIds = await catalog.queryCatalogAssetIds({ serverId: 'https://one.example' });
     expect(assetIds).toHaveLength(1);
     expect(assetIds[0]).toBe(`${pubkey}:immutable-event:asset-a`);
   });
@@ -575,7 +562,7 @@ describe('user blob catalog', () => {
       state: 'complete',
       full: true,
     });
-    await refreshReplicaAvailability(catalog, pubkey, async () => ({ status: 404 }));
+    await catalog.refreshReplicaAvailability(pubkey, async () => ({ status: 404 }));
 
     // A Primal-style stale listing still carries the deleted blob; the re-claim
     // must not overwrite the probe's absence.
@@ -588,8 +575,8 @@ describe('user blob catalog', () => {
 
     const locations = await store.getAllFromIndex<{ state: string }>('blob_location', 'by_sha256', hashA);
     expect(locations.map(location => location.state)).toEqual(['absent']);
-    await projectCatalogAssets(catalog, pubkey, { force: true });
-    expect((await queryCatalogTimeline(catalog, pubkey))[0]).toMatchObject({
+    await catalog.queryCatalogTimeline(pubkey);
+    expect((await catalog.queryCatalogTimeline(pubkey))[0]).toMatchObject({
       availabilityState: 'unavailable',
       replicaCount: 0,
     });
@@ -649,9 +636,9 @@ describe('user blob catalog', () => {
       async () => [website, unrelated],
       ['https://files.example/']
     );
-    await projectCatalogAssets(catalog, hashA, { force: true });
+    await catalog.queryCatalogTimeline(hashA);
 
-    const imported = (await queryCatalogTimeline(catalog, hashA)).find(
+    const imported = (await catalog.queryCatalogTimeline(hashA)).find(
       item => item.eventId === 'external-site'
     );
     expect(imported).toMatchObject({
@@ -667,8 +654,8 @@ describe('user blob catalog', () => {
       full: true,
     });
     await catalog.removeAdditionalPubkey(hashA, hashB);
-    await projectCatalogAssets(catalog, hashA, { force: true });
-    const remaining = await queryCatalogTimeline(catalog, hashA);
+    await catalog.queryCatalogTimeline(hashA);
+    const remaining = await catalog.queryCatalogTimeline(hashA);
     expect(remaining).toHaveLength(1);
     expect(remaining[0]).toMatchObject({ primaryBlobSha256: hashC });
     expect(remaining[0].eventId).toBeUndefined();
@@ -682,23 +669,23 @@ describe('user blob catalog', () => {
       [event('native-url-event', 100, [], nativeUrl, 1)],
       'wss://relay.example'
     );
-    await projectCatalogAssets(catalog, pubkey, { force: true });
-    const timeline = await queryCatalogTimeline(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
+    const timeline = await catalog.queryCatalogTimeline(pubkey);
     const asset = timeline.find(item => item.eventId === 'native-url-event');
     if (!asset) throw new Error('Native URL event projection was not created');
 
-    await refreshEventUrlAvailability(catalog, pubkey, async url => {
+    await catalog.refreshEventUrlAvailability(pubkey, async url => {
       expect(url).toBe(nativeUrl);
       return { status: 200, size: 42, mimeType: 'video/mp4' };
     });
-    await projectCatalogAssets(catalog, pubkey, { force: true });
+    await catalog.queryCatalogTimeline(pubkey);
 
-    expect((await queryCatalogTimeline(catalog, pubkey)).find(item => item.assetId === asset.assetId)).toMatchObject({
+    expect((await catalog.queryCatalogTimeline(pubkey)).find(item => item.assetId === asset.assetId)).toMatchObject({
       availabilityState: 'complete',
       primaryUrl: nativeUrl,
       replicaCount: 0,
     });
-    expect(await planCatalogAction(catalog, pubkey, asset.assetId, 'mirror')).toMatchObject({
+    expect(await catalog.planCatalogAction(pubkey, asset.assetId, 'mirror')).toMatchObject({
       allowed: false,
       reason: 'No server currently has a copy that can be transferred',
       targets: [hashA],
@@ -751,9 +738,9 @@ describe('user blob catalog', () => {
     );
 
     await catalog.ingestAuthoredEvents(pubkey, [video], 'wss://relay.example');
-    await projectCatalogAssets(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
 
-    expect(await queryCatalogTimeline(catalog, pubkey, { types: ['video'], search: 'nesting box' })).toEqual([
+    expect(await catalog.queryCatalogTimeline(pubkey, { types: ['video'], search: 'nesting box' })).toEqual([
       expect.objectContaining({
         eventId: 'video-event',
         displayType: 'video',
@@ -805,8 +792,8 @@ describe('user blob catalog', () => {
       'wss://relay.example'
     );
 
-    await projectCatalogAssets(catalog, pubkey);
-    const timeline = await queryCatalogTimeline(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
+    const timeline = await catalog.queryCatalogTimeline(pubkey);
 
     const videoProjection = timeline.find(item => item.eventId === 'video-with-thumbnail');
     expect(videoProjection).toMatchObject({
@@ -818,7 +805,7 @@ describe('user blob catalog', () => {
       unknownBlobSizeCount: 0,
     });
     if (!videoProjection) throw new Error('Video projection was not created');
-    expect(await getCatalogTimelineAsset(catalog, pubkey, videoProjection.assetId)).toMatchObject({
+    expect(await catalog.getCatalogTimelineAsset(pubkey, videoProjection.assetId)).toMatchObject({
       projection: expect.objectContaining({ assetId: videoProjection.assetId }),
       event: expect.objectContaining({
         id: 'video-with-thumbnail',
@@ -882,15 +869,15 @@ describe('user blob catalog', () => {
       ],
       'wss://relay.example'
     );
-    await projectCatalogAssets(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
 
-    expect(await queryCatalogTimeline(catalog, pubkey, { types: ['audio'] })).toEqual([
+    expect(await catalog.queryCatalogTimeline(pubkey, { types: ['audio'] })).toEqual([
       expect.objectContaining({ eventId: 'mpeg-file', displayType: 'audio' }),
     ]);
 
     await catalog.ingestId3(hashA, { title: 'Extracted track', artist: 'Extracted artist' });
-    await projectCatalogAssets(catalog, pubkey, { force: true });
-    expect(await queryCatalogTimeline(catalog, pubkey, { types: ['audio'] })).toEqual([
+    await catalog.queryCatalogTimeline(pubkey);
+    expect(await catalog.queryCatalogTimeline(pubkey, { types: ['audio'] })).toEqual([
       expect.objectContaining({
         eventId: 'mpeg-file',
         displayTitle: 'Extracted track',
@@ -906,10 +893,10 @@ describe('user blob catalog', () => {
       blobs: [{ ...blob(hashA), url: `https://media.example/${hashA}.mp3`, type: 'audio/mpeg' }],
       state: 'complete',
     });
-    await projectCatalogAssets(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
     // A file named after its own hash is not a name: the kind label stands in until
     // ID3 supplies a real one.
-    expect(await queryCatalogTimeline(catalog, pubkey, { types: ['audio'] })).toEqual([
+    expect(await catalog.queryCatalogTimeline(pubkey, { types: ['audio'] })).toEqual([
       expect.objectContaining({
         displayTitle: 'MP3 audio',
         displayTitleIsFallback: true,
@@ -918,9 +905,9 @@ describe('user blob catalog', () => {
     ]);
 
     await catalog.ingestId3(hashA, { title: 'Track title', artist: 'Artist name', album: 'Album name', year: '2026' });
-    await projectCatalogAssets(catalog, pubkey, { force: true });
+    await catalog.queryCatalogTimeline(pubkey);
 
-    expect(await queryCatalogTimeline(catalog, pubkey, { types: ['audio'] })).toEqual([
+    expect(await catalog.queryCatalogTimeline(pubkey, { types: ['audio'] })).toEqual([
       expect.objectContaining({ displayTitle: 'Track title', displaySubtitle: 'Artist name · Album name (2026)' }),
     ]);
   });
@@ -941,9 +928,9 @@ describe('user blob catalog', () => {
       if (url.endsWith('master.m3u8')) return `#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nhttps://cdn.example/${hashB}`;
       return `#EXTM3U\n#EXTINF:4,\nhttps://cdn.example/${hashC}`;
     });
-    await projectCatalogAssets(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
 
-    expect(await queryCatalogTimeline(catalog, pubkey, { types: ['video'] })).toEqual([
+    expect(await catalog.queryCatalogTimeline(pubkey, { types: ['video'] })).toEqual([
       expect.objectContaining({
         displayType: 'video',
         primaryBlobSha256: hashA,
@@ -1027,8 +1014,8 @@ describe('user blob catalog', () => {
       ],
       state: 'complete',
     });
-    await projectCatalogAssets(catalog, pubkey);
-    const timeline = await queryCatalogTimeline(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
+    const timeline = await catalog.queryCatalogTimeline(pubkey);
 
     // The extension is enough for the first file; the second says nothing until its
     // bytes are read, and must not claim a type it cannot back up.
@@ -1053,9 +1040,9 @@ describe('user blob catalog', () => {
     // Deliberately not forced: reading a file's bytes must count as a mutation, or
     // the projection considers itself current and the new type never reaches a card.
     expect(await catalog.isProjectionStale(pubkey)).toBe(true);
-    await projectCatalogAssets(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
 
-    const sniffed = (await queryCatalogTimeline(catalog, pubkey)).find(item => item.primaryBlobSha256 === hashB);
+    const sniffed = (await catalog.queryCatalogTimeline(pubkey)).find(item => item.primaryBlobSha256 === hashB);
     expect(sniffed).toMatchObject({ displayType: 'video', displayKindLabel: 'WebM video' });
   });
 
@@ -1071,21 +1058,21 @@ describe('user blob catalog', () => {
       blobs: [blob(hashB)],
       state: 'complete',
     });
-    await projectCatalogAssets(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
     const hostedOn: Record<string, string> = { [hashA]: 'https://one.example', [hashB]: 'https://two.example' };
-    await refreshReplicaAvailability(catalog, pubkey, async (server, sha256) => ({
+    await catalog.refreshReplicaAvailability(pubkey, async (server, sha256) => ({
       status: hostedOn[sha256] === server.baseUrl ? 200 : 404,
       size: 42,
       mimeType: 'image/jpeg',
     }));
 
-    const onServerOne = await queryCatalogTimeline(catalog, pubkey, { serverId: 'https://one.example' });
+    const onServerOne = await catalog.queryCatalogTimeline(pubkey, { serverId: 'https://one.example' });
     expect(onServerOne.map(item => item.assetId)).toEqual([`${pubkey}:root-blob:${hashA}`]);
 
-    const onServerTwo = await queryCatalogTimeline(catalog, pubkey, { serverId: 'https://two.example' });
+    const onServerTwo = await catalog.queryCatalogTimeline(pubkey, { serverId: 'https://two.example' });
     expect(onServerTwo.map(item => item.assetId)).toEqual([`${pubkey}:root-blob:${hashB}`]);
 
-    const onUnknownServer = await queryCatalogTimeline(catalog, pubkey, { serverId: 'https://three.example' });
+    const onUnknownServer = await catalog.queryCatalogTimeline(pubkey, { serverId: 'https://three.example' });
     expect(onUnknownServer).toEqual([]);
   });
 
@@ -1100,12 +1087,12 @@ describe('user blob catalog', () => {
       ],
       state: 'complete',
     });
-    await projectCatalogAssets(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
 
-    const bySizeAsc = await queryCatalogTimeline(catalog, pubkey, { sort: { field: 'size', direction: 'asc' } });
+    const bySizeAsc = await catalog.queryCatalogTimeline(pubkey, { sort: { field: 'size', direction: 'asc' } });
     expect(bySizeAsc.map(item => item.primaryBlobSha256)).toEqual([hashA, hashC, hashB]);
 
-    const byDateAsc = await queryCatalogTimeline(catalog, pubkey, { sort: { field: 'date', direction: 'asc' } });
+    const byDateAsc = await catalog.queryCatalogTimeline(pubkey, { sort: { field: 'date', direction: 'asc' } });
     expect(byDateAsc.map(item => item.primaryBlobSha256)).toEqual([hashB, hashC, hashA]);
   });
 
@@ -1116,12 +1103,12 @@ describe('user blob catalog', () => {
       blobs: [blob(hashA), blob(hashB)],
       state: 'complete',
     });
-    await projectCatalogAssets(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
 
-    const matched = await queryCatalogTimeline(catalog, pubkey, { search: hashA.slice(0, 10) });
+    const matched = await catalog.queryCatalogTimeline(pubkey, { search: hashA.slice(0, 10) });
     expect(matched.map(item => item.primaryBlobSha256)).toEqual([hashA]);
 
-    const unmatched = await queryCatalogTimeline(catalog, pubkey, { search: 'zzzzzzzz' });
+    const unmatched = await catalog.queryCatalogTimeline(pubkey, { search: 'zzzzzzzz' });
     expect(unmatched).toEqual([]);
   });
 
@@ -1150,8 +1137,8 @@ describe('user blob catalog', () => {
       await catalog.ingestServerList(pubkey, { server: { url, type: 'blossom' }, state: 'complete' });
     }
     await catalog.ingestAuthoredEvents(pubkey, [event('replica-map', 100, [['x', hashA]])], 'wss://relay.example');
-    await projectCatalogAssets(catalog, pubkey);
-    const [asset] = await queryCatalogTimeline(catalog, pubkey);
+    await catalog.queryCatalogTimeline(pubkey);
+    const [asset] = await catalog.queryCatalogTimeline(pubkey);
     await store.put('blob_location', {
       id: `${hashA}:https://one.example`,
       sha256: hashA,
@@ -1175,7 +1162,7 @@ describe('user blob catalog', () => {
       source: 'native-url',
     });
 
-    expect(await getAssetReplicaMap(catalog, pubkey, asset.assetId)).toEqual([
+    expect(await catalog.getAssetReplicaMap(pubkey, asset.assetId)).toEqual([
       expect.objectContaining({
         sha256: hashA,
         sources: [{ serverId: 'https://one.example', baseUrl: 'https://one.example', serverType: 'blossom' }],

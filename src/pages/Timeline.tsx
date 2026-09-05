@@ -2,16 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { normalizeServerUrl } from '../catalog/catalog';
 import { getCatalogClient } from '../catalog/catalogClient';
 import { identifyUnexplainedBlobs } from '../catalog/identifyBlobs';
-import {
-  isHashSearchTerm,
-  sortTimelineProjections,
-  splitSearchTerms,
-  type CatalogAction,
-  type TimelineSort,
-} from '../catalog/advanced';
+import type { CatalogAction } from '../catalog/catalog';
 import {
   syncAdditionalPubkeyFromRelays,
   syncAuthoredEventsFromRelays,
@@ -25,47 +18,19 @@ import ServerListPopup from '../components/ServerListPopup';
 import { TimelineNavigation, groupByMonth } from '../components/TimelineNavigation';
 import { queueId3Tag, type ID3Tag } from '../utils/id3';
 import { useGlobalContext } from '../GlobalState';
-import { BrowseToolbar, type BrowseDisplayMode } from '../components/Browse/BrowseToolbar';
+import { BrowseToolbar } from '../components/Browse/BrowseToolbar';
 import { BrowseMediaGrid } from '../components/Browse/BrowseMediaGrid';
 import { BrowseListView } from '../components/Browse/BrowseListView';
 import { BrowseSelectionBar } from '../components/Browse/BrowseSelectionBar';
 import { BrowseActionPlanDialog } from '../components/Browse/BrowseActionPlanDialog';
 import { useAssetSelection } from '../components/Browse/useAssetSelection';
-import type { AvailabilityFilter } from '../components/Browse/BrowseFilterMenu';
-import {
-  groupRepeatedPosts,
-  matchesTypeFilter,
-  type TimelineItem,
-  type TypeFilter,
-} from '../components/Browse/browseConstants';
+import { type TimelineItem } from '../components/Browse/browseConstants';
+import { useBrowseView } from '../components/Browse/useBrowseView';
+import { useCatalogRefresh } from '../components/Browse/useCatalogRefresh';
 
-type BrowseViewState = {
-  anchorAssetId?: string;
-  anchorOffset?: number;
-  availabilityFilter: AvailabilityFilter[];
-  descriptiveOnly: boolean;
-  displayMode: BrowseDisplayMode;
-  eventOnly: boolean;
-  unlinkedOnly: boolean;
-  groupDuplicates: boolean;
-  scrollY: number;
-  search: string;
-  selectedServerName?: string;
-  sort: TimelineSort;
-  typeFilter: TypeFilter;
-};
 type TimelineReturnState = { timelineLocationKey?: string };
 
-function storedBrowseView(key: string): BrowseViewState | undefined {
-  try {
-    const value = sessionStorage.getItem(`bouquet:timeline:${key}`);
-    return value ? (JSON.parse(value) as BrowseViewState) : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
-const DEFAULT_SORT: TimelineSort = { field: 'date', direction: 'desc' };
 
 export default function Timeline() {
   const { user, signEventTemplate, relaysReady } = useNostr();
@@ -80,45 +45,47 @@ export default function Timeline() {
     [distribution]
   );
   const { storeUserServers } = useUserServers();
-  const [isServerListDialogOpen, setIsServerListDialogOpen] = useState(false);
-  const initialView = useRef(storedBrowseView(timelineLocationKey));
-  const scrollRestored = useRef(false);
-  const [items, setItems] = useState<TimelineItem[]>([]);
   const [audioMetadata, setAudioMetadata] = useState<Record<string, ID3Tag>>({});
   const audioProjectionTimer = useRef<number | undefined>(undefined);
-  const [projectionState, setProjectionState] = useState<'idle' | 'projecting' | 'complete' | 'failed'>('idle');
+  const refresh = useCatalogRefresh(user?.pubkey);
+  const { items, setItems, state: projectionState, error: projectionError, retry, version } = refresh;
+  const view = useBrowseView({
+    timelineLocationKey,
+    items,
+    ready: projectionState === 'complete',
+    version,
+    serverInfo,
+    pubkey: user?.pubkey,
+  });
+  const {
+    displayMode,
+    setDisplayMode,
+    typeFilter,
+    setTypeFilter,
+    eventOnly,
+    setEventOnly,
+    unlinkedOnly,
+    setUnlinkedOnly,
+    descriptiveOnly,
+    setDescriptiveOnly,
+    groupDuplicates,
+    setGroupDuplicates,
+    availabilityFilter,
+    setAvailabilityFilter,
+    search,
+    setSearch,
+    sort,
+    setSort,
+    selectedServerName,
+    setSelectedServerName,
+    lookupError,
+    filteredItems,
+    clearAllFilters,
+    saveBrowseView,
+  } = view;
 
-  const [displayMode, setDisplayMode] = useState<BrowseDisplayMode>(() => initialView.current?.displayMode ?? 'media');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>(() => initialView.current?.typeFilter ?? 'all');
-  const [eventOnly, setEventOnlyState] = useState(() => initialView.current?.eventOnly ?? false);
-  const [unlinkedOnly, setUnlinkedOnlyState] = useState(() => initialView.current?.unlinkedOnly ?? false);
-  // The two are opposite ends of the same axis - "has an event" vs. "does not" -
-  // so turning one on always turns the other off, instead of silently combining
-  // into a filter that can never match anything.
-  const setEventOnly = useCallback((value: boolean) => {
-    setEventOnlyState(value);
-    if (value) setUnlinkedOnlyState(false);
-  }, []);
-  const setUnlinkedOnly = useCallback((value: boolean) => {
-    setUnlinkedOnlyState(value);
-    if (value) setEventOnlyState(false);
-  }, []);
-  const [descriptiveOnly, setDescriptiveOnly] = useState(() => initialView.current?.descriptiveOnly ?? false);
-  const [groupDuplicates, setGroupDuplicates] = useState(() => initialView.current?.groupDuplicates ?? true);
-  const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter[]>(
-    () => initialView.current?.availabilityFilter ?? []
-  );
-  const [search, setSearch] = useState(() => initialView.current?.search ?? '');
-  const [sort, setSort] = useState<TimelineSort>(() => initialView.current?.sort ?? DEFAULT_SORT);
-  const [selectedServerName, setSelectedServerName] = useState<string | undefined>(
-    () => initialView.current?.selectedServerName
-  );
-  const [serverAssetIds, setServerAssetIds] = useState<Set<string>>();
-  const [hashMatchAssetIds, setHashMatchAssetIds] = useState<Set<string>>();
-  const [catalogVersion, setCatalogVersion] = useState(0);
-  const [lookupError, setLookupError] = useState<string>();
-  const [projectionError, setProjectionError] = useState<string>();
-  const [projectionAttempt, setProjectionAttempt] = useState(0);
+  const [isServerListDialogOpen, setIsServerListDialogOpen] = useState(false);
+
   const [eventSyncGeneration, setEventSyncGeneration] = useState(0);
   const [activeMonth, setActiveMonth] = useState<string>();
   const [bulkAction, setBulkAction] = useState<CatalogAction>();
@@ -150,83 +117,6 @@ export default function Timeline() {
     });
   }, [eventSyncGeneration, relaysReady, user?.pubkey, user?.relayUrls]);
 
-  useEffect(() => {
-    if (!user?.pubkey) {
-      setItems([]);
-      setProjectionState('idle');
-      return;
-    }
-
-    let active = true;
-    const catalog = getCatalogClient();
-
-    void catalog
-      .queryCatalogTimeline(user.pubkey)
-      .then(cached => {
-        if (!active || cached.length === 0) return;
-        setItems(cached);
-        setProjectionState('complete');
-      })
-      .catch(() => {
-        // The full projection below is the real source; a failed cache read only
-        // costs a slower first paint, so it must not surface as an error.
-      });
-
-    let timer: number | undefined;
-    let inFlight = false;
-    let dirty = false;
-    const runProjection = () => {
-      if (timer !== undefined) window.clearTimeout(timer);
-      // Server-list sync fires a change event per page. Without single-flight
-      // every page triggers a full re-projection, so a long sync stacks dozens
-      // of catalog-wide projections and wedges the worker.
-      timer = window.setTimeout(() => {
-        if (!active) return;
-        if (inFlight) {
-          dirty = true;
-          return;
-        }
-        inFlight = true;
-        setProjectionState(current => (current === 'complete' ? current : 'projecting'));
-        void (async () => {
-          await catalog.reprojectEvents(user.pubkey);
-          // Checking every URL here used to run catalog-wide on every reprojection -
-          // a relay sync firing dozens of times turned into thousands of HEAD
-          // requests. `useNativeUrlAvailabilityCheck` now does this per row/card,
-          // scoped to what virtualization actually renders.
-          await catalog.projectCatalogAssets(user.pubkey);
-          return catalog.queryCatalogTimeline(user.pubkey);
-        })()
-          .then(projected => {
-            if (!active) return;
-            setItems(projected);
-            setProjectionError(undefined);
-            setProjectionState('complete');
-          })
-          .catch(error => {
-            if (!active) return;
-            setProjectionError(error instanceof Error ? error.message : String(error));
-            setProjectionState(current => (current === 'complete' ? current : 'failed'));
-          })
-          .finally(() => {
-            inFlight = false;
-            if (dirty && active) {
-              dirty = false;
-              runProjection();
-            }
-          });
-      }, 500);
-    };
-
-    runProjection();
-    window.addEventListener('bouquet-catalog-changed', runProjection);
-
-    return () => {
-      active = false;
-      if (timer !== undefined) window.clearTimeout(timer);
-      window.removeEventListener('bouquet-catalog-changed', runProjection);
-    };
-  }, [user?.pubkey, projectionAttempt]);
 
   // Files no server ever typed only become recognisable once their first bytes are
   // read - and a playlist among them is what folds hundreds of segments into one
@@ -239,116 +129,8 @@ export default function Timeline() {
     void identifyUnexplainedBlobs(user.pubkey);
   }, [projectionState, user?.pubkey]);
 
-  const searchTerms = useMemo(() => splitSearchTerms(search), [search]);
-  const hashTerms = useMemo(() => searchTerms.filter(isHashSearchTerm), [searchTerms]);
-  const textTerms = useMemo(() => searchTerms.filter(term => !isHashSearchTerm(term)), [searchTerms]);
 
-  const selectedServer = selectedServerName ? serverInfo[selectedServerName] : undefined;
-  const serverId = selectedServer && !selectedServer.virtual ? normalizeServerUrl(selectedServer.url) : undefined;
 
-  // Catalog-backed lookups below must re-run when the catalog itself changes, not
-  // whenever `items` happens to be replaced. Audio metadata reprojection rewrites
-  // `items` frequently and would otherwise re-read every blob location each time.
-  // A relay sync fires one change event per page - measured at 25 in under four
-  // seconds - and each one re-runs the two catalog-backed lookups below. Coalescing
-  // turns that burst into a single query instead of a queue the worker serializes.
-  useEffect(() => {
-    let timer: number | undefined;
-    const bump = () => {
-      if (timer !== undefined) window.clearTimeout(timer);
-      timer = window.setTimeout(() => setCatalogVersion(version => version + 1), 400);
-    };
-    window.addEventListener('bouquet-catalog-changed', bump);
-    return () => {
-      if (timer !== undefined) window.clearTimeout(timer);
-      window.removeEventListener('bouquet-catalog-changed', bump);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!user?.pubkey || !serverId) {
-      setServerAssetIds(undefined);
-      return;
-    }
-    let active = true;
-    void getCatalogClient()
-      .queryCatalogAssetIds({ serverId })
-      .then(assetIds => {
-        if (!active) return;
-        setServerAssetIds(new Set(assetIds));
-        setLookupError(undefined);
-      })
-      .catch(() => {
-        // Leaving the set empty would filter everything out and read as
-        // "you have nothing here", which is a wrong answer stated confidently.
-        if (!active) return;
-        setServerAssetIds(undefined);
-        setLookupError('The server filter could not be applied, so everything is shown.');
-      });
-    return () => {
-      active = false;
-    };
-  }, [catalogVersion, serverId, user?.pubkey]);
-
-  // Hash search needs the asset's full blob set, which the projection does not carry.
-  // Only sha256-looking terms take this path, so ordinary typing stays client-side.
-  useEffect(() => {
-    if (!user?.pubkey || hashTerms.length === 0) {
-      setHashMatchAssetIds(undefined);
-      return;
-    }
-    let active = true;
-    void getCatalogClient()
-      .queryCatalogAssetIds({ hashTerms })
-      .then(assetIds => {
-        if (!active) return;
-        setHashMatchAssetIds(new Set(assetIds));
-        setLookupError(undefined);
-      })
-      .catch(() => {
-        if (!active) return;
-        setHashMatchAssetIds(undefined);
-        setLookupError('The hash search could not be run, so results may be incomplete.');
-      });
-    return () => {
-      active = false;
-    };
-  }, [catalogVersion, hashTerms, user?.pubkey]);
-
-  const filteredItems = useMemo(() => {
-    const filtered = items.filter(
-      item =>
-        (!eventOnly || item.eventId !== undefined) &&
-        (!unlinkedOnly || item.eventId === undefined) &&
-        (!descriptiveOnly || !item.displayTitleIsFallback) &&
-        matchesTypeFilter(item, typeFilter) &&
-        (availabilityFilter.length === 0 || availabilityFilter.includes(item.availabilityState)) &&
-        (!serverId || serverAssetIds?.has(item.assetId)) &&
-        textTerms.every(term => item.searchText.includes(term)) &&
-        // A hash can also appear in an item's own text, so the catalog lookup only
-        // adds the assets whose files match; it does not replace the text match.
-        (hashTerms.length === 0 ||
-          hashTerms.every(term => item.searchText.includes(term)) ||
-          hashMatchAssetIds?.has(item.assetId) === true)
-    );
-    const sorted = displayMode === 'list' ? sortTimelineProjections(filtered, sort) : filtered;
-    return groupDuplicates ? groupRepeatedPosts(sorted) : sorted;
-  }, [
-    availabilityFilter,
-    descriptiveOnly,
-    displayMode,
-    eventOnly,
-    groupDuplicates,
-    unlinkedOnly,
-    hashMatchAssetIds,
-    hashTerms,
-    items,
-    serverAssetIds,
-    serverId,
-    sort,
-    textTerms,
-    typeFilter,
-  ]);
 
   const orderedAssetIds = useMemo(() => filteredItems.map(item => item.assetId), [filteredItems]);
   const { selectedAssetIds, handleSelectAsset, clearSelection, selectAll } = useAssetSelection(orderedAssetIds);
@@ -357,61 +139,14 @@ export default function Timeline() {
     [filteredItems, selectedAssetIds]
   );
 
-  useEffect(() => {
-    const view = initialView.current;
-    if (!view || scrollRestored.current || projectionState !== 'complete') return;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const anchor = view.anchorAssetId
-          ? [...document.querySelectorAll<HTMLElement>('[data-asset-id]')].find(
-              element => element.dataset.assetId === view.anchorAssetId
-            )
-          : undefined;
-        const top =
-          anchor && view.anchorOffset !== undefined
-            ? window.scrollY + anchor.getBoundingClientRect().top - view.anchorOffset
-            : view.scrollY;
-        window.scrollTo({ top, behavior: 'auto' });
-        scrollRestored.current = true;
-      });
-    });
-  }, [projectionState]);
 
-  const saveBrowseView = (anchorAssetId?: string, anchorOffset?: number) => {
-    try {
-      sessionStorage.setItem(
-        `bouquet:timeline:${timelineLocationKey}`,
-        JSON.stringify({
-          anchorAssetId,
-          anchorOffset,
-          availabilityFilter,
-          descriptiveOnly,
-          displayMode,
-          eventOnly,
-          groupDuplicates,
-          unlinkedOnly,
-          scrollY: window.scrollY,
-          search,
-          selectedServerName,
-          sort,
-          typeFilter,
-        } satisfies BrowseViewState)
-      );
-    } catch {
-      // Navigation remains available when browser storage is unavailable.
-    }
-  };
 
   const scheduleAudioProjection = () => {
     if (!user?.pubkey) return;
     if (audioProjectionTimer.current !== undefined) window.clearTimeout(audioProjectionTimer.current);
     audioProjectionTimer.current = window.setTimeout(() => {
       const catalog = getCatalogClient();
-      void catalog
-        .projectCatalogAssets(user.pubkey, { force: true })
-        .then(() => catalog.queryCatalogTimeline(user.pubkey))
-        .then(setItems)
-        .catch(() => undefined);
+      void catalog.queryCatalogTimeline(user.pubkey).then(setItems).catch(() => undefined);
     }, 200);
   };
 
@@ -526,7 +261,7 @@ export default function Timeline() {
           {/* Without this the list silently goes stale: the old items stay on screen
               and nothing says the refresh failed. */}
           <span>Showing your last known media list. Refreshing it failed.</span>
-          <Button size="sm" variant="outline" onClick={() => setProjectionAttempt(attempt => attempt + 1)}>
+          <Button size="sm" variant="outline" onClick={retry}>
             Try again
           </Button>
         </div>
@@ -642,7 +377,7 @@ export default function Timeline() {
                 : 'Your catalog is intact, but reading it failed.'
             }
           />
-          <Button className="mt-4" onClick={() => setProjectionAttempt(attempt => attempt + 1)}>
+          <Button className="mt-4" onClick={retry}>
             Try again
           </Button>
         </div>
@@ -657,14 +392,7 @@ export default function Timeline() {
               page kept falling into: the user has to undo each control by hand. */}
           <Button
             className="mt-4"
-            onClick={() => {
-              setSearch('');
-              setTypeFilter('all');
-              setAvailabilityFilter([]);
-              setSelectedServerName(undefined);
-              setEventOnly(false);
-              setDescriptiveOnly(false);
-            }}
+            onClick={clearAllFilters}
           >
             Clear all filters
           </Button>

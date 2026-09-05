@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { TimelineProjection } from '../../catalog/advanced';
+import type { TimelineProjection } from '../../catalog/catalog'
 
 export type AvailabilityFilter = TimelineProjection['availabilityState'];
 

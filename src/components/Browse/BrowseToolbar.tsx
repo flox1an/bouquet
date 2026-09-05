@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ServerInfo } from '../../utils/useServerInfo';
-import type { TimelineSort, TimelineSortField } from '../../catalog/advanced';
+import type { TimelineSort, TimelineSortField } from '../../catalog/catalog'
 import { formatFileSize } from '../../utils/utils';
 import { SORT_FIELD_OPTIONS, TYPE_FILTERS, type TypeFilter } from './browseConstants';
 import { BrowseFilterMenu, type AvailabilityFilter } from './BrowseFilterMenu';

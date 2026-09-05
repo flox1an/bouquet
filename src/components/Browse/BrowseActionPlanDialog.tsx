@@ -9,11 +9,11 @@ import { cn } from '@/lib/utils';
 import { formatFileSize } from '../../utils/utils';
 import { normalizeServerUrl, type BlobRemoval, type CatalogServerType } from '../../catalog/catalog';
 import { getCatalogClient } from '../../catalog/catalogClient';
-import { buildReplicaOps, type AssetReplica, type CatalogAction, type ReplicaOp } from '../../catalog/advanced';
+import { buildReplicaOps, type AssetReplica, type CatalogAction, type ReplicaOp } from '../../catalog/catalog';
+import { mediaServer } from '../../utils/server';
 import { probeReplica } from '../../catalog/availabilityFetch';
 import { transferBlob, type TransferPhase } from '../../utils/transfer';
 import { runTasks } from '../../utils/run';
-import { mediaServer } from '../../utils/server';
 import {
   finishDiagnosticRun,
   recordDiagnosticError,
@@ -75,6 +75,7 @@ export function BrowseActionPlanDialog({
   const [replicaMaps, setReplicaMaps] = useState<AssetReplica[][]>([]);
   const cancelledRef = useRef(false);
   const deleteAbortRef = useRef<AbortController | undefined>(undefined);
+  const transferAbortRef = useRef<AbortController | undefined>(undefined);
   const failedRef = useRef(false);
   const diagnosticRunRef = useRef<DiagnosticRun | undefined>(undefined);
 
@@ -140,7 +141,7 @@ export function BrowseActionPlanDialog({
   const blockedPlans = plans?.filter(plan => !plan.allowed) ?? [];
   const targetHashes = [...new Set(allowedPlans.flatMap(plan => plan.targets))];
   const eligibleServers = Object.values(serverInfo)
-    .filter(server => server.type === 'blossom' && !server.virtual)
+    .filter(server => mediaServer(server).capabilities.mirror && !server.virtual)
     .sort((a, b) => a.name.localeCompare(b.name));
   const destination = eligibleServers.find(server => server.name === chosenServerName);
   // Only blobs the destination is actually missing get transferred, so the preview
@@ -328,7 +329,6 @@ export function BrowseActionPlanDialog({
         // next probe to notice the file it just watched disappear.
         if (removed.length > 0) {
           await getCatalogClient().recordBlobsRemoved(pubkey, removed);
-          await getCatalogClient().projectCatalogAssets(pubkey, { force: true });
         }
         complete(result);
         if (diagnosticRunId) finishDiagnosticRun(diagnosticRunId);
@@ -369,23 +369,24 @@ export function BrowseActionPlanDialog({
       );
       setPhase('running');
       transfersRan = true;
-      let nextIndex = 0;
       const transferredHashes = new Set<string>();
-      const worker = async () => {
-        while (true) {
-          if (cancelledRef.current) return;
-          const i = nextIndex++;
-          if (i >= ops.length) return;
-          const op = ops[i];
+      const controller = new AbortController();
+      transferAbortRef.current = controller;
+      const result = await runTasks(
+        ops,
+        async op => {
           const key = `${op.sha256}:${op.targetServerId}`;
           const target = Object.values(serverInfo).find(server => normalizeServerUrl(server.url) === op.targetServerId);
           if (!target) {
-            updateRow(key, { state: 'error', message: 'Destination server is no longer available.' });
-            continue;
+            const error = new Error('Destination server is no longer available.');
+            updateRow(key, { state: 'error', message: error.message });
+            failedRef.current = true;
+            throw error;
           }
           updateRow(key, { state: 'running', message: undefined });
           try {
             const descriptor = await transferBlob(`${op.sourceBaseUrl}/${op.sha256}`, target, signEventTemplate, {
+              signal: controller.signal,
               allowMirror: mirrorSupport[op.targetServerId] !== false,
               onMirrorUnsupported: () => setMirrorSupport(current => ({ ...current, [op.targetServerId]: false })),
               onPhaseChange: transferPhase => updateRow(key, { phase: transferPhase }),
@@ -395,18 +396,20 @@ export function BrowseActionPlanDialog({
             transferredHashes.add(op.sha256);
             updateRow(key, { state: 'done', phase: 'completed' });
           } catch (error) {
+            failedRef.current = true;
             updateRow(key, { state: 'error', message: errorMessage(error), phase: 'error' });
+            throw error;
           }
-        }
-      };
-      await Promise.all(Array.from({ length: TRANSFER_CONCURRENCY }, worker));
+        },
+        { concurrency: TRANSFER_CONCURRENCY, signal: controller.signal }
+      );
+      transferAbortRef.current = undefined;
       // Blobs that made it across before a cancel are really there, so record them either
       // way. Without this the catalog keeps reporting them as missing on the destination.
       if (transferredHashes.size > 0) {
         await getCatalogClient().refreshReplicaAvailability(pubkey, probeReplica, 100, [...transferredHashes]);
-        await getCatalogClient().projectCatalogAssets(pubkey, { force: true });
       }
-      if (!cancelledRef.current) complete();
+      complete(result);
     } catch (error) {
       setFailureMessage(
         transfersRan
@@ -619,6 +622,7 @@ export function BrowseActionPlanDialog({
                 variant="outline"
                 size="sm"
                 onClick={() => {
+                  transferAbortRef.current?.abort();
                   cancelledRef.current = true;
                   if (diagnosticRunRef.current) {
                     updateDiagnosticRun(diagnosticRunRef.current.id, { phase: 'cancelling' });

@@ -1,6 +1,6 @@
 import type { NostrEvent } from 'nostr-tools';
 import { nip19 } from 'nostr-tools';
-import type { Catalog, CatalogServerType } from './catalog';
+import { Catalog, type CatalogServerType } from './catalog';
 import { extractTimelineEventMetadata, type TimelineEventMetadata } from './timelineMetadata';
 import { EVENT_EXTRACTOR_VERSION } from './eventReferences';
 import { isGenericMimeType } from '../utils/mimeTypes';
@@ -24,7 +24,7 @@ type BlobLocation = {
   reportedMimeType?: string;
   canonicalUrl: string;
   consecutiveFailures: number;
-  source?: 'replica' | 'native-url' | 'server-list';
+  source?: 'replica' | 'native-url' | 'server-list' | 'delete';
 };
 type BlobLocationHistory = {
   id: string;
@@ -320,10 +320,10 @@ export async function refreshReplicaAvailability(
   onCheck?: (sha256: string, serverId: string, state: ReplicaState, httpStatus?: number) => void
 ): Promise<void> {
   const [memberships, profileServers, servers, locations] = await Promise.all([
-    catalog.store.getAll<Membership>('profile_blob_membership'),
-    catalog.store.getAll<ProfileServer>('profile_server'),
-    catalog.store.getAll<Server>('server'),
-    catalog.store.getAll<BlobLocation>('blob_location'),
+    Catalog.storeFor(catalog).getAll<Membership>('profile_blob_membership'),
+    Catalog.storeFor(catalog).getAll<ProfileServer>('profile_server'),
+    Catalog.storeFor(catalog).getAll<Server>('server'),
+    Catalog.storeFor(catalog).getAll<BlobLocation>('blob_location'),
   ]);
   const activeHashes =
     hashes ?? memberships.filter(item => item.pubkey === pubkey && item.status === 'active').map(item => item.sha256);
@@ -367,14 +367,14 @@ export async function refreshReplicaAvailability(
         source: 'replica',
         consecutiveFailures: failures,
       };
-      await catalog.store.put<BlobLocation>('blob_location', location);
+      await Catalog.storeFor(catalog).put<BlobLocation>('blob_location', location);
       onCheck?.(sha256, server.serverId, state, observed?.status);
       const changed =
         previous?.state !== state ||
         previous?.reportedSize !== location.reportedSize ||
         previous?.reportedMimeType !== location.reportedMimeType;
       if (changed) {
-        await catalog.store.put<BlobLocationHistory>('blob_location_history', {
+        await Catalog.storeFor(catalog).put<BlobLocationHistory>('blob_location_history', {
           id: `${id}:${observedAt}:${previous?.state ?? 'none'}:${state}`,
           sha256,
           serverId: server.serverId,
@@ -399,9 +399,9 @@ export async function refreshEventUrlAvailability(
   hashes?: string[]
 ): Promise<void> {
   const [memberships, blobUrls, locations] = await Promise.all([
-    catalog.store.getAll<Membership>('profile_blob_membership'),
-    catalog.store.getAll<BlobUrl>('blob_url'),
-    catalog.store.getAll<BlobLocation>('blob_location'),
+    Catalog.storeFor(catalog).getAll<Membership>('profile_blob_membership'),
+    Catalog.storeFor(catalog).getAll<BlobUrl>('blob_url'),
+    Catalog.storeFor(catalog).getAll<BlobLocation>('blob_location'),
   ]);
   const activeHashes = new Set(
     hashes ?? memberships.filter(item => item.pubkey === pubkey && item.status === 'active').map(item => item.sha256)
@@ -451,13 +451,13 @@ export async function refreshEventUrlAvailability(
       canonicalUrl: observed?.url ?? blobUrl.url,
       consecutiveFailures: failures,
     };
-    await catalog.store.put<BlobLocation>('blob_location', location);
+    await Catalog.storeFor(catalog).put<BlobLocation>('blob_location', location);
     const changed =
       previous?.state !== state ||
       previous?.reportedSize !== location.reportedSize ||
       previous?.reportedMimeType !== location.reportedMimeType;
     if (changed) {
-      await catalog.store.put<BlobLocationHistory>('blob_location_history', {
+      await Catalog.storeFor(catalog).put<BlobLocationHistory>('blob_location_history', {
         id: `${id}:${observedAt}:${previous?.state ?? 'none'}:${state}`,
         sha256: blobUrl.sha256,
         serverId: blobUrl.url,
@@ -497,15 +497,15 @@ export async function projectCatalogAssets(
     blobUrls,
     metadataFacts,
   ] = await Promise.all([
-    catalog.store.getAll<Membership>('profile_blob_membership'),
-    catalog.store.getAll<ProfileEvent>('profile_event'),
-    catalog.store.getAll<TimelineEvent>('timeline_event'),
-    catalog.store.getAll<EventReference>('event_reference'),
-    catalog.store.getAll<BlobLocation>('blob_location'),
-    catalog.store.getAll<Relationship>('blob_relationship'),
-    catalog.store.getAll<Blob>('blob'),
-    catalog.store.getAll<BlobUrl>('blob_url'),
-    catalog.store.getAll<MetadataFact>('metadata_fact'),
+    Catalog.storeFor(catalog).getAll<Membership>('profile_blob_membership'),
+    Catalog.storeFor(catalog).getAll<ProfileEvent>('profile_event'),
+    Catalog.storeFor(catalog).getAll<TimelineEvent>('timeline_event'),
+    Catalog.storeFor(catalog).getAll<EventReference>('event_reference'),
+    Catalog.storeFor(catalog).getAll<BlobLocation>('blob_location'),
+    Catalog.storeFor(catalog).getAll<Relationship>('blob_relationship'),
+    Catalog.storeFor(catalog).getAll<Blob>('blob'),
+    Catalog.storeFor(catalog).getAll<BlobUrl>('blob_url'),
+    Catalog.storeFor(catalog).getAll<MetadataFact>('metadata_fact'),
   ]);
   const profileTimelineEvents = await hydrateTimelineEvents(catalog, pubkey, profileEvents, cachedTimelineEvents);
   const activeHashes = new Set(
@@ -793,14 +793,14 @@ async function hydrateTimelineEvents(
   if (missingEventIds.length === 0) return [...cachedByEventId.values()];
 
   const rawByEventId = new Map(
-    (await catalog.store.getAll<CatalogEvent>('catalog_event')).map(event => [event.eventId, event.event])
+    (await Catalog.storeFor(catalog).getAll<CatalogEvent>('catalog_event')).map(event => [event.eventId, event.event])
   );
   for (const eventId of missingEventIds) {
     const raw = rawByEventId.get(eventId);
     if (!raw) continue;
     const metadata = extractTimelineEventMetadata(raw);
     const cached = { id: `${pubkey}:${eventId}`, pubkey, ...metadata };
-    await catalog.store.put<TimelineEvent>('timeline_event', cached);
+    await Catalog.storeFor(catalog).put<TimelineEvent>('timeline_event', cached);
     cachedByEventId.set(eventId, cached);
   }
   return [...cachedByEventId.values()];
@@ -921,8 +921,8 @@ async function flushWrites(
 ): Promise<void> {
   const chunk = 2000;
   const [storedAssets, storedAssetBlobs] = await Promise.all([
-    catalog.store.getAll<Asset>('asset'),
-    catalog.store.getAll<AssetBlob>('asset_blob'),
+    Catalog.storeFor(catalog).getAll<Asset>('asset'),
+    Catalog.storeFor(catalog).getAll<AssetBlob>('asset_blob'),
   ]);
   const assetsById = new Map(storedAssets.map(asset => [asset.id, asset]));
   const assetBlobsById = new Map(storedAssetBlobs.map(assetBlob => [assetBlob.id, assetBlob]));
@@ -951,11 +951,11 @@ async function flushWrites(
     );
   });
   for (let i = 0; i < changedAssets.length; i += chunk)
-    await catalog.store.putMany('asset', changedAssets.slice(i, i + chunk));
+    await Catalog.storeFor(catalog).putMany('asset', changedAssets.slice(i, i + chunk));
   for (let i = 0; i < changedAssetBlobs.length; i += chunk)
-    await catalog.store.putMany('asset_blob', changedAssetBlobs.slice(i, i + chunk));
+    await Catalog.storeFor(catalog).putMany('asset_blob', changedAssetBlobs.slice(i, i + chunk));
   for (let i = 0; i < writes.projections.length; i += chunk)
-    await catalog.store.putMany('timeline_projection', writes.projections.slice(i, i + chunk));
+    await Catalog.storeFor(catalog).putMany('timeline_projection', writes.projections.slice(i, i + chunk));
 }
 
 async function writeProjection(
@@ -1034,8 +1034,8 @@ export async function queryCatalogTimeline(
   // a text search all answer from `timeline_projection` alone, which is what keeps
   // filtering off the multi-table read path.
   const [projections, assetBlobs] = await Promise.all([
-    catalog.store.getAll<TimelineProjection>('timeline_projection'),
-    hashTerms.length > 0 ? catalog.store.getAll<AssetBlob>('asset_blob') : Promise.resolve<AssetBlob[]>([]),
+    Catalog.storeFor(catalog).getAll<TimelineProjection>('timeline_projection'),
+    hashTerms.length > 0 ? Catalog.storeFor(catalog).getAll<AssetBlob>('asset_blob') : Promise.resolve<AssetBlob[]>([]),
   ]);
   const assetBlobsByAssetId = Map.groupBy(assetBlobs, assetBlob => assetBlob.assetId);
   const matchesSearchTerm = (projection: TimelineProjection, term: string): boolean => {
@@ -1078,9 +1078,9 @@ export async function queryCatalogAssetIds(
   const hashTerms = query.hashTerms ?? [];
   if (!query.serverId && hashTerms.length === 0) return [];
   const [assetBlobs, presentLocations] = await Promise.all([
-    catalog.store.getAll<AssetBlob>('asset_blob'),
+    Catalog.storeFor(catalog).getAll<AssetBlob>('asset_blob'),
     query.serverId
-      ? catalog.store.getAllFromIndex<BlobLocation>('blob_location', 'by_server_state', [query.serverId, 'present'])
+      ? Catalog.storeFor(catalog).getAllFromIndex<BlobLocation>('blob_location', 'by_server_state', [query.serverId, 'present'])
       : Promise.resolve<BlobLocation[]>([]),
   ]);
   let assetIds: Set<string> | undefined;
@@ -1144,10 +1144,10 @@ async function loadAssetBlobs(catalog: Catalog, assetBlobs: AssetBlob[]): Promis
   return Promise.all(
     assetBlobs.map(async assetBlob => {
       const [blob, urls, locations, facts] = await Promise.all([
-        catalog.store.get<Blob>('blob', assetBlob.sha256),
-        catalog.store.getAllFromIndex<BlobUrl>('blob_url', 'by_sha256', assetBlob.sha256),
-        catalog.store.getAllFromIndex<BlobLocation>('blob_location', 'by_sha256', assetBlob.sha256),
-        catalog.store.getAllFromIndex<MetadataFact>('metadata_fact', 'by_subject', assetBlob.sha256),
+        Catalog.storeFor(catalog).get<Blob>('blob', assetBlob.sha256),
+        Catalog.storeFor(catalog).getAllFromIndex<BlobUrl>('blob_url', 'by_sha256', assetBlob.sha256),
+        Catalog.storeFor(catalog).getAllFromIndex<BlobLocation>('blob_location', 'by_sha256', assetBlob.sha256),
+        Catalog.storeFor(catalog).getAllFromIndex<MetadataFact>('metadata_fact', 'by_subject', assetBlob.sha256),
       ]);
       return toTimelineAssetBlob(
         assetBlob,
@@ -1161,7 +1161,7 @@ async function loadAssetBlobs(catalog: Catalog, assetBlobs: AssetBlob[]): Promis
 }
 
 async function assetBlobsInOrder(catalog: Catalog, assetId: string): Promise<AssetBlob[]> {
-  const assetBlobs = await catalog.store.getAllFromIndex<AssetBlob>('asset_blob', 'by_asset', assetId);
+  const assetBlobs = await Catalog.storeFor(catalog).getAllFromIndex<AssetBlob>('asset_blob', 'by_asset', assetId);
   return assetBlobs.sort((a, b) => a.ordinal - b.ordinal);
 }
 
@@ -1170,12 +1170,12 @@ export async function getCatalogTimelineAsset(
   pubkey: string,
   assetId: string
 ): Promise<TimelineAssetDetail | undefined> {
-  const projection = await catalog.store.get<TimelineProjection>('timeline_projection', `${pubkey}:${assetId}`);
+  const projection = await Catalog.storeFor(catalog).get<TimelineProjection>('timeline_projection', `${pubkey}:${assetId}`);
   if (!projection) return;
   const [blobs, catalogEvent] = await Promise.all([
     assetBlobsInOrder(catalog, assetId).then(assetBlobs => loadAssetBlobs(catalog, assetBlobs)),
     projection.eventId
-      ? catalog.store.get<CatalogEvent>('catalog_event', projection.eventId)
+      ? Catalog.storeFor(catalog).get<CatalogEvent>('catalog_event', projection.eventId)
       : Promise.resolve(undefined),
   ]);
   return { projection, event: catalogEvent?.event, blobs };
@@ -1199,12 +1199,12 @@ export async function getCatalogAssetContents(
 
 export async function planCatalogAction(catalog: Catalog, pubkey: string, assetId: string, action: CatalogAction) {
   const [assets, assetBlobs, relationships, locations] = await Promise.all([
-    catalog.store.getAll<Asset>('asset'),
-    catalog.store.getAll<AssetBlob>('asset_blob'),
-    catalog.store.getAll<{ fromSha256: string; state: 'active' | 'unresolved' | 'failed' | 'truncated' }>(
+    Catalog.storeFor(catalog).getAll<Asset>('asset'),
+    Catalog.storeFor(catalog).getAll<AssetBlob>('asset_blob'),
+    Catalog.storeFor(catalog).getAll<{ fromSha256: string; state: 'active' | 'unresolved' | 'failed' | 'truncated' }>(
       'blob_relationship'
     ),
-    catalog.store.getAll<BlobLocation>('blob_location'),
+    Catalog.storeFor(catalog).getAll<BlobLocation>('blob_location'),
   ]);
   const asset = assets.find(item => item.id === assetId && item.pubkey === pubkey);
   if (!asset) return { allowed: false, reason: 'This item is not in your profile', targets: [] as string[] };
@@ -1236,11 +1236,11 @@ export type AssetReplica = {
 
 export async function getAssetReplicaMap(catalog: Catalog, pubkey: string, assetId: string): Promise<AssetReplica[]> {
   const [assetBlobs, locations, servers, profileServers, blobs] = await Promise.all([
-    catalog.store.getAll<AssetBlob>('asset_blob'),
-    catalog.store.getAll<BlobLocation>('blob_location'),
-    catalog.store.getAll<Server>('server'),
-    catalog.store.getAll<ProfileServer>('profile_server'),
-    catalog.store.getAll<Blob>('blob'),
+    Catalog.storeFor(catalog).getAll<AssetBlob>('asset_blob'),
+    Catalog.storeFor(catalog).getAll<BlobLocation>('blob_location'),
+    Catalog.storeFor(catalog).getAll<Server>('server'),
+    Catalog.storeFor(catalog).getAll<ProfileServer>('profile_server'),
+    Catalog.storeFor(catalog).getAll<Blob>('blob'),
   ]);
   const serversById = new Map(servers.map(server => [server.serverId, server]));
   const enabledServers = profileServers

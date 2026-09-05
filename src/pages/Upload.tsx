@@ -1,23 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
-import { createUploadAuth } from 'blossom-client-sdk/auth';
 import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
-import { useQueryClient } from '@tanstack/react-query';
 import { removeExifData } from '../utils/exif';
-import type { AxiosError, AxiosProgressEvent } from 'axios';
+import type { AxiosError } from 'axios';
 import FileEventEditor, { FileEventData } from '../components/FileEventEditor/FileEventEditor';
-import pLimit from 'p-limit';
 import { Server, useUserServers } from '../utils/useUserServers';
 import { resizeImage } from '../utils/resize';
 import { getBlurhashAndSizeFromFile } from '../utils/blur';
 import UploadFileSelection, { ResizeOptions, TransferStats } from '../components/UploadFileSelection';
 import UploadProgress from '../components/UploadProgress';
-import { uploadNip96File } from '../utils/nip96';
 import { extractDomain } from '../utils/utils';
 import { transferBlob } from '../utils/transfer';
-import { calculateFileHash, checkBlobExists } from '../utils/blossom';
-import { formatUploadError, uploadBlob } from '../utils/upload';
+import { formatUploadError } from '../utils/upload';
 import { usePublishing } from '../components/FileEventEditor/usePublishing';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { NostrEvent } from 'nostr-tools';
@@ -28,18 +23,18 @@ import { Info } from 'lucide-react';
 import UploadOnboarding from '../components/UploadOboarding';
 import { toast } from '@/hooks/use-toast';
 import { getCatalogClient } from '../catalog/catalogClient';
+import { mediaServer } from '../utils/server';
+import { uploadFiles } from '../utils/uploadRun';
 
 function Upload() {
   const { servers, serversLoading } = useUserServers();
   const { user, signEventTemplate } = useNostr();
   const { serverInfo } = useServerInfo();
-  const queryClient = useQueryClient();
   const location = useLocation();
   const [transfers, setTransfers] = useState<{ [key: string]: TransferStats }>({});
   const [files, setFiles] = useState<File[]>([]);
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
   const [uploadBusy, setUploadBusy] = useState(false);
-  const limit = pLimit(3);
   const [preparing, setPreparing] = useState(false);
   const [fileEventsToPublish, setFileEventsToPublish] = useState<(FileEventData & { publishErrors?: string[] })[]>([]);
   const [imageResize, setImageResize] = useState(0);
@@ -119,6 +114,7 @@ function Upload() {
     setPreparing(true);
     const failedServers = new Set<string>();
 
+    let uploadVerdict: 'allSucceeded' | 'failed' | 'cancelled' = 'allSucceeded';
     try {
       setUploadStep(1);
       // TODO this blocks the UI
@@ -129,97 +125,7 @@ function Upload() {
       // TODO icon to cancel upload
       // TODO detect if the file already exists? if we have the hash??
 
-      const startTransfer = async (server: Server, primary: boolean) => {
-        const serverUrl = serverInfo[server.name].url;
-        let serverTransferred = 0;
-        for (const file of filesToUpload) {
-          try {
-            let newBlob: BlobDescriptor;
 
-            // Check if blob already exists on Blossom servers
-            if (server.type == 'blossom') {
-              const fileHash = await calculateFileHash(file);
-
-              // Check if blob exists using HEAD request
-              const existingBlob = await checkBlobExists(serverUrl, fileHash);
-
-              if (existingBlob) {
-                newBlob = existingBlob;
-                // Mark as transferred immediately since we're skipping upload
-                serverTransferred += file.size;
-                setTransfers(ut => ({
-                  ...ut,
-                  [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
-                }));
-              } else {
-                // Blob doesn't exist, proceed with upload
-                const uploadAuth = await createUploadAuth(signEventTemplate, file);
-
-                const progressHandler = (progressEvent: AxiosProgressEvent) => {
-                  setTransfers(ut => ({
-                    ...ut,
-                    [server.name]: {
-                      ...ut[server.name],
-                      transferred: serverTransferred + progressEvent.loaded,
-                      rate: progressEvent.rate || 0,
-                    },
-                  }));
-                };
-
-                newBlob = await uploadBlob(serverUrl, file, uploadAuth, progressHandler);
-                serverTransferred += file.size;
-                setTransfers(ut => ({
-                  ...ut,
-                  [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
-                }));
-              }
-            } else {
-              // NIP-96 servers - upload as normal (no HEAD check yet)
-              const progressHandler = (progressEvent: AxiosProgressEvent) => {
-                setTransfers(ut => ({
-                  ...ut,
-                  [server.name]: {
-                    ...ut[server.name],
-                    transferred: serverTransferred + progressEvent.loaded,
-                    rate: progressEvent.rate || 0,
-                  },
-                }));
-              };
-              newBlob = await uploadNip96File(server, file, '', signEventTemplate, progressHandler);
-              serverTransferred += file.size;
-              setTransfers(ut => ({
-                ...ut,
-                [server.name]: { ...ut[server.name], transferred: serverTransferred, rate: 0 },
-              }));
-            }
-
-            fileDimensions[file.name] = {
-              ...fileDimensions[file.name],
-              x: newBlob.sha256,
-              url: primary
-                ? [newBlob.url, ...fileDimensions[file.name].url]
-                : [...fileDimensions[file.name].url, newBlob.url],
-              size: newBlob.size || fileDimensions[file.name].size, // fallback for nip96 servers that don't return size
-              m: newBlob.type,
-            };
-            if (user?.pubkey) {
-              void getCatalogClient()
-                .ingestUpload(user.pubkey, { url: server.url, type: server.type }, newBlob)
-                .catch(() => undefined);
-            }
-          } catch (e) {
-            const axiosError = e as AxiosError;
-            console.error(e);
-            failedServers.add(server.name);
-            // Record error in transfer log
-            setTransfers(ut => ({
-              ...ut,
-              [server.name]: { ...ut[server.name], error: formatUploadError(axiosError) },
-            }));
-          }
-        }
-        queryClient.invalidateQueries({ queryKey: ['blobs', server.name] });
-      };
 
       if (filesToUpload && filesToUpload.length) {
         // sum files sizes
@@ -237,20 +143,66 @@ function Upload() {
           return newTransfers;
         });
 
-        const enabledServers = servers.filter(s => transfers[s.name]?.enabled);
+        const enabledServers = servers.filter(server => transfers[server.name]?.enabled);
         const primaryServerName = servers[0].name;
-
-        await Promise.all(enabledServers.map(s => limit(() => startTransfer(s, s.name == primaryServerName))));
-
-        // Only drop the selection once every server is done with it. Clearing it
-        // after a partial failure left the user told to retry with nothing to retry.
-        if (failedServers.size === 0) setFiles([]);
-        // TODO reset input control value??
-        setFileEventsToPublish(Object.values(fileDimensions));
+        const orderedServers = [...enabledServers].sort((left, right) =>
+          Number(right.name === primaryServerName) - Number(left.name === primaryServerName)
+        );
+        const transferred: Record<string, number> = {};
+        const uploadTasks = orderedServers.flatMap(server => filesToUpload.map(file => ({ server, file })));
+        const result = await uploadFiles({
+          files: filesToUpload,
+          servers: orderedServers,
+          sign: signEventTemplate,
+          resolveServer: mediaServer,
+          onProgress: ({ server }, progress) => {
+            setTransfers(current => ({
+              ...current,
+              [server.name]: {
+                ...current[server.name],
+                transferred: (transferred[server.name] ?? 0) + progress.loaded,
+                rate: progress.rate || 0,
+              },
+            }));
+          },
+        });
+        uploadVerdict = result.verdict;
+        for (const outcome of result.outcomes) {
+          if (outcome.state === 'error') continue;
+          if (outcome.state === 'cancelled') {
+            failedServers.add('cancelled');
+            continue;
+          }
+          const { task, descriptor } = outcome.value;
+          transferred[task.server.name] = (transferred[task.server.name] ?? 0) + task.file.size;
+          fileDimensions[task.file.name] = {
+            ...fileDimensions[task.file.name],
+            x: descriptor.sha256,
+            url:
+              task.server.name === primaryServerName
+                ? [descriptor.url, ...fileDimensions[task.file.name].url]
+                : [...fileDimensions[task.file.name].url, descriptor.url],
+            size: descriptor.size || fileDimensions[task.file.name].size,
+            m: descriptor.type,
+          };
+          if (user?.pubkey)
+            void getCatalogClient()
+              .ingestUpload(user.pubkey, { url: task.server.url, type: task.server.type }, descriptor)
+              .catch(() => undefined);
+        }
+        for (const index of result.failed) {
+          const task = uploadTasks[index];
+          const outcome = result.outcomes[index];
+          if (outcome.state !== 'error') continue;
+          failedServers.add(task.server.name);
+          setTransfers(current => ({
+            ...current,
+            [task.server.name]: { ...current[task.server.name], error: formatUploadError(outcome.error as AxiosError) },
+          }));
+        }
+        if (result.verdict === 'allSucceeded') setFiles([]);
       }
-
-      if (failedServers.size === 0) {
-        // Only go to the next step if no errors have occured
+      if (uploadVerdict === 'allSucceeded') {
         setUploadStep(2);
       } else {
         toast({

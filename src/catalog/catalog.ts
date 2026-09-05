@@ -5,6 +5,38 @@ import { isHlsPlaylistBody, parseHlsPlaylist } from '../utils/hlsPlaylist';
 import { GENERIC_MIME_TYPES, isGenericMimeType, PLAYLIST_MIME_TYPES } from '../utils/mimeTypes';
 import { extractEventReferences, EVENT_EXTRACTOR_VERSION, type EventReference } from './eventReferences';
 import { extractTimelineEventMetadata, type TimelineEventMetadata } from './timelineMetadata';
+import {
+  getAssetReplicaMap,
+  getCatalogAssetContents,
+  getCatalogTimelineAsset,
+  planCatalogAction,
+  projectCatalogAssets,
+  queryCatalogAssetIds,
+  queryCatalogTimeline,
+  refreshEventUrlAvailability,
+  refreshReplicaAvailability,
+  type CatalogAction,
+  type NativeUrlProbe,
+  type ReplicaProbe,
+  type TimelineAssetContents,
+  type TimelineAssetDetail,
+  type TimelineProjection,
+  type TimelineQuery,
+} from './advanced';
+export { buildReplicaOps, isHashSearchTerm, sortTimelineProjections, splitSearchTerms } from './advanced';
+export type {
+  AssetReplica,
+  CatalogAction,
+  NativeUrlProbe,
+  ReplicaOp,
+  ReplicaProbe,
+  TimelineAssetContents,
+  TimelineAssetDetail,
+  TimelineProjection,
+  TimelineQuery,
+  TimelineSort,
+  TimelineSortField,
+} from './advanced';
 
 const DATABASE_NAME = 'bouquet-user-blob-catalog';
 const DATABASE_VERSION = 10;
@@ -632,7 +664,61 @@ export type BlobPrefixLoader = (
   maxBytes: number
 ) => Promise<{ bytes: ArrayBuffer; mimeType?: string; size?: number; truncated: boolean }>;
 export class Catalog {
-  constructor(readonly store: CatalogStore) {}
+  constructor(private readonly store: CatalogStore) {}
+
+  /** @internal Projection helpers share the catalog's private persistence seam. */
+  static storeFor(catalog: Catalog): CatalogStore {
+    return catalog.store;
+  }
+  async queryCatalogTimeline(pubkey: string, query?: TimelineQuery): Promise<TimelineProjection[]> {
+    await this.reprojectEvents(pubkey);
+    await projectCatalogAssets(this, pubkey);
+    return queryCatalogTimeline(this, pubkey, query);
+  }
+
+  async queryCatalogAssetIds(query: { serverId?: string; hashTerms?: string[] }): Promise<string[]> {
+    return queryCatalogAssetIds(this, query);
+  }
+
+  async getCatalogTimelineAsset(pubkey: string, assetId: string): Promise<TimelineAssetDetail | undefined> {
+    await this.reprojectEvents(pubkey);
+    await projectCatalogAssets(this, pubkey);
+    return getCatalogTimelineAsset(this, pubkey, assetId);
+  }
+
+  getCatalogAssetContents(assetId: string, limit: number): Promise<TimelineAssetContents> {
+    return getCatalogAssetContents(this, assetId, limit);
+  }
+
+  planCatalogAction(pubkey: string, assetId: string, action: CatalogAction) {
+    return planCatalogAction(this, pubkey, assetId, action);
+  }
+  getAssetReplicaMap(pubkey: string, assetId: string) {
+    return getAssetReplicaMap(this, pubkey, assetId);
+  }
+
+  async refreshReplicaAvailability(
+    pubkey: string,
+    probe: ReplicaProbe,
+    maxChecks?: number,
+    hashes?: string[],
+    onCheck?: Parameters<typeof refreshReplicaAvailability>[5]
+  ): Promise<void> {
+    await refreshReplicaAvailability(this, pubkey, probe, maxChecks, hashes, onCheck);
+    await this.touchProfileMutation(pubkey);
+    this.changed(pubkey);
+  }
+
+  async refreshEventUrlAvailability(
+    pubkey: string,
+    probe: NativeUrlProbe,
+    maxChecks?: number,
+    hashes?: string[]
+  ): Promise<void> {
+    await refreshEventUrlAvailability(this, pubkey, probe, maxChecks, hashes);
+    await this.touchProfileMutation(pubkey);
+    this.changed(pubkey);
+  }
 
   /** Wipes derived catalog data while preserving the account's configured
       read-only pubkeys, so Rescan can rebuild their content too. */
@@ -803,6 +889,7 @@ export class Catalog {
         );
       }
     }
+    await this.touchProfileMutation(pubkey);
     this.changed(pubkey);
   }
   /**
@@ -847,6 +934,7 @@ export class Catalog {
       for (const sha256 of new Set(removals.map(removal => removal.sha256))) {
         await this.purgeBlobIfGoneEverywhere(pubkey, sha256);
       }
+      await this.touchProfileMutation(pubkey);
       this.changed(pubkey);
     }
   }
@@ -917,6 +1005,24 @@ export class Catalog {
       depth: 0,
       discoveredAt: now,
     });
+    const id = `${descriptor.sha256}:${serverId}`;
+    const previous = await this.store.get<BlobLocationRecord>('blob_location', id);
+    await this.store.put<BlobLocationRecord>('blob_location', {
+      id,
+      sha256: descriptor.sha256,
+      serverId,
+      state: 'present',
+      firstPresentAt: previous?.firstPresentAt ?? now,
+      lastPresentAt: now,
+      lastCheckedAt: now,
+      nextCheckAt: now + 24 * 60 * 60_000,
+      reportedSize: descriptor.size,
+      reportedMimeType: descriptor.type,
+      canonicalUrl: descriptor.url,
+      consecutiveFailures: 0,
+      source: 'server-list',
+    });
+    await this.touchProfileMutation(pubkey);
     this.changed(pubkey);
   }
 
@@ -924,6 +1030,7 @@ export class Catalog {
     const now = Date.now();
     await this.ensureProfile(pubkey, now);
     for (const event of events) await this.persistEvent(pubkey, event, relayUrl, now);
+    await this.touchProfileMutation(pubkey);
     this.changed(pubkey);
   }
 
@@ -939,6 +1046,7 @@ export class Catalog {
     for (const event of events.filter(event => event.pubkey === sourcePubkey)) {
       await this.persistEvent(ownerPubkey, event, relayUrl, now, 'additional', undefined, serverUrls);
     }
+    await this.touchProfileMutation(ownerPubkey);
     this.changed(ownerPubkey);
   }
 
@@ -1365,6 +1473,7 @@ export class Catalog {
       payload: JSON.stringify(tags),
       completedAt: Date.now(),
     });
+    await this.touchAllProfiles();
     this.changed();
   }
 
@@ -1879,6 +1988,12 @@ export class Catalog {
     const lastMutationAt = nextMutationStamp(profile);
     if (lastMutationAt !== profile.lastMutationAt)
       await this.store.put<ProfileRecord>('profile', { ...profile, lastMutationAt });
+  }
+
+  private async touchAllProfiles(): Promise<void> {
+    for (const profile of await this.store.getAll<ProfileRecord>('profile')) {
+      await this.touchProfileMutation(profile.pubkey);
+    }
   }
 }
 

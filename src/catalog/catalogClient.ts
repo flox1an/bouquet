@@ -39,6 +39,22 @@ type WorkerMessage = {
   bridgeId?: number;
   args?: unknown[];
 };
+type WorkerPort = {
+  postMessage(message: unknown): void;
+  onmessage?: ((event: MessageEvent) => void) | null;
+  onerror?: Worker['onerror'];
+  addEventListener(type: string, listener: (event: MessageEvent) => void): void;
+  removeEventListener(type: string, listener: (event: MessageEvent) => void): void;
+};
+export const catalogMethodNames = [
+  'ingestServerList', 'reset', 'listAdditionalPubkeys', 'addAdditionalPubkey', 'removeAdditionalPubkey',
+  'ingestUpload', 'recordBlobsRemoved', 'syncAuthoredEvents', 'syncAdditionalEvents', 'syncReverseLookups',
+  'enrichHls', 'enrichBlobPrefix', 'queryPlaylistHashes', 'queryUnidentifiedBlobs', 'ingestId3',
+  'getCatalogStatus', 'updateBlobServerMetadata', 'queryCatalogTimeline', 'queryCatalogAssetIds',
+  'getCatalogTimelineAsset', 'getCatalogAssetContents', 'planCatalogAction', 'getAssetReplicaMap',
+  'refreshReplicaAvailability', 'refreshEventUrlAvailability',
+] as const satisfies readonly (keyof Catalog)[];
+type CatalogMethodName = (typeof catalogMethodNames)[number];
 
 type ServerRef = { url: string; type: CatalogServerType };
 
@@ -46,11 +62,15 @@ export class CatalogClient {
   private nextId = 1;
   private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
   private readonly bridges = new Map<number, (...args: unknown[]) => unknown>();
-  private readonly worker: Worker | undefined;
+  private readonly worker: WorkerPort | undefined;
 
-  constructor() {
-    if (typeof Worker === 'undefined' || import.meta.env?.MODE === 'test') return; // tests/SSR: methods resolve empty
-    this.worker = new Worker(new URL('./catalogWorker.ts', import.meta.url), { type: 'module' });
+  constructor(port?: WorkerPort) {
+    if (port) {
+      this.worker = port;
+    } else if (typeof Worker !== 'undefined' && import.meta.env?.MODE !== 'test') {
+      this.worker = new Worker(new URL('./catalogWorker.ts', import.meta.url), { type: 'module' });
+    }
+    if (!this.worker) return;
     this.worker.onmessage = event => this.receive(event.data as WorkerMessage);
     this.worker.onerror = event => {
       const error = new Error(event.message || 'Catalog worker failed');
@@ -89,8 +109,8 @@ export class CatalogClient {
     } else pending.resolve(message.result);
   }
 
-  private call(method: string, ...args: unknown[]): Promise<unknown> {
-    if (!this.worker) return Promise.resolve(undefined);
+  private call(method: CatalogMethodName, ...args: unknown[]): Promise<unknown> {
+    if (!this.worker) return Promise.reject(new Error('Catalog worker is unavailable'));
     const id = this.nextId++;
     const { promise, resolve, reject } = Promise.withResolvers<unknown>();
     this.pending.set(id, { resolve, reject });
@@ -163,9 +183,6 @@ export class CatalogClient {
   ): Promise<void> {
     return this.call('syncReverseLookups', pubkey, relayUrl, loadBatch, batchSize, maxHashes) as Promise<void>;
   }
-  reprojectEvents(pubkey: string): Promise<void> {
-    return this.call('reprojectEvents', pubkey) as Promise<void>;
-  }
   enrichHls(
     pubkey: string,
     rootSha256: string,
@@ -206,9 +223,6 @@ export class CatalogClient {
   }
   updateBlobServerMetadata(sha256: string, size?: number, mimeType?: string): Promise<void> {
     return this.call('updateBlobServerMetadata', sha256, size, mimeType) as Promise<void>;
-  }
-  projectCatalogAssets(pubkey: string, options?: { force?: boolean }): Promise<void> {
-    return this.call('projectCatalogAssets', pubkey, options) as Promise<void>;
   }
   queryCatalogTimeline(pubkey: string, query?: TimelineQuery): Promise<TimelineProjection[]> {
     return this.call('queryCatalogTimeline', pubkey, query) as Promise<TimelineProjection[]>;

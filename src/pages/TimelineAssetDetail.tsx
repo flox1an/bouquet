@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { nip19 } from 'nostr-tools';
 import { getCatalogClient } from '../catalog/catalogClient';
-import type { TimelineAssetDetail as TimelineAssetDetailType } from '../catalog/advanced';
+import type { TimelineAssetDetail as TimelineAssetDetailType } from '../catalog/catalog'
 import { TimelineThumbnail } from '../components/TimelineThumbnail';
 import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -94,9 +94,6 @@ export default function TimelineAssetDetail() {
           ),
           getCatalogClient().refreshEventUrlAvailability(user.pubkey, probeNativeUrl, 1_000_000, blobHashes),
         ]);
-        // The probes rewrote blob_location rows; reproject so the header's
-        // availability reflects what the servers answered, not the last listing.
-        await getCatalogClient().projectCatalogAssets(user.pubkey, { force: true });
       } catch {
         // Show whatever the catalog holds now; the check can run again next visit.
       }
@@ -117,13 +114,7 @@ export default function TimelineAssetDetail() {
     let active = true;
     setState('loading');
     void getCatalogClient()
-      .reprojectEvents(user.pubkey)
-      .then(() => getCatalogClient().getCatalogTimelineAsset(user.pubkey, assetId))
-      .then(async result => {
-        if (result) return result;
-        await getCatalogClient().projectCatalogAssets(user.pubkey);
-        return getCatalogClient().getCatalogTimelineAsset(user.pubkey, assetId);
-      })
+      .getCatalogTimelineAsset(user.pubkey, assetId)
       .then(result => {
         if (!active) return;
         setDetail(result);

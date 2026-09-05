@@ -1,7 +1,7 @@
 import { CheckSquare, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatFileSize } from '../../utils/utils';
-import type { CatalogAction } from '../../catalog/advanced';
+import type { CatalogAction } from '../../catalog/catalog'
 import type { TimelineItem } from './browseConstants';
 
 type BrowseSelectionBarProps = {

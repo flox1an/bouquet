@@ -1,5 +1,5 @@
 import { FileText, Image, Music2, Video } from 'lucide-react';
-import type { TimelineProjection, TimelineSortField } from '../../catalog/advanced';
+import type { TimelineProjection, TimelineSortField } from '../../catalog/catalog'
 
 export type TimelineItem = TimelineProjection;
 export type TypeFilter = 'all' | 'media' | 'website' | TimelineItem['displayType'];

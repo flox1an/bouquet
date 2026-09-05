@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getCatalogClient } from '../../catalog/catalogClient';
-import type { TimelineAssetContents } from '../../catalog/advanced';
+import type { TimelineAssetContents } from '../../catalog/catalog'
 import { TimelineThumbnail, type KnownServersFor } from '../TimelineThumbnail';
 import { useNativeUrlAvailabilityCheck } from './useNativeUrlAvailability';
 import { formatDate, formatFileSize } from '../../utils/utils';
