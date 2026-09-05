@@ -12,13 +12,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { nip19 } from 'nostr-tools';
 import { getCatalogClient } from '../catalog/catalogClient';
-import type { TimelineAssetDetail as TimelineAssetDetailType } from '../catalog/catalog'
+import type { TimelineAssetDetail as TimelineAssetDetailType } from '../catalog/catalog';
 import { TimelineThumbnail } from '../components/TimelineThumbnail';
 import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
 import { formatDate, formatFileSize } from '../utils/utils';
 import { probeNativeUrl } from '../catalog/availabilityFetch';
 import { eventKindLabel } from '../catalog/eventKinds';
+import { eventBody } from '../catalog/timelineMetadata';
+import { NostrText } from '../components/NostrText';
 
 const TYPE_ICON = {
   image: Image,
@@ -172,6 +174,15 @@ export default function TimelineAssetDetail() {
     );
 
   const { projection, blobs } = detail;
+  // The kind-specific text body (a note's content, a video's description tag).
+  // When the body is what the title was derived from - a note whose content
+  // became the card title - it renders once, as body, not twice.
+  const body = detail.event ? eventBody(detail.event) : undefined;
+  const subtitle =
+    body && (!projection.displaySubtitle || projection.displaySubtitle === body)
+      ? undefined
+      : projection.displaySubtitle;
+  const titleHidden = body !== undefined && projection.displayTitle === body;
   const Icon = TYPE_ICON[projection.displayType];
   const dateLabel =
     projection.displayDateSource === 'event'
@@ -223,10 +234,10 @@ export default function TimelineAssetDetail() {
                   </p>
                   <h1
                     className={`truncate text-3xl font-black tracking-tight ${
-                      projection.displayTitleIsFallback ? 'text-muted-foreground' : ''
+                      projection.displayTitleIsFallback || titleHidden ? 'text-muted-foreground' : ''
                     }`}
                   >
-                    {projection.displayTitle}
+                    {titleHidden ? eventKindLabel(projection.eventKind) : projection.displayTitle}
                   </h1>
                   <p className="mt-1 font-mono text-xs text-muted-foreground">
                     {dateLabel} {formatDate(projection.displayDate)} ·{' '}
@@ -252,17 +263,20 @@ export default function TimelineAssetDetail() {
             </div>
             {projection.eventId ? (
               <>
-                {projection.displaySubtitle && (
+                {(subtitle || body) && (
                   <>
-                    <p className={`mt-5 max-w-2xl text-base leading-7 ${descExpanded ? '' : 'line-clamp-3'}`}>
-                      {projection.displaySubtitle}
-                    </p>
-                    <button
-                      onClick={() => setDescExpanded(v => !v)}
-                      className="mt-1 text-xs text-primary underline-offset-4 hover:underline"
-                    >
-                      {descExpanded ? 'Show less' : 'Show more'}
-                    </button>
+                    <div className={`mt-5 max-w-2xl text-base leading-7 ${descExpanded ? '' : 'line-clamp-3'}`}>
+                      {subtitle && <p>{subtitle}</p>}
+                      {body && <NostrText text={body} />}
+                    </div>
+                    {(subtitle || body) && (subtitle?.length ?? 0) + (body?.length ?? 0) > 200 && (
+                      <button
+                        onClick={() => setDescExpanded(v => !v)}
+                        className="mt-1 text-xs text-primary underline-offset-4 hover:underline"
+                      >
+                        {descExpanded ? 'Show less' : 'Show more'}
+                      </button>
+                    )}
                   </>
                 )}
                 <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-xs text-muted-foreground">
