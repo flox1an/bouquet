@@ -20,12 +20,34 @@ const createDeleteAuth = vi.fn();
 vi.mock('../../catalog/catalogClient', () => ({
   getCatalogClient: () => ({ planCatalogAction, getAssetReplicaMap, recordBlobsRemoved }),
 }));
-vi.mock('../../utils/server', () => ({
-  mediaServer: (server: { url: string }) => ({
-    capabilities: { mirror: true },
-    delete: async (hash: string) => deleteBlob(server.url, hash, {}),
-  }),
-}));
+vi.mock('../../utils/server', () => {
+  // The real seam decodes raw HTTP statuses into MediaServerError kinds before
+  // anything outside sees them - the fake honours that contract.
+  class MediaServerError extends Error {
+    constructor(
+      readonly kind: string,
+      message: string
+    ) {
+      super(message);
+    }
+  }
+  return {
+    MediaServerError,
+    mediaServer: (server: { url: string }) => ({
+      capabilities: { mirror: true },
+      delete: async (hash: string) => {
+        try {
+          return await deleteBlob(server.url, hash, {});
+        } catch (error) {
+          const status = (error as { status?: number }).status;
+          const kind =
+            status === 404 || status === 410 ? 'not-found' : status === 401 || status === 403 ? 'auth' : 'server';
+          throw new MediaServerError(kind, String(error));
+        }
+      },
+    }),
+  };
+});
 
 afterEach(() => {
   cleanup();

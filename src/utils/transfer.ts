@@ -1,7 +1,7 @@
-import axios, { AxiosError, AxiosProgressEvent } from 'axios';
+import axios, { type AxiosError, type AxiosProgressEvent } from 'axios';
 import { BlobDescriptor, EventTemplate, SignedEvent } from 'blossom-client-sdk';
 import { downloadBlossomBlob } from './blossom';
-import { mediaServer } from './server';
+import { mediaServer, MediaServerError } from './server';
 import { Server } from './useUserServers';
 
 export type TransferPhase = 'validating' | 'mirroring' | 'downloading' | 'uploading' | 'completed' | 'error';
@@ -132,13 +132,13 @@ export const transferBlob = async (
         onPhaseChange?.('completed');
         await onCompleted?.(blob, 'mirror');
         return blob;
-      } catch (e: any) {
-        if (signal?.aborted || e.message?.includes('cancelled')) {
+      } catch (e) {
+        if (signal?.aborted || (e instanceof Error && e.message?.includes('cancelled'))) {
           throw e;
         }
-        const status = e.response?.status;
-        // Mirror endpoint unsupported or disabled on target server.
-        if (status === 400 || status === 404 || status === 405 || status === 501) {
+        // The seam already decoded the status: these kinds mean this server will
+        // not take a mirror, whatever the transport reported.
+        if (e instanceof MediaServerError && (e.kind === 'unsupported' || e.kind === 'not-found')) {
           onMirrorUnsupported?.();
         }
       }

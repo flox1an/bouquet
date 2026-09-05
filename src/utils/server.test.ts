@@ -1,7 +1,54 @@
-import { describe, expect, it } from 'vitest';
-import type { BlobDescriptor } from 'blossom-client-sdk';
-import type { MediaServer, ServerListProgress } from './server';
-import { syncServerList } from './server';
+import { describe, expect, it, vi } from 'vitest';
+import type { BlobDescriptor, EventTemplate, SignedEvent } from 'blossom-client-sdk';
+import { deleteBlob } from 'blossom-client-sdk/actions/delete';
+import { mediaServer, syncServerList, type MediaServer, type ServerListProgress } from './server';
+import * as blossom from './blossom';
+import * as nip96 from './nip96';
+
+vi.mock('./blossom', async importOriginal => ({ ...(await importOriginal<typeof blossom>()) }));
+vi.mock('./nip96', async importOriginal => ({ ...(await importOriginal<typeof nip96>()) }));
+vi.mock('blossom-client-sdk/actions/delete', () => ({ deleteBlob: vi.fn() }));
+
+const sign = async (template: EventTemplate) =>
+  ({ ...template, id: '', pubkey: '', sig: '' }) as SignedEvent;
+
+const httpError = (status: number) => Object.assign(new Error(`HTTP ${status}`), { response: { status } });
+
+describe('media server error kinds', () => {
+  it('rejects with kind not-found when a blossom delete hits a 404', async () => {
+    vi.mocked(deleteBlob).mockRejectedValue(httpError(404));
+    const server = mediaServer({ type: 'blossom', name: 'x', url: 'https://x.example' });
+    await expect(server.delete('h', sign)).rejects.toMatchObject({ kind: 'not-found' });
+  });
+
+  it('every blossom method rejects with MediaServerError, never a raw status', async () => {
+    const server = mediaServer({ type: 'blossom', name: 'x', url: 'https://x.example' });
+    const file = new File(['x'], 'x.jpg', { type: 'image/jpeg' });
+    vi.spyOn(blossom, 'fetchBlossomList').mockRejectedValue(httpError(401));
+    vi.spyOn(blossom, 'uploadBlossomBlob').mockRejectedValue(httpError(403));
+    vi.spyOn(blossom, 'checkBlobExists').mockRejectedValue(httpError(500));
+    vi.spyOn(blossom, 'mirrordBlossomBlob').mockRejectedValue(httpError(429));
+
+    await expect(server.list('pk', sign)).rejects.toMatchObject({ kind: 'auth' });
+    await expect(server.upload(file, 'x.jpg', sign)).rejects.toMatchObject({ kind: 'auth' });
+    await expect(server.mirror('https://src/h', sign)).rejects.toMatchObject({ kind: 'rate_limited' });
+  });
+
+  it('every nip96 method rejects with MediaServerError, never a raw status', async () => {
+    const source = { type: 'nip96' as const, name: 'x', url: 'https://x.example' };
+    const server = mediaServer(source);
+    const file = new File(['x'], 'x.jpg', { type: 'image/jpeg' });
+    vi.spyOn(nip96, 'fetchNip96List').mockRejectedValue(httpError(500));
+    vi.spyOn(nip96, 'uploadNip96File').mockRejectedValue(httpError(404));
+    vi.spyOn(nip96, 'deleteNip96File').mockRejectedValue(httpError(410));
+
+    await expect(server.list('pk', sign)).rejects.toMatchObject({ kind: 'server' });
+    await expect(server.upload(file, 'x.jpg', sign)).rejects.toMatchObject({ kind: 'not-found' });
+    await expect(server.delete('h', sign)).rejects.toMatchObject({ kind: 'not-found' });
+    // Absence of a capability is observed, not assumed - and surfaced as a kind.
+    await expect(server.exists('h')).rejects.toMatchObject({ kind: 'unsupported' });
+  });
+});
 
 const blob = (sha256: string): BlobDescriptor => ({
   sha256,

@@ -14,7 +14,7 @@ export type ServerListProgress = {
   error?: string;
 };
 
-export type MediaServerErrorKind = 'unsupported' | 'not-found' | 'auth' | 'network' | 'server';
+export type MediaServerErrorKind = 'unsupported' | 'not-found' | 'auth' | 'rate_limited' | 'network' | 'server';
 
 export class MediaServerError extends Error {
   constructor(
@@ -31,7 +31,17 @@ export const normalizeMediaServerError = (error: unknown): MediaServerError => {
   const status = (error as { response?: { status?: number }; status?: number })?.response?.status ??
     (error as { status?: number })?.status;
   const kind: MediaServerErrorKind =
-    status === 404 || status === 410 ? 'not-found' : status === 401 || status === 403 ? 'auth' : status && status >= 500 ? 'server' : 'network';
+    status === 404 || status === 410
+      ? 'not-found'
+      : status === 401 || status === 403
+        ? 'auth'
+        : status === 429
+          ? 'rate_limited'
+          : status === 405 || status === 501
+            ? 'unsupported'
+            : status && status >= 500
+              ? 'server'
+              : 'network';
   return new MediaServerError(kind, error instanceof Error ? error.message : String(error), error);
 };
 
@@ -50,15 +60,25 @@ const unsupported = (operation: string) => {
   throw new MediaServerError('unsupported', `Server does not support ${operation}`);
 };
 
+/** Raw HTTP statuses stop at this seam: callers see MediaServerError kinds only. */
+const guard = async <T>(operation: () => Promise<T>): Promise<T> => {
+  try {
+    return await operation();
+  } catch (error) {
+    throw normalizeMediaServerError(error);
+  }
+};
+
 export const mediaServer = (source: Server): MediaServer => {
   if (source.type === 'blossom') {
     return {
       source,
       capabilities: { list: true, upload: true, exists: true, mirror: true, delete: true },
-      list: (pubkey, sign, onProgress) => fetchBlossomList(source.url, pubkey, sign, onProgress),
-      upload: (file, _filename, sign, onProgress, signal) => uploadBlossomBlob(source.url, file, sign, onProgress, signal),
-      exists: hash => checkBlobExists(source.url, hash),
-      mirror: (sourceUrl, sign, signal) => mirrordBlossomBlob(source.url, sourceUrl, sign, signal),
+      list: (pubkey, sign, onProgress) => guard(() => fetchBlossomList(source.url, pubkey, sign, onProgress)),
+      upload: (file, _filename, sign, onProgress, signal) =>
+        guard(() => uploadBlossomBlob(source.url, file, sign, onProgress, signal)),
+      exists: hash => guard(() => checkBlobExists(source.url, hash)),
+      mirror: (sourceUrl, sign, signal) => guard(() => mirrordBlossomBlob(source.url, sourceUrl, sign, signal)),
       delete: async (hash, sign) => {
         const auth = await createDeleteAuth(sign, hash);
         try {
@@ -73,10 +93,11 @@ export const mediaServer = (source: Server): MediaServer => {
   return {
     source,
     capabilities: { list: true, upload: true, exists: false, mirror: false, delete: true },
-    list: (_pubkey, sign, onProgress) => fetchNip96List(source, sign, onProgress),
-    upload: (file, filename, sign, onProgress, signal) => uploadNip96File(source, file, filename, sign, onProgress, signal),
-    exists: () => unsupported('existence checks'),
-    mirror: () => unsupported('mirroring'),
+    list: (_pubkey, sign, onProgress) => guard(() => fetchNip96List(source, sign, onProgress)),
+    upload: (file, filename, sign, onProgress, signal) =>
+      guard(() => uploadNip96File(source, file, filename, sign, onProgress, signal)),
+    exists: async () => unsupported('existence checks'),
+    mirror: async () => unsupported('mirroring'),
     delete: async (hash, sign) => {
       try {
         await deleteNip96File(source, hash, sign);

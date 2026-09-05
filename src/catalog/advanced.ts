@@ -4,40 +4,19 @@ import { Catalog, type CatalogServerType } from './catalog';
 import { extractTimelineEventMetadata, type TimelineEventMetadata } from './timelineMetadata';
 import { EVENT_EXTRACTOR_VERSION } from './eventReferences';
 import { isGenericMimeType } from '../utils/mimeTypes';
-
-export type ReplicaState = 'present' | 'absent' | 'unauthorized' | 'rate_limited' | 'unreachable' | 'unknown';
+import {
+  nextCheckAtFrom,
+  stateFromHttpStatus,
+  type BlobLocation,
+  type BlobLocationHistory,
+  type ReplicaState,
+} from './replica';
+export type { ReplicaState };
 export type CatalogAction = 'mirror' | 'sync' | 'delete';
 
 type Membership = { pubkey: string; sha256: string; status: 'active' | 'unresolved' | 'forgotten' };
 type ProfileServer = { pubkey: string; serverId: string; enabled: boolean };
 type Server = { serverId: string; baseUrl: string; serverType: CatalogServerType };
-type BlobLocation = {
-  id: string;
-  sha256: string;
-  serverId: string;
-  state: ReplicaState;
-  firstPresentAt?: number;
-  lastPresentAt?: number;
-  lastCheckedAt: number;
-  nextCheckAt: number;
-  reportedSize?: number;
-  reportedMimeType?: string;
-  canonicalUrl: string;
-  consecutiveFailures: number;
-  source?: 'replica' | 'native-url' | 'server-list' | 'delete';
-};
-type BlobLocationHistory = {
-  id: string;
-  sha256: string;
-  serverId: string;
-  observedAt: number;
-  previousState?: ReplicaState;
-  newState: ReplicaState;
-  httpStatus?: number;
-  reason?: string;
-  reportedSize?: number;
-  reportedMimeType?: string;
-};
 type ProfileEvent = { pubkey: string; eventId: string };
 type CatalogEvent = { eventId: string; event: NostrEvent };
 type TimelineEvent = TimelineEventMetadata & { id: string; pubkey: string };
@@ -150,13 +129,7 @@ export type NativeUrlProbe = (
   url: string
 ) => Promise<{ status: number; size?: number; mimeType?: string; url?: string }>;
 
-function stateFromStatus(status: number): ReplicaState {
-  if (status >= 200 && status < 300) return 'present';
-  if (status === 404 || status === 410) return 'absent';
-  if (status === 401 || status === 403) return 'unauthorized';
-  if (status === 429) return 'rate_limited';
-  return 'unreachable';
-}
+const stateFromStatus = stateFromHttpStatus;
 
 function assetTypeFromEvent(event: Pick<NostrEvent, 'kind'>): Asset['assetType'] {
   if (event.kind === 20) return 'image';
@@ -350,8 +323,7 @@ export async function refreshReplicaAvailability(
       }
       const isPresent = state === 'present';
       const failures = isPresent ? 0 : (previous?.consecutiveFailures ?? 0) + 1;
-      const nextCheckAt =
-        observedAt + (isPresent ? 24 * 60 * 60_000 : Math.min(60 * 60_000 * 2 ** failures, 24 * 60 * 60_000));
+      const nextCheckAt = nextCheckAtFrom(observedAt, state, failures);
       const location: BlobLocation = {
         id,
         sha256,
@@ -436,6 +408,7 @@ export async function refreshEventUrlAvailability(
     }
     const isPresent = state === 'present';
     const failures = isPresent ? 0 : (previous?.consecutiveFailures ?? 0) + 1;
+    const nextCheckAt = nextCheckAtFrom(observedAt, state, failures);
     const location: BlobLocation = {
       id,
       sha256: blobUrl.sha256,
@@ -445,8 +418,7 @@ export async function refreshEventUrlAvailability(
       firstPresentAt: isPresent ? (previous?.firstPresentAt ?? observedAt) : previous?.firstPresentAt,
       lastPresentAt: isPresent ? observedAt : previous?.lastPresentAt,
       lastCheckedAt: observedAt,
-      nextCheckAt:
-        observedAt + (isPresent ? 24 * 60 * 60_000 : Math.min(60 * 60_000 * 2 ** failures, 24 * 60 * 60_000)),
+      nextCheckAt,
       reportedSize: observed?.size,
       canonicalUrl: observed?.url ?? blobUrl.url,
       consecutiveFailures: failures,
@@ -1080,7 +1052,10 @@ export async function queryCatalogAssetIds(
   const [assetBlobs, presentLocations] = await Promise.all([
     Catalog.storeFor(catalog).getAll<AssetBlob>('asset_blob'),
     query.serverId
-      ? Catalog.storeFor(catalog).getAllFromIndex<BlobLocation>('blob_location', 'by_server_state', [query.serverId, 'present'])
+      ? Catalog.storeFor(catalog).getAllFromIndex<BlobLocation>('blob_location', 'by_server_state', [
+          query.serverId,
+          'present',
+        ])
       : Promise.resolve<BlobLocation[]>([]),
   ]);
   let assetIds: Set<string> | undefined;
@@ -1170,7 +1145,10 @@ export async function getCatalogTimelineAsset(
   pubkey: string,
   assetId: string
 ): Promise<TimelineAssetDetail | undefined> {
-  const projection = await Catalog.storeFor(catalog).get<TimelineProjection>('timeline_projection', `${pubkey}:${assetId}`);
+  const projection = await Catalog.storeFor(catalog).get<TimelineProjection>(
+    'timeline_projection',
+    `${pubkey}:${assetId}`
+  );
   if (!projection) return;
   const [blobs, catalogEvent] = await Promise.all([
     assetBlobsInOrder(catalog, assetId).then(assetBlobs => loadAssetBlobs(catalog, assetBlobs)),

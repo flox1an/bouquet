@@ -5,6 +5,8 @@ import { isHlsPlaylistBody, parseHlsPlaylist } from '../utils/hlsPlaylist';
 import { GENERIC_MIME_TYPES, isGenericMimeType, PLAYLIST_MIME_TYPES } from '../utils/mimeTypes';
 import { extractEventReferences, EVENT_EXTRACTOR_VERSION, type EventReference } from './eventReferences';
 import { extractTimelineEventMetadata, type TimelineEventMetadata } from './timelineMetadata';
+import type { BlobLocation, BlobLocationHistory } from './replica';
+import { listingClaimMayRestore, nextCheckAtFrom } from './replica';
 import {
   getAssetReplicaMap,
   getCatalogAssetContents,
@@ -613,31 +615,6 @@ export type CatalogStatus = {
   enrichments: { pending: number; failed: number; truncated: number };
   lastSyncAt?: number;
 };
-type BlobLocationRecord = {
-  id: string;
-  sha256: string;
-  serverId: string;
-  state: 'present' | 'absent';
-  firstPresentAt?: number;
-  lastPresentAt?: number;
-  lastCheckedAt: number;
-  nextCheckAt: number;
-  reportedSize?: number;
-  reportedMimeType?: string;
-  canonicalUrl: string;
-  consecutiveFailures: number;
-  source: 'server-list' | 'delete';
-};
-type BlobLocationHistoryRecord = {
-  id: string;
-  sha256: string;
-  serverId: string;
-  observedAt: number;
-  previousState?: string;
-  newState: 'present' | 'absent';
-  reason?: string;
-};
-
 export type BlobRemoval = { sha256: string; serverUrl: string; reason?: string };
 
 export type ServerListInput = {
@@ -781,11 +758,10 @@ export class Catalog {
       )) {
         await this.store.delete('event_relay_observation', observation.id);
       }
-      for (const evidence of await this.store.getAllFromIndex<EvidenceRecord>(
-        'profile_blob_evidence',
-        'by_source',
-        ['additional-event', profileEvent.eventId]
-      )) {
+      for (const evidence of await this.store.getAllFromIndex<EvidenceRecord>('profile_blob_evidence', 'by_source', [
+        'additional-event',
+        profileEvent.eventId,
+      ])) {
         if (evidence.pubkey !== owner) continue;
         affectedHashes.add(evidence.sha256);
         await this.store.delete('profile_blob_evidence', evidence.evidenceId);
@@ -796,11 +772,10 @@ export class Catalog {
       if (run.sourcePubkey === source) await this.store.delete('event_sync_run', run.id);
     }
     for (const sha256 of affectedHashes) {
-      const remaining = await this.store.getAllFromIndex<EvidenceRecord>(
-        'profile_blob_evidence',
-        'by_profile_hash',
-        [owner, sha256]
-      );
+      const remaining = await this.store.getAllFromIndex<EvidenceRecord>('profile_blob_evidence', 'by_profile_hash', [
+        owner,
+        sha256,
+      ]);
       if (remaining.length === 0) await this.store.delete('profile_blob_membership', `${owner}:${sha256}`);
     }
 
@@ -857,9 +832,9 @@ export class Catalog {
       // (Primal keeps listing blobs it has already deleted), and only a fresh
       // probe may flip absence back - the claim here must not resurrect it.
       const id = `${descriptor.sha256}:${serverId}`;
-      const previous = await this.store.get<BlobLocationRecord>('blob_location', id);
-      if (previous?.state === 'absent') continue;
-      await this.store.put<BlobLocationRecord>('blob_location', {
+      const previous = await this.store.get<BlobLocation>('blob_location', id);
+      if (!listingClaimMayRestore(previous?.state)) continue;
+      await this.store.put<BlobLocation>('blob_location', {
         id,
         sha256: descriptor.sha256,
         serverId,
@@ -867,7 +842,7 @@ export class Catalog {
         firstPresentAt: previous?.firstPresentAt ?? now,
         lastPresentAt: now,
         lastCheckedAt: now,
-        nextCheckAt: now + 24 * 60 * 60_000,
+        nextCheckAt: nextCheckAtFrom(now, 'present', 0),
         reportedSize: descriptor.size,
         reportedMimeType: descriptor.type,
         canonicalUrl: descriptor.url,
@@ -877,7 +852,7 @@ export class Catalog {
     }
     if (input.full && input.blobs) {
       const receivedHashes = new Set(input.blobs.map(blob => blob.sha256));
-      const present = await this.store.getAllFromIndex<BlobLocationRecord>('blob_location', 'by_server_state', [
+      const present = await this.store.getAllFromIndex<BlobLocation>('blob_location', 'by_server_state', [
         serverId,
         'present',
       ]);
@@ -905,9 +880,9 @@ export class Catalog {
     for (const { sha256, serverUrl, reason } of removals) {
       const serverId = normalizeServerUrl(serverUrl);
       const id = `${sha256}:${serverId}`;
-      const previous = await this.store.get<BlobLocationRecord>('blob_location', id);
+      const previous = await this.store.get<BlobLocation>('blob_location', id);
       if (previous?.state === 'absent') continue;
-      await this.store.put<BlobLocationRecord>('blob_location', {
+      await this.store.put<BlobLocation>('blob_location', {
         id,
         sha256,
         serverId,
@@ -920,7 +895,7 @@ export class Catalog {
         consecutiveFailures: (previous?.consecutiveFailures ?? 0) + 1,
         source: 'delete',
       });
-      await this.store.put<BlobLocationHistoryRecord>('blob_location_history', {
+      await this.store.put<BlobLocationHistory>('blob_location_history', {
         id: `${id}:${now}:${previous?.state ?? 'none'}:absent`,
         sha256,
         serverId,
@@ -949,7 +924,7 @@ export class Catalog {
    * hash keeps rendering; the location history stays as the audit trail.
    */
   private async purgeBlobIfGoneEverywhere(pubkey: string, sha256: string): Promise<void> {
-    const locations = await this.store.getAllFromIndex<BlobLocationRecord>('blob_location', 'by_sha256', sha256);
+    const locations = await this.store.getAllFromIndex<BlobLocation>('blob_location', 'by_sha256', sha256);
     // An 'unreachable' or 'unauthorized' server knows something we do not; only
     // when every known location says 'absent' is the file gone everywhere we know of.
     if (locations.some(location => location.state !== 'absent')) return;
@@ -1006,8 +981,8 @@ export class Catalog {
       discoveredAt: now,
     });
     const id = `${descriptor.sha256}:${serverId}`;
-    const previous = await this.store.get<BlobLocationRecord>('blob_location', id);
-    await this.store.put<BlobLocationRecord>('blob_location', {
+    const previous = await this.store.get<BlobLocation>('blob_location', id);
+    await this.store.put<BlobLocation>('blob_location', {
       id,
       sha256: descriptor.sha256,
       serverId,
@@ -1228,8 +1203,7 @@ export class Catalog {
     // wedged the playlist behind it forever. Every caller here is already gated on
     // playlist evidence, so re-proving a zero-descendant candidate costs one ranged
     // GET, not a sweep.
-    if (existing?.state === 'complete' && (!existing.payload || JSON.parse(existing.payload).descendants > 0))
-      return;
+    if (existing?.state === 'complete' && (!existing.payload || JSON.parse(existing.payload).descendants > 0)) return;
     // An earlier reader stopped at the first kilobyte of a playlist whose host sends
     // no `content-range`, so its videos were expanded into a handful of segments
     // instead of hundreds. Those have to be read again - and a version-1 run that
@@ -1864,11 +1838,7 @@ export class Catalog {
       if ((source === 'authored' || source === 'additional') && reference.sha256) {
         await this.ingestBlob(pubkey, descriptorFromReference(reference), {
           evidenceType:
-            source === 'additional'
-              ? 'additional-event'
-              : reference.isDirect
-                ? 'authored-event'
-                : 'event-reference',
+            source === 'additional' ? 'additional-event' : reference.isDirect ? 'authored-event' : 'event-reference',
           sourceId: event.id,
           relationRole: reference.role,
           depth: reference.isDirect ? 0 : 1,

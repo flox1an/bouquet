@@ -6,6 +6,7 @@ import { useNostr } from '../utils/nostr';
 import { nip19 } from 'nostr-tools';
 import { Server, useUserServers } from './useUserServers';
 import { mediaServer } from './server';
+import { rescanCatalog } from '../catalog/rescan';
 import { getCatalogClient } from '../catalog/catalogClient';
 import { fetchHlsPlaylist } from '../catalog/enrichmentFetch';
 
@@ -236,12 +237,25 @@ export const useServerInfo = () => {
   }, [servers, serverInfo]);
 
   const rescan = async () => {
-    await getCatalogClient().reset();
+    const catalog = getCatalogClient();
+    await rescanCatalog(catalog, {
+      pubkey: pubkey!,
+      servers: servers.map(server => ({ url: server.url, type: server.type, name: server.name })),
+      list: server =>
+        mediaServer(server).list(pubkey!, signEventTemplate, progress =>
+          catalog.ingestServerList(pubkey!, {
+            server: { url: server.url, type: server.type },
+            blobs: progress.blobs,
+            cursor: progress.cursor,
+            state: progress.state,
+            error: progress.error,
+            received: progress.received,
+          })
+        ),
+    });
+    // Refresh the live react-query caches from the servers, then announce so the
+    // playlist-expansion effect re-runs against the fully re-ingested catalog.
     const results = await Promise.all(blobs.map(query => query.refetch()));
-    // Rebuild deterministically before announcing: the awaited ingest means the
-    // playlist-expansion effect re-run by the counter below reads a fully
-    // re-ingested catalog instead of racing it.
-    await ingestServerLists(results);
     ingestedCatalogSyncKey.current = catalogSyncKeyFor(pubkey, servers, results, rescanCount + 1);
     setRescanCount(count => count + 1);
   };
