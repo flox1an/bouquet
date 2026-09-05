@@ -1,8 +1,8 @@
 import axios, { AxiosError, AxiosProgressEvent } from 'axios';
 import { BlobDescriptor, EventTemplate, SignedEvent } from 'blossom-client-sdk';
-import { downloadBlossomBlob, mirrordBlossomBlob, uploadBlossomBlob } from './blossom';
+import { downloadBlossomBlob } from './blossom';
+import { mediaServer } from './server';
 import { Server } from './useUserServers';
-import { uploadNip96File } from './nip96';
 
 export type TransferPhase = 'validating' | 'mirroring' | 'downloading' | 'uploading' | 'completed' | 'error';
 
@@ -90,6 +90,7 @@ export const transferBlob = async (
     onMirrorUnsupported,
     onCompleted,
   } = options;
+  const target = mediaServer(targetServer);
 
   if (signal?.aborted) {
     throw new Error('Transfer cancelled');
@@ -111,20 +112,17 @@ export const transferBlob = async (
     const file = await blobUrlToFile(sourceUrl, 'cover.jpg');
     onPhaseChange?.('uploading');
 
-    const uploadFn = () =>
-      targetServer.type == 'blossom'
-        ? uploadBlossomBlob(targetServer.url, file, signEventTemplate, onProgress, signal)
-        : uploadNip96File(targetServer, file, 'cover.jpg', signEventTemplate, onProgress, signal);
+    const uploadFn = () => target.upload(file, 'cover.jpg', signEventTemplate, onProgress, signal);
 
     const result = await withTimeout(retryWithBackoff(uploadFn, maxRetries, signal), timeout, signal);
     onPhaseChange?.('completed');
     await onCompleted?.(result, 'upload');
     return result;
   } else {
-    if (targetServer.type == 'blossom' && allowMirror) {
+    if (target.capabilities.mirror && allowMirror) {
       try {
         onPhaseChange?.('mirroring');
-        const mirrorFn = () => mirrordBlossomBlob(targetServer.url, sourceUrl, signEventTemplate, signal);
+        const mirrorFn = () => target.mirror(sourceUrl, signEventTemplate, signal);
         const blob = await withTimeout(retryWithBackoff(mirrorFn, maxRetries, signal), timeout, signal);
         onProgress?.({
           loaded: blob.size,
@@ -154,10 +152,7 @@ export const transferBlob = async (
     const file = new File([result.data], fileName, { type: result.type, lastModified: new Date().getTime() });
 
     onPhaseChange?.('uploading');
-    const uploadFn = () =>
-      targetServer.type == 'blossom'
-        ? uploadBlossomBlob(targetServer.url, file, signEventTemplate, onProgress, signal)
-        : uploadNip96File(targetServer, file, fileName, signEventTemplate, onProgress, signal);
+    const uploadFn = () => target.upload(file, fileName, signEventTemplate, onProgress, signal);
 
     const uploadResult = await withTimeout(retryWithBackoff(uploadFn, maxRetries, signal), timeout, signal);
     onPhaseChange?.('completed');
