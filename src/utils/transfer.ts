@@ -137,8 +137,13 @@ export const transferBlob = async (
           throw e;
         }
         // The seam already decoded the status: these kinds mean this server will
-        // not take a mirror, whatever the transport reported.
-        if (e instanceof MediaServerError && (e.kind === 'unsupported' || e.kind === 'not-found')) {
+        // not take a mirror, whatever the transport reported. BUD-04: 409 = hash
+        // mismatch (permanent), 502 = origin unusable — both fall back to
+        // download+upload instead of retrying forever.
+        if (
+          e instanceof MediaServerError &&
+          (e.kind === 'unsupported' || e.kind === 'not-found' || e.kind === 'conflict' || e.status === 502)
+        ) {
           onMirrorUnsupported?.();
         }
       }

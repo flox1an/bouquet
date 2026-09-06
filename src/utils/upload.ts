@@ -1,7 +1,4 @@
-import axios, { type AxiosError, type AxiosProgressEvent } from 'axios';
-import type { BlobDescriptor, SignedEvent } from 'blossom-client-sdk';
-import { encodeAuthorizationHeader } from 'blossom-client-sdk/auth';
-
+import type { AxiosError } from 'axios';
 /**
  * Formats an axios upload error into a human-readable message, surfacing the
  * HTTP status and any server-provided message.
@@ -37,27 +34,3 @@ export function formatTransferError(error: unknown, sourceServer: string): strin
   return value.message ?? 'Unknown error';
 }
 
-/**
- * Uploads a single file to a Blossom server via PUT, optionally with a Blossom
- * auth event and upload-progress callback.
- */
-export async function uploadBlob(
-  server: string,
-  file: File,
-  auth?: SignedEvent,
-  onUploadProgress?: (progressEvent: AxiosProgressEvent) => void,
-  signal?: AbortSignal
-): Promise<BlobDescriptor> {
-  const headers = {
-    Accept: 'application/json',
-    'Content-Type': file.type,
-  };
-
-  const res = await axios.put<BlobDescriptor>(`${server}/upload`, file, {
-    headers: auth ? { ...headers, authorization: encodeAuthorizationHeader(auth) } : headers,
-    onUploadProgress,
-    signal,
-  });
-
-  return res.data;
-}

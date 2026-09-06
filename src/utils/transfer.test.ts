@@ -38,4 +38,26 @@ describe('transferBlob mirror fallback', () => {
     expect(result.url).toContain('target.example');
     expect(vi.mocked(blossom.uploadBlossomBlob)).toHaveBeenCalled();
   });
+
+  it.each([409, 502])('falls back to download-and-upload when mirror fails with %i (BUD-04)', async status => {
+    vi.spyOn(blossom, 'mirrordBlossomBlob').mockRejectedValue(
+      Object.assign(new Error(`HTTP ${status}`), { response: { status } })
+    );
+    vi.spyOn(blossom, 'downloadBlossomBlob').mockResolvedValue({
+      data: new Blob(['x']),
+      type: 'image/jpeg',
+    } as never);
+    vi.spyOn(blossom, 'uploadBlossomBlob').mockResolvedValue(descriptor('a'.repeat(64)));
+    const onMirrorUnsupported = vi.fn();
+
+    const result = await transferBlob('https://source.example/' + 'a'.repeat(64), target, sign, {
+      allowMirror: true,
+      onMirrorUnsupported,
+    });
+
+    expect(onMirrorUnsupported).toHaveBeenCalledOnce();
+    expect(result.url).toContain('target.example');
+    expect(vi.mocked(blossom.uploadBlossomBlob)).toHaveBeenCalled();
+  });
+
 });

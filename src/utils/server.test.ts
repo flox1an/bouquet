@@ -34,6 +34,38 @@ describe('media server error kinds', () => {
     await expect(server.mirror('https://src/h', sign)).rejects.toMatchObject({ kind: 'rate_limited' });
   });
 
+  it('scopes delete auth to the server domain (BUD-11)', async () => {
+    vi.mocked(deleteBlob).mockResolvedValue(true as never);
+    const server = mediaServer({ type: 'blossom', name: 'x', url: 'https://x.example' });
+    await server.delete('h', sign);
+    const auth = (vi.mocked(deleteBlob).mock.calls[0][2] as { auth: SignedEvent }).auth;
+    expect(auth.tags).toContainEqual(['server', 'x.example']);
+  });
+
+  it('maps 409 to a conflict kind carrying the status (BUD-04 hash mismatch)', async () => {
+    vi.spyOn(blossom, 'mirrordBlossomBlob').mockRejectedValue(httpError(409));
+    const server = mediaServer({ type: 'blossom', name: 'x', url: 'https://x.example' });
+    await expect(server.mirror('https://src/h', sign)).rejects.toMatchObject({ kind: 'conflict', status: 409 });
+  });
+
+  it('carries the status on server errors (502 mirror origin failure)', async () => {
+    vi.spyOn(blossom, 'checkBlobExists').mockRejectedValue(httpError(502));
+    const server = mediaServer({ type: 'blossom', name: 'x', url: 'https://x.example' });
+    await expect(server.exists('h')).rejects.toMatchObject({ kind: 'server', status: 502 });
+  });
+
+  it('supports reports on blossom and rejects them as unsupported on nip96', async () => {
+    vi.spyOn(blossom, 'reportBlobs').mockResolvedValue();
+    const blossomServer = mediaServer({ type: 'blossom', name: 'x', url: 'https://x.example' });
+    expect(blossomServer.capabilities.report).toBe(true);
+    const event = { id: '1' } as never;
+    await expect(blossomServer.report(event)).resolves.toBeUndefined();
+
+    const nip96Server = mediaServer({ type: 'nip96' as const, name: 'x', url: 'https://x.example' });
+    expect(nip96Server.capabilities.report).toBe(false);
+    await expect(nip96Server.report(event)).rejects.toMatchObject({ kind: 'unsupported' });
+  });
+
   it('every nip96 method rejects with MediaServerError, never a raw status', async () => {
     const source = { type: 'nip96' as const, name: 'x', url: 'https://x.example' };
     const server = mediaServer(source);

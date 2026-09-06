@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Code2, ExternalLink, FileText, Image, Loader2, MoreVertical, Music2, Video } from 'lucide-react';
+import { ArrowLeft, Code2, ExternalLink, FileText, Flag, Image, Loader2, MoreVertical, Music2, Video } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -22,6 +22,7 @@ import { eventKindLabel } from '../catalog/eventKinds';
 import { eventBody } from '../catalog/timelineMetadata';
 import { NostrText } from '../components/NostrText';
 
+import { ReportDialog } from '../components/Browse/ReportDialog';
 const TYPE_ICON = {
   image: Image,
   video: Video,
@@ -40,7 +41,8 @@ const AVAILABILITY_LABEL = {
 type DetailReturnState = { timelineLocationKey?: string };
 
 export default function TimelineAssetDetail() {
-  const { user } = useNostr();
+  const { user, signEventTemplate } = useNostr();
+  const [reportOpen, setReportOpen] = useState(false);
   const { distribution } = useServerInfo();
   const knownServersFor = useCallback(
     (sha256: string | undefined) => (sha256 ? (distribution[sha256]?.servers ?? []) : []),
@@ -323,6 +325,10 @@ export default function TimelineAssetDetail() {
                 {blobs.length} blobs)
               </Button>
             )}
+            <Button size="sm" variant="outline" onClick={() => setReportOpen(true)} className="mt-5">
+              <Flag className="mr-1 h-4 w-4" />
+              Report
+            </Button>
             {availableChecked && <p className="mt-3 text-xs text-muted-foreground">Availability checked</p>}
           </div>
           <div className="shrink-0 md:w-72">
@@ -461,6 +467,13 @@ export default function TimelineAssetDetail() {
           </DialogContent>
         </Dialog>
       )}
+      <ReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        hashes={blobs.map(b => b.sha256)}
+        event={detail.event ? { id: detail.event.id, pubkey: detail.event.pubkey } : undefined}
+        signEventTemplate={signEventTemplate}
+      />
     </main>
   );
 }
