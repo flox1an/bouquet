@@ -14,11 +14,20 @@ import { BrowseActionPlanDialog } from './BrowseActionPlanDialog';
 const planCatalogAction = vi.fn();
 const getAssetReplicaMap = vi.fn();
 const recordBlobsRemoved = vi.fn();
+const ingestUpload = vi.fn();
+const refreshReplicaAvailability = vi.fn();
 const deleteBlob = vi.fn();
 const createDeleteAuth = vi.fn();
+const { transferBlob } = vi.hoisted(() => ({ transferBlob: vi.fn() }));
 
 vi.mock('../../catalog/catalogClient', () => ({
-  getCatalogClient: () => ({ planCatalogAction, getAssetReplicaMap, recordBlobsRemoved }),
+  getCatalogClient: () => ({
+    planCatalogAction,
+    getAssetReplicaMap,
+    recordBlobsRemoved,
+    ingestUpload,
+    refreshReplicaAvailability,
+  }),
 }));
 vi.mock('../../utils/server', () => {
   // The real seam decodes raw HTTP statuses into MediaServerError kinds before
@@ -48,6 +57,7 @@ vi.mock('../../utils/server', () => {
     }),
   };
 });
+vi.mock('../../utils/transfer', () => ({ transferBlob }));
 
 afterEach(() => {
   cleanup();
@@ -56,6 +66,9 @@ afterEach(() => {
   recordBlobsRemoved.mockReset();
   deleteBlob.mockReset();
   createDeleteAuth.mockReset();
+  ingestUpload.mockReset();
+  refreshReplicaAvailability.mockReset();
+  transferBlob.mockReset();
 });
 
 const item = (assetId: string): TimelineItem =>
@@ -91,7 +104,10 @@ const server = (name: string, url: string): ServerInfo =>
     features: {},
   }) as ServerInfo;
 
-const renderDialog = (assets: TimelineItem[], overrides: { serverInfo?: Record<string, ServerInfo> } = {}) => {
+const renderDialog = (
+  assets: TimelineItem[],
+  overrides: { action?: 'mirror' | 'sync' | 'delete'; serverInfo?: Record<string, ServerInfo> } = {}
+) => {
   const queryClient = new QueryClient();
   return render(
     h(
@@ -99,7 +115,7 @@ const renderDialog = (assets: TimelineItem[], overrides: { serverInfo?: Record<s
       { client: queryClient },
       h(BrowseActionPlanDialog, {
         open: true,
-        action: 'delete',
+        action: overrides.action ?? 'delete',
         assets,
         pubkey: 'pk',
         serverInfo: overrides.serverInfo ?? {},
@@ -144,6 +160,74 @@ describe('BrowseActionPlanDialog', () => {
     expect(screen.queryByText(/Planning…/i)).toBeNull();
     expect(screen.getByText(/cannot be undone/i)).toBeTruthy();
     expect(planCatalogAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the chosen mirror destination while replanning', async () => {
+    planCatalogAction.mockResolvedValue({ allowed: true, targets: ['a'.repeat(64)] });
+    getAssetReplicaMap.mockResolvedValue([]);
+
+    renderDialog([item('asset-1')], {
+      action: 'mirror',
+      serverInfo: { destination: server('destination', 'https://destination.example') },
+    });
+
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /Choose a destination server/i })).toBeTruthy());
+    await userEvent.click(screen.getByRole('button', { name: /Choose a destination server/i }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: /destination/i }));
+
+    await vi.waitFor(() => {
+      const mirror = screen.getByRole('button', { name: 'Mirror 1 file' });
+      expect(mirror.hasAttribute('disabled')).toBe(false);
+      expect(screen.getByRole('button', { name: /destination/i })).toBeTruthy();
+    });
+  });
+
+  it('transfers to a mirror destination when the virtual all-servers entry is present', async () => {
+    const hash = 'a'.repeat(64);
+    const destination = server('destination', 'https://destination.example');
+    planCatalogAction.mockResolvedValue({ allowed: true, targets: [hash] });
+    getAssetReplicaMap.mockResolvedValue([
+      {
+        sha256: hash,
+        assetId: 'asset-1',
+        role: 'main',
+        sources: [{ serverId: 'https://source.example', baseUrl: 'https://source.example', serverType: 'blossom' }],
+        presentOn: ['https://source.example'],
+        absentFrom: [{ serverId: destination.url, baseUrl: destination.url }],
+      },
+    ]);
+    transferBlob.mockResolvedValue({
+      sha256: hash,
+      url: `${destination.url}/${hash}`,
+      type: 'image/jpeg',
+      size: 1,
+      uploaded: 1,
+    });
+    ingestUpload.mockResolvedValue(undefined);
+    refreshReplicaAvailability.mockResolvedValue(undefined);
+
+    renderDialog([item('asset-1')], {
+      action: 'mirror',
+      serverInfo: {
+        all: { ...server('All servers', 'all'), virtual: true },
+        destination,
+      },
+    });
+
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /Choose a destination server/i })).toBeTruthy());
+    await userEvent.click(screen.getByRole('button', { name: /Choose a destination server/i }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: /destination/i }));
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Mirror 1 file' }).hasAttribute('disabled')).toBe(false));
+    await userEvent.click(screen.getByRole('button', { name: 'Mirror 1 file' }));
+
+    await vi.waitFor(() =>
+      expect(transferBlob).toHaveBeenCalledWith(
+        `https://source.example/${hash}`,
+        expect.objectContaining({ url: destination.url }),
+        expect.any(Function),
+        expect.any(Object)
+      )
+    );
   });
 
   it('shows a per-server breakdown, tells "already gone" apart from failure, and updates the catalog on success', async () => {

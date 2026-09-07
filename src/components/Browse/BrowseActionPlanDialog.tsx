@@ -96,12 +96,17 @@ export function BrowseActionPlanDialog({
   useEffect(() => {
     if (!open) return;
     diagnosticRunRef.current = action === 'delete' ? startDiagnosticRun(assets.length) : undefined;
-    setPhase('planning');
     setFailureMessage(undefined);
-    setPlan(undefined);
     setRows([]);
     setChosenServerName(undefined);
     setMirrorSupport({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- assetIdsKey stands in for `assets`
+  }, [open, assetIdsKey, action, pubkey]);
+
+  useEffect(() => {
+    if (!open) return;
+    setPhase('planning');
+    setPlan(undefined);
     void planActionRun(getCatalogClient(), {
       pubkey,
       action,
@@ -263,7 +268,7 @@ export function BrowseActionPlanDialog({
     if (!plan) return;
     const titleByTargetKey = new Map(allowedPlans.flatMap(p => p.targets.map(hash => [hash, p.title] as const)));
     const targetServerFor = (serverId: string) =>
-      Object.values(serverInfo).find(server => normalizeServerUrl(server.url) === serverId);
+      Object.values(serverInfo).find(server => !server.virtual && normalizeServerUrl(server.url) === serverId);
     setRows(
       plan.ops.map(op => ({
         key: `${op.sha256}:${op.targetServerId}`,
