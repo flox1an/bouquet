@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
@@ -24,7 +24,7 @@ import UploadOnboarding from '../components/UploadOboarding';
 import { toast } from '@/hooks/use-toast';
 import { getCatalogClient } from '../catalog/catalogClient';
 import { mediaServer } from '../utils/server';
-import { uploadFiles } from '../utils/uploadRun';
+import { uploadFiles, type UploadTask } from '../utils/uploadRun';
 
 function Upload() {
   const { servers, serversLoading } = useUserServers();
@@ -40,6 +40,9 @@ function Upload() {
   const [imageResize, setImageResize] = useState(0);
   const [uploadStep, setUploadStep] = useState(0);
   const { publishFileEvent, publishAudioEvent, publishVideoEvent } = usePublishing();
+  const [failedUploadTasks, setFailedUploadTasks] = useState<UploadTask[]>([]);
+  const dimensionsRef = useRef<{ [key: string]: FileEventData }>({});
+  const uploadedFilesRef = useRef<File[]>([]);
   const navigate = useNavigate();
 
   // Get pre-selected server from navigation state
@@ -109,48 +112,62 @@ function Upload() {
     return fileDimensions;
   }
 
-  const upload = async () => {
+  const upload = async (retryTasks?: UploadTask[]) => {
     setUploadBusy(true);
-    setPreparing(true);
+    const isRetry = Boolean(retryTasks && retryTasks.length > 0);
+    if (!isRetry) {
+      setPreparing(true);
+    }
     const failedServers = new Set<string>();
 
     let uploadVerdict: 'allSucceeded' | 'failed' | 'cancelled' = 'allSucceeded';
     try {
       setUploadStep(1);
       // TODO this blocks the UI
-      const filesToUpload: File[] = await getListOfFilesToUpload();
-      const fileDimensions = await getPreUploadMetaData(filesToUpload);
-      setPreparing(false);
+      const filesToUpload: File[] = isRetry ? uploadedFilesRef.current : await getListOfFilesToUpload();
+      const fileDimensions = isRetry ? dimensionsRef.current : await getPreUploadMetaData(filesToUpload);
+      if (!isRetry) {
+        uploadedFilesRef.current = filesToUpload;
+        dimensionsRef.current = fileDimensions;
+        setPreparing(false);
+      }
 
       // TODO icon to cancel upload
       // TODO detect if the file already exists? if we have the hash??
 
-
-
       if (filesToUpload && filesToUpload.length) {
-        // sum files sizes
-        const totalSize = filesToUpload.reduce((acc, f) => acc + f.size, 0);
+        const enabledServers = servers.filter(server => transfers[server.name]?.enabled);
+        const primaryServerName = servers[0]?.name;
+        const orderedServers = [...enabledServers].sort((left, right) =>
+          Number(right.name === primaryServerName) - Number(left.name === primaryServerName)
+        );
+        const uploadTasks: UploadTask[] = isRetry
+          ? (retryTasks as UploadTask[])
+          : orderedServers.flatMap(server => filesToUpload.map(file => ({ server, file })));
 
-        // set all entries size to totalSize
         setTransfers(ut => {
           const newTransfers = { ...ut };
-          for (const server of servers) {
-            if (newTransfers[server.name].enabled) {
-              newTransfers[server.name].size = totalSize;
-              newTransfers[server.name].error = undefined;
+          if (isRetry) {
+            for (const task of uploadTasks) {
+              if (newTransfers[task.server.name]) {
+                newTransfers[task.server.name].error = undefined;
+              }
+            }
+          } else {
+            const totalSize = filesToUpload.reduce((acc, f) => acc + f.size, 0);
+            for (const server of servers) {
+              if (newTransfers[server.name]?.enabled) {
+                newTransfers[server.name].size = totalSize;
+                newTransfers[server.name].error = undefined;
+              }
             }
           }
           return newTransfers;
         });
 
-        const enabledServers = servers.filter(server => transfers[server.name]?.enabled);
-        const primaryServerName = servers[0].name;
-        const orderedServers = [...enabledServers].sort((left, right) =>
-          Number(right.name === primaryServerName) - Number(left.name === primaryServerName)
-        );
         const transferred: Record<string, number> = {};
-        const uploadTasks = orderedServers.flatMap(server => filesToUpload.map(file => ({ server, file })));
         const result = await uploadFiles({
+          tasks: uploadTasks,
           files: filesToUpload,
           servers: orderedServers,
           sign: signEventTemplate,
@@ -175,14 +192,16 @@ function Upload() {
           }
           const { task, descriptor } = outcome.value;
           transferred[task.server.name] = (transferred[task.server.name] ?? 0) + task.file.size;
+          const existingUrls = fileDimensions[task.file.name]?.url ?? [];
           fileDimensions[task.file.name] = {
             ...fileDimensions[task.file.name],
             x: descriptor.sha256,
-            url:
-              task.server.name === primaryServerName
-                ? [descriptor.url, ...fileDimensions[task.file.name].url]
-                : [...fileDimensions[task.file.name].url, descriptor.url],
-            size: descriptor.size || fileDimensions[task.file.name].size,
+            url: existingUrls.includes(descriptor.url)
+              ? existingUrls
+              : task.server.name === primaryServerName
+                ? [descriptor.url, ...existingUrls]
+                : [...existingUrls, descriptor.url],
+            size: descriptor.size || fileDimensions[task.file.name]?.size,
             m: descriptor.type,
           };
           if (user?.pubkey)
@@ -190,19 +209,28 @@ function Upload() {
               .ingestUpload(user.pubkey, { url: task.server.url, type: task.server.type }, descriptor)
               .catch(() => undefined);
         }
+        const remainingFailedTasks: UploadTask[] = [];
         for (const index of result.failed) {
           const task = uploadTasks[index];
           const outcome = result.outcomes[index];
           if (outcome.state !== 'error') continue;
+          remainingFailedTasks.push(task);
           failedServers.add(task.server.name);
           setTransfers(current => ({
             ...current,
             [task.server.name]: { ...current[task.server.name], error: formatUploadError(outcome.error as AxiosError) },
           }));
         }
-        if (result.verdict === 'allSucceeded') setFiles([]);
+        setFailedUploadTasks(remainingFailedTasks);
+        if (result.verdict === 'allSucceeded' && !isRetry) setFiles([]);
       }
       if (uploadVerdict === 'allSucceeded') {
+        setFailedUploadTasks([]);
+        setFiles([]);
+        const drafts = filesToUpload
+          .map(file => fileDimensions[file.name])
+          .filter((fe): fe is FileEventData => Boolean(fe && fe.x && fe.url.length > 0));
+        setFileEventsToPublish(drafts);
         setUploadStep(2);
       } else {
         toast({
@@ -247,10 +275,12 @@ function Upload() {
       )
     );
 
+    setFailedUploadTasks([]);
+    dimensionsRef.current = {};
+    uploadedFilesRef.current = [];
     setFileEventsToPublish([]);
     setUploadStep(0);
   }, [servers, serverInfo, preSelectedServer]);
-
   const [transfersInitialized, setTransfersInitialized] = useState(false);
 
   useEffect(() => {
@@ -397,7 +427,16 @@ function Upload() {
                 />
               )}
 
-              {uploadStep == 1 && <UploadProgress servers={servers} transfers={transfers} preparing={preparing} />}
+              {uploadStep == 1 && (
+                <UploadProgress
+                  servers={servers}
+                  transfers={transfers}
+                  preparing={preparing}
+                  uploadBusy={uploadBusy}
+                  failedCount={failedUploadTasks.length}
+                  onRetry={() => void upload(failedUploadTasks)}
+                />
+              )}
             </div>
           )}
           {uploadStep == 2 && fileEventsToPublish.length > 0 && (

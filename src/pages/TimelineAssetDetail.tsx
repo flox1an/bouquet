@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Code2, ExternalLink, FileText, Flag, Image, Loader2, MoreVertical, Music2, Video } from 'lucide-react';
+import { ArrowLeft, Code2, ExternalLink, FileText, Flag, Image, Loader2, MoreVertical, Music2, Play, Video } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -13,9 +12,10 @@ import {
 import { nip19 } from 'nostr-tools';
 import { getCatalogClient } from '../catalog/catalogClient';
 import type { TimelineAssetDetail as TimelineAssetDetailType } from '../catalog/catalog';
-import { TimelineThumbnail } from '../components/TimelineThumbnail';
+import { TimelineThumbnail, type KnownServersFor } from '../components/TimelineThumbnail';
 import { useNostr } from '../utils/nostr';
-import { useServerInfo } from '../utils/useServerInfo';
+import { useGlobalContext } from '../GlobalState';
+import { useServerInfo, type ServerInfo } from '../utils/useServerInfo';
 import { formatDate, formatFileSize } from '../utils/utils';
 import { probeNativeUrl } from '../catalog/availabilityFetch';
 import { eventKindLabel } from '../catalog/eventKinds';
@@ -23,6 +23,7 @@ import { eventBody } from '../catalog/timelineMetadata';
 import { NostrText } from '../components/NostrText';
 
 import { ReportDialog } from '../components/Browse/ReportDialog';
+import { BrowseActionPlanDialog } from '../components/Browse/BrowseActionPlanDialog';
 const TYPE_ICON = {
   image: Image,
   video: Video,
@@ -38,12 +39,66 @@ const AVAILABILITY_LABEL = {
   unknown: 'Not checked',
 };
 
+type CopyState = 'confirmed' | 'confirmed-missing' | 'unreachable' | 'unchecked';
+
+const COPY_STATE_LABEL: Record<CopyState, string> = {
+  confirmed: '✅ Confirmed',
+  'confirmed-missing': 'Confirmed missing',
+  unreachable: '☒ Unreachable',
+  unchecked: 'Not checked',
+};
+
+function sameHost(a: string, b: string): boolean {
+  try {
+    return new URL(a).host === new URL(b).host;
+  } catch {
+    return false;
+  }
+}
+
+type ServerCopyRow = { name: string; state: CopyState; url?: string };
+
+/** One row per configured server, using only URLs the catalog already recorded
+    (from a server listing or an event tag) - never a synthesized `${server}/${sha256}`,
+    since not every server type addresses blobs that way (ADR-0006, NIP-96 servers). */
+function serverCopyRows(
+  sha256: string,
+  urls: string[],
+  servers: ServerInfo[],
+  liveResults: Array<{ serverId: string; state: string; httpStatus?: number }> | undefined
+): ServerCopyRow[] {
+  return servers.map(server => {
+    const matchedUrl = urls.find(url => sameHost(url, server.url));
+    const live = liveResults?.find(result => result.serverId === server.url);
+    if (live) {
+      const state: CopyState =
+        live.state === 'present' ? 'confirmed' : live.state === 'unreachable' ? 'unreachable' : 'confirmed-missing';
+      return { name: server.name, state, url: state === 'confirmed' ? matchedUrl : undefined };
+    }
+    if (server.isLoading) return { name: server.name, state: 'unchecked' };
+    if (server.isError) return { name: server.name, state: 'unreachable' };
+    if (server.blobs) {
+      const present = server.blobs.some(blob => blob.sha256 === sha256);
+      return { name: server.name, state: present ? 'confirmed' : 'confirmed-missing', url: present ? matchedUrl : undefined };
+    }
+    return { name: server.name, state: 'unchecked' };
+  });
+}
+
+/** URLs that came from a Nostr event tag rather than a configured server's own
+    listing - shown separately so a confirmed server copy is never confused with
+    an unverified external link (issue #23). */
+function eventUrlsFor(urls: string[], servers: ServerInfo[]): string[] {
+  return urls.filter(url => !servers.some(server => sameHost(url, server.url)));
+}
+
 type DetailReturnState = { timelineLocationKey?: string };
 
 export default function TimelineAssetDetail() {
   const { user, signEventTemplate } = useNostr();
   const [reportOpen, setReportOpen] = useState(false);
-  const { distribution } = useServerInfo();
+  const { distribution, serverInfo } = useServerInfo();
+  const { dispatch } = useGlobalContext();
   const knownServersFor = useCallback(
     (sha256: string | undefined) => (sha256 ? (distribution[sha256]?.servers ?? []) : []),
     [distribution]
@@ -61,6 +116,7 @@ export default function TimelineAssetDetail() {
     Record<string, Array<{ serverId: string; state: string; httpStatus?: number }>>
   >({});
   const [rawEventOpen, setRawEventOpen] = useState(false);
+  const [detailAction, setDetailAction] = useState<'mirror' | 'sync' | 'delete'>();
   const availabilityStarted = useRef(false);
 
   const checkAvailability = useCallback(
@@ -140,6 +196,19 @@ export default function TimelineAssetDetail() {
     navigate('/browse', { state: timelineLocationKey ? { timelineLocationKey } : null });
   };
 
+  const closeDetailAction = () => setDetailAction(undefined);
+  const handleActionCompleted = () => {
+    const completedAction = detailAction;
+    setDetailAction(undefined);
+    if (completedAction === 'delete') {
+      navigate('/browse');
+    } else {
+      // Mirror/sync add copies without removing the item - refetch so the
+      // header's replica count and availability agree with the new state.
+      setLoadAttempt(attempt => attempt + 1);
+    }
+  };
+
   if (!user?.pubkey)
     return (
       <DetailMessage
@@ -176,6 +245,11 @@ export default function TimelineAssetDetail() {
     );
 
   const { projection, blobs } = detail;
+  const configuredServers = Object.values(serverInfo).filter(server => !server.virtual);
+  const playAudio = () => {
+    if (!projection.primaryUrl) return;
+    dispatch({ type: 'SET_CURRENT_SONG', song: { url: projection.primaryUrl } });
+  };
   // The kind-specific text body (a note's content, a video's description tag).
   // When the body is what the title was derived from - a note whose content
   // became the card title - it renders once, as body, not twice.
@@ -246,21 +320,29 @@ export default function TimelineAssetDetail() {
                     {AVAILABILITY_LABEL[projection.availabilityState]}
                   </p>
                 </div>
-                {detail.event && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="shrink-0" aria-label="Open event actions">
-                        <MoreVertical className="h-5 w-5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="shrink-0" aria-label="Open item actions">
+                      <MoreVertical className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setDetailAction('mirror')}>Mirror</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setDetailAction('sync')}>Sync</DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onSelect={() => setDetailAction('delete')}
+                    >
+                      Delete
+                    </DropdownMenuItem>
+                    {detail.event && (
                       <DropdownMenuItem onSelect={() => setRawEventOpen(true)}>
                         <Code2 className="mr-2 h-4 w-4" />
                         Raw event
                       </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
             {projection.eventId ? (
@@ -331,8 +413,8 @@ export default function TimelineAssetDetail() {
             </Button>
             {availableChecked && <p className="mt-3 text-xs text-muted-foreground">Availability checked</p>}
           </div>
-          <div className="shrink-0 md:w-72">
-            <TimelineThumbnail item={projection} knownServersFor={knownServersFor} />
+          <div className="shrink-0 md:w-96">
+            <MediaPreview projection={projection} knownServersFor={knownServersFor} onPlayAudio={playAudio} />
           </div>
         </div>
       </header>
@@ -361,97 +443,94 @@ export default function TimelineAssetDetail() {
           </p>
         )}
         <ul className="mt-4 space-y-3">
-          {blobs.map(blob => (
-            <li
-              key={`${blob.sha256}:${blob.role}:${blob.ordinal}`}
-              className="border bg-card p-4 shadow-[3px_3px_0_hsl(var(--border))]"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">{blob.role}</p>
-                  <p className="mt-1 truncate font-mono text-sm">{blob.sha256}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {checkingAvailability && serverResults[blob.sha256]?.length ? (
-                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-green-500" />
-                  ) : null}
-                  {AVAILABILITY_LABEL[blob.availabilityState] === '✅ Available' && serverResults[blob.sha256] ? (
-                    <TooltipProvider>
-                      <Tooltip delayDuration={150}>
-                        <TooltipTrigger asChild>
-                          <span className="cursor-pointer font-mono text-xs uppercase text-muted-foreground">
-                            {AVAILABILITY_LABEL[blob.availabilityState]}{' '}
-                            {serverResults[blob.sha256]!.length > 0
-                              ? `(${serverResults[blob.sha256]!.filter(r => r.state === 'present').length}/${serverResults[blob.sha256]!.length})`
-                              : ''}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent
-                          side="left"
-                          className="max-w-64 border bg-popover text-popover-foreground text-xs shadow-md"
-                        >
-                          <p className="mb-1 font-semibold">Server responses</p>
-                          {serverResults[blob.sha256]!.map(result => (
-                            <p
-                              key={result.serverId}
-                              className={result.state === 'present' ? 'text-green-600' : 'text-muted-foreground'}
-                            >
-                              {result.serverId.slice(0, 24)}… —{' '}
-                              {result.state === 'present'
-                                ? `✅ ${result.httpStatus ?? 200}`
-                                : result.state === 'unreachable'
-                                  ? '☒ unreachable'
-                                  : result.state}
-                            </p>
-                          ))}
-                          {serverResults[blob.sha256]!.length === 0 && (
-                            <p className="text-muted-foreground">No servers checked yet</p>
-                          )}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ) : (
+          {blobs.map(blob => {
+            const copyRows = serverCopyRows(blob.sha256, blob.urls, configuredServers, serverResults[blob.sha256]);
+            const eventUrls = eventUrlsFor(blob.urls, configuredServers);
+            return (
+              <li
+                key={`${blob.sha256}:${blob.role}:${blob.ordinal}`}
+                className="border bg-card p-4 shadow-[3px_3px_0_hsl(var(--border))]"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">{blob.role}</p>
+                    <p className="mt-1 truncate font-mono text-sm">{blob.sha256}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {checkingAvailability && serverResults[blob.sha256]?.length ? (
+                      <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-green-500" />
+                    ) : null}
                     <span className="font-mono text-xs uppercase text-muted-foreground">
                       {AVAILABILITY_LABEL[blob.availabilityState]}
                     </span>
-                  )}
+                  </div>
                 </div>
-              </div>
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
-                <DetailStat
-                  label="MIME type"
-                  value={
-                    projection.displayType === 'video' && blob.eventMimeType
-                      ? blob.eventMimeType
-                      : (blob.mimeType ?? 'Unknown')
-                  }
-                />
-                <DetailStat label="Size" value={blob.size !== undefined ? formatFileSize(blob.size) : 'Unknown'} />
-                <DetailStat label="Copies" value={`${blob.replicaCount}`} />
-                {blob.dimensions && <DetailStat label="Dimensions" value={blob.dimensions} />}
-              </dl>
-              {blob.urls.length > 0 && (
-                <div className="mt-4 border-t pt-3">
-                  <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Known locations</p>
-                  <ul className="mt-2 space-y-1">
-                    {blob.urls.map(url => (
-                      <li key={url}>
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex max-w-full items-center gap-1 break-all text-sm text-primary underline-offset-4 hover:underline"
-                        >
-                          <span>{url}</span>
-                          <ExternalLink className="h-3 w-3 shrink-0" aria-label="Opens in a new tab" />
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </li>
-          ))}
+                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
+                  <DetailStat
+                    label="MIME type"
+                    value={
+                      projection.displayType === 'video' && blob.eventMimeType
+                        ? blob.eventMimeType
+                        : (blob.mimeType ?? 'Unknown')
+                    }
+                  />
+                  <DetailStat label="Size" value={blob.size !== undefined ? formatFileSize(blob.size) : 'Unknown'} />
+                  <DetailStat label="Copies" value={`${blob.replicaCount}`} />
+                  {blob.dimensions && <DetailStat label="Dimensions" value={blob.dimensions} />}
+                </dl>
+                {configuredServers.length > 0 && (
+                  <div className="mt-4 border-t pt-3">
+                    <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      Server copies
+                    </p>
+                    <ul className="mt-2 space-y-1">
+                      {copyRows.map(row => (
+                        <li key={row.name} className="flex items-center justify-between gap-2 text-sm">
+                          {row.url ? (
+                            <a
+                              href={row.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline-offset-4 hover:underline"
+                            >
+                              {row.name}
+                            </a>
+                          ) : (
+                            <span>{row.name}</span>
+                          )}
+                          <span className="font-mono text-xs uppercase text-muted-foreground">
+                            {COPY_STATE_LABEL[row.state]}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {eventUrls.length > 0 && (
+                  <div className="mt-4 border-t pt-3">
+                    <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      From event metadata
+                    </p>
+                    <ul className="mt-2 space-y-1">
+                      {eventUrls.map(url => (
+                        <li key={url}>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex max-w-full items-center gap-1 break-all text-sm text-primary underline-offset-4 hover:underline"
+                          >
+                            <span>{url}</span>
+                            <ExternalLink className="h-3 w-3 shrink-0" aria-label="Opens in a new tab" />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </section>
       {detail.event && (
@@ -474,6 +553,18 @@ export default function TimelineAssetDetail() {
         event={detail.event ? { id: detail.event.id, pubkey: detail.event.pubkey } : undefined}
         signEventTemplate={signEventTemplate}
       />
+      {detailAction && user?.pubkey && (
+        <BrowseActionPlanDialog
+          open
+          action={detailAction}
+          assets={[projection]}
+          pubkey={user.pubkey}
+          serverInfo={serverInfo}
+          signEventTemplate={signEventTemplate}
+          onClose={closeDetailAction}
+          onDeleted={handleActionCompleted}
+        />
+      )}
     </main>
   );
 }
@@ -483,6 +574,65 @@ function DetailStat({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</dt>
       <dd className="mt-1 font-medium">{value}</dd>
+    </div>
+  );
+}
+
+/** The direct, playable media for this item - not the proxied static thumbnail
+    used on cards - so images read at real size and audio/video are interactive
+    in place instead of forcing a raw link open in a new tab (issue #24). */
+function MediaPreview({
+  projection,
+  knownServersFor,
+  onPlayAudio,
+}: {
+  projection: TimelineAssetDetailType['projection'];
+  knownServersFor: KnownServersFor;
+  onPlayAudio: () => void;
+}) {
+  const [failed, setFailed] = useState(false);
+  const url = projection.primaryUrl;
+  if (!url) {
+    return (
+      <div className="flex aspect-video items-center justify-center border bg-muted/30 text-sm text-muted-foreground">
+        Media unavailable
+      </div>
+    );
+  }
+  if (projection.displayType === 'image' && !failed) {
+    return (
+      <img
+        src={url}
+        alt={projection.displayTitle}
+        onError={() => setFailed(true)}
+        className="max-h-[70vh] w-full border object-contain"
+      />
+    );
+  }
+  if (projection.displayType === 'video' && !failed) {
+    return (
+      <video src={url} controls onError={() => setFailed(true)} className="max-h-[70vh] w-full border bg-black" />
+    );
+  }
+  if (projection.displayType === 'audio') {
+    return (
+      <Button onClick={onPlayAudio} size="lg" className="w-full">
+        <Play className="mr-2 h-5 w-5" />
+        Play
+      </Button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <TimelineThumbnail item={projection} knownServersFor={knownServersFor} />
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center justify-center gap-1 border px-3 py-2 text-sm text-primary underline-offset-4 hover:underline"
+      >
+        Open externally <ExternalLink className="h-3 w-3" aria-label="Opens in a new tab" />
+      </a>
     </div>
   );
 }

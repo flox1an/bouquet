@@ -19,15 +19,20 @@ export type UploadServer = {
 };
 
 export async function uploadFiles(input: {
-  files: File[];
-  servers: Server[];
+  files?: File[];
+  servers?: Server[];
+  tasks?: UploadTask[];
   sign: (template: EventTemplate) => Promise<SignedEvent>;
   resolveServer(server: Server): UploadServer;
   onProgress?(task: UploadTask, progress: AxiosProgressEvent): void;
   signal?: AbortSignal;
   concurrency?: number;
 }): Promise<RunResult<UploadResult> & { verdict: 'allSucceeded' | 'failed' | 'cancelled' }> {
-  const tasks = input.servers.flatMap(server => input.files.map(file => ({ file, server })));
+  const tasks =
+    input.tasks ??
+    (input.servers && input.files
+      ? input.servers.flatMap(server => input.files!.map(file => ({ file, server })))
+      : []);
   const result = await runTasks(
     tasks,
     async task => {

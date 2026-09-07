@@ -1,17 +1,27 @@
 import React from 'react';
 import { Server } from '../utils/useUserServers';
 import { TransferStats } from './UploadFileSelection';
-import { Cog, Server as ServerIcon, Loader2 } from 'lucide-react';
+import { Cog, Server as ServerIcon, Loader2, RotateCw } from 'lucide-react';
 import ProgressBar from './ProgressBar/ProgressBar';
 import { formatFileSize } from '../utils/utils';
+import { Button } from '@/components/ui/button';
 
 interface UploadProgressProps {
   servers: Server[];
   transfers: Record<string, TransferStats>;
   preparing: boolean;
+  uploadBusy?: boolean;
+  onRetry?: () => void;
+  failedCount?: number;
 }
-
-const UploadProgress: React.FC<UploadProgressProps> = ({ servers, transfers, preparing }) => {
+const UploadProgress: React.FC<UploadProgressProps> = ({
+  servers,
+  transfers,
+  preparing,
+  uploadBusy,
+  onRetry,
+  failedCount,
+}) => {
   return (
     <>
       <h3 className="text-lg font-semibold">Servers</h3>
@@ -44,6 +54,14 @@ const UploadProgress: React.FC<UploadProgressProps> = ({ servers, transfers, pre
             )
         )}
       </div>
+      {onRetry && !uploadBusy && (failedCount ?? 0) > 0 && (
+        <div className="flex justify-end pt-3">
+          <Button onClick={onRetry} variant="default">
+            <RotateCw className="w-4 h-4 mr-1" />
+            Retry failed uploads
+          </Button>
+        </div>
+      )}
     </>
   );
 };

@@ -26,7 +26,7 @@ import { formatTransferError } from '../utils/upload';
 type TransferStatus = {
   [key: string]: {
     sha256: string;
-    status: 'pending' | 'done' | 'error';
+    status: 'pending' | 'done' | 'error' | 'cancelled';
     phase?: TransferPhase;
     message?: string;
     size: number;
@@ -103,6 +103,18 @@ export const Transfer = () => {
     return [];
   }, [serverInfo, transferSource, transferTarget]);
 
+  // Loading/unreachable listings must never be presented as a confirmed
+  // zero-difference "nothing to sync" - that hides real inventory the app
+  // simply hasn't read yet.
+  const inventoryStatus = useMemo((): 'loading' | 'error' | 'ready' => {
+    if (!transferSource || !transferTarget) return 'ready';
+    const sourceServer = serverInfo[transferSource];
+    const targetServer = serverInfo[transferTarget];
+    if (sourceServer?.isError || targetServer?.isError) return 'error';
+    if (sourceServer?.isLoading || targetServer?.isLoading) return 'loading';
+    return 'ready';
+  }, [serverInfo, transferSource, transferTarget]);
+
   const getTransferPreview = (targetServer: ServerInfo): string | undefined => {
     if (!transferSource || !serverInfo[transferSource]) return undefined;
     const sourceBlobs = serverInfo[transferSource].blobs;
@@ -129,7 +141,7 @@ export const Transfer = () => {
     const controller = new AbortController();
     setAbortController(controller);
     setStarted(true);
-    await runTasks(
+    const result = await runTasks(
       blobs,
       async b => {
         setTransferLog(ts => ({
@@ -210,6 +222,17 @@ export const Transfer = () => {
       },
       { concurrency: 1, signal: controller.signal }
     );
+    // Tasks the runner never got to dequeue before the abort still need a
+    // visible, resumable record - otherwise "Resume remaining" can't see them.
+    for (const [index, outcome] of result.outcomes.entries()) {
+      if (outcome.state !== 'cancelled') continue;
+      const blob = blobs[index];
+      setTransferLog(ts =>
+        ts[blob.sha256]
+          ? ts
+          : { ...ts, [blob.sha256]: { sha256: blob.sha256, status: 'cancelled', size: blob.size, retries: 0 } }
+      );
+    }
     setAbortController(null);
   };
 
@@ -241,6 +264,14 @@ export const Transfer = () => {
   }, [transferLog, transferJobs]);
 
   const transferErrors = useMemo(() => Object.values(transferLog).filter(b => b.status == 'error'), [transferLog]);
+  const transferCancelled = useMemo(
+    () => Object.values(transferLog).filter(b => b.status === 'cancelled'),
+    [transferLog]
+  );
+  const transferResumable = useMemo(
+    () => [...transferErrors, ...transferCancelled],
+    [transferErrors, transferCancelled]
+  );
   const currentTransfer = useMemo(() => Object.values(transferLog).find(t => t.status === 'pending'), [transferLog]);
   const isTransferComplete = started && Object.keys(transferLog).length > 0 && transferStatus.pending === 0;
 
@@ -426,15 +457,15 @@ export const Transfer = () => {
                 </div>
               )}
 
-              {transferErrors.length > 0 && (
+              {transferResumable.length > 0 && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>
-                    {transferErrors.length} transfer error{transferErrors.length > 1 ? 's' : ''}
+                    {transferResumable.length} transfer{transferResumable.length > 1 ? 's' : ''} need attention
                   </AlertTitle>
                   <AlertDescription>
                     <div className="mt-2 grid w-full gap-2">
-                      {transferErrors.map(t => (
+                      {transferResumable.map(t => (
                         <div
                           key={t.sha256}
                           className="grid gap-2 rounded-md border border-destructive/20 bg-background/60 p-2 text-xs md:grid-cols-[1fr_auto_auto]"
@@ -444,27 +475,29 @@ export const Transfer = () => {
                             <span className="truncate">{t.sha256}</span>
                           </span>
                           <span className="whitespace-nowrap text-muted-foreground">{formatFileSize(t.size)}</span>
-                          <span className="text-destructive">{t.message}</span>
+                          <span className="text-destructive">
+                            {t.status === 'cancelled' ? 'Cancelled before it started' : t.message}
+                          </span>
                         </div>
                       ))}
                     </div>
-                    {/* Without this the only way past a partial failure is to run the
-                        whole transfer again, including everything that already worked. */}
+                    {/* Without this the only way past a partial failure or cancellation is to
+                        run the whole transfer again, including everything that already worked. */}
                     <Button
                       className="mt-3"
                       size="sm"
                       variant="outline"
                       disabled={Boolean(abortController)}
                       onClick={() => {
-                        const failed = transferJobs?.filter(job =>
-                          transferErrors.some(error => error.sha256 === job.sha256)
+                        const remaining = transferJobs?.filter(job =>
+                          transferResumable.some(t => t.sha256 === job.sha256)
                         );
-                        if (transferSource && failed?.length) {
-                          void performTransfer(transferSource, transferTarget, failed, { resetLog: false });
+                        if (transferSource && remaining?.length) {
+                          void performTransfer(transferSource, transferTarget, remaining, { resetLog: false });
                         }
                       }}
                     >
-                      Retry {transferErrors.length} failed transfer{transferErrors.length > 1 ? 's' : ''}
+                      Resume {transferResumable.length} remaining transfer{transferResumable.length > 1 ? 's' : ''}
                     </Button>
                   </AlertDescription>
                 </Alert>
@@ -477,7 +510,17 @@ export const Transfer = () => {
       ) : (
         <Card className="shadow-sm">
           <CardContent className="flex min-h-40 items-center justify-center p-8 text-center text-sm text-muted-foreground">
-            {transferTarget ? (
+            {transferTarget && inventoryStatus === 'loading' ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Checking file inventory…
+              </div>
+            ) : transferTarget && inventoryStatus === 'error' ? (
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Could not read this server&apos;s file list. Try rescanning your servers.
+              </div>
+            ) : transferTarget ? (
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
                 No missing files to transfer.
