@@ -297,9 +297,7 @@ export const Transfer = () => {
   const hasValidTarget = targetServers.length > 0;
   const hasStaleSource = Boolean(transferSource && !serverInfo[transferSource]);
 
-  const handleSaveServers = async (newServers: Server[]) => {
-    await storeUserServers(newServers);
-  };
+  const handleSaveServers = (newServers: Server[]) => storeUserServers(newServers);
 
   return (
     <div className="mx-auto flex w-full max-w-[80em] flex-col gap-4 py-1">

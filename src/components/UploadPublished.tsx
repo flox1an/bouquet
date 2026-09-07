@@ -3,10 +3,11 @@ import { FileEventData } from './FileEventEditor/FileEventEditor';
 import type { NostrEvent } from 'nostr-tools';
 import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../utils/useFileMetaEvents';
 import { nip19 } from 'nostr-tools';
-import { Link } from 'lucide-react';
+import { Link, Loader2, RotateCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import type { PublishResult } from '../utils/publish';
 
 type EventVisModel = {
   id: string;
@@ -108,17 +109,77 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
   );
 };
 
-type PublishResult = FileEventData & { publishErrors?: string[] };
+export type PublishJobKind = 'file' | 'audio' | 'video';
+/** One publish attempt's outcome: either it never got signed/dispatched (`error`,
+    e.g. no signer) or it reached the shared publish module and got a per-relay
+    verdict back (issue #9's `PublishResult` - never discarded, so a retry can
+    target exactly the relays that failed). */
+export type PublishOutcome =
+  | { kind: PublishJobKind; result: PublishResult }
+  | { kind: PublishJobKind; error: string };
+export type FileEventPublishState = FileEventData & { publishOutcomes?: PublishOutcome[] };
 
-const UploadPublished: React.FC<{ fileEventsToPublish: PublishResult[] }> = ({ fileEventsToPublish }) => {
+const KIND_LABEL: Record<PublishJobKind, string> = { file: 'File event', audio: 'Audio event', video: 'Video event' };
+
+function isRetryable(outcome: PublishOutcome): boolean {
+  return 'error' in outcome || outcome.result.verdict === 'failed' || outcome.result.verdict === 'partial';
+}
+
+function outcomeStatusLabel(outcome: PublishOutcome): string {
+  if ('error' in outcome) return `Signing failed: ${outcome.error}`;
+  switch (outcome.result.verdict) {
+    case 'delivered':
+      return 'Delivered';
+    case 'disabled':
+      return 'Skipped (publishing disabled)';
+    case 'partial':
+      return `Partial (${outcome.result.targets.filter(t => t.ok).length}/${outcome.result.targets.length} relays)`;
+    case 'failed':
+      return 'Failed';
+  }
+}
+
+function statusClassName(outcome: PublishOutcome): string {
+  if ('error' in outcome) return 'text-destructive';
+  switch (outcome.result.verdict) {
+    case 'delivered':
+      return 'text-green-600';
+    case 'disabled':
+      return 'text-muted-foreground';
+    default:
+      return 'text-destructive';
+  }
+}
+
+const UploadPublished: React.FC<{
+  fileEventsToPublish: FileEventPublishState[];
+  /** Retries exactly one file's one event kind: only its failed relays if it has a
+      PublishResult already, or a full re-sign+publish if it never got that far. */
+  onRetry: (fileX: string, kind: PublishJobKind) => void;
+  /** `${fileX}:${kind}` of the outcome currently being retried, to disable its button. */
+  retryingKey?: string;
+}> = ({ fileEventsToPublish, onRetry, retryingKey }) => {
   const navigate = useNavigate();
 
-  const allEvents = useMemo(() => fileEventsToPublish.flatMap(fe => fe.events), [fileEventsToPublish]);
-  const failedFiles = useMemo(
-    () => fileEventsToPublish.filter(fe => fe.publishErrors && fe.publishErrors.length > 0),
+  const allEvents = useMemo(
+    () =>
+      fileEventsToPublish.flatMap(fe =>
+        (fe.publishOutcomes ?? [])
+          .filter(
+            (outcome): outcome is { kind: PublishJobKind; result: PublishResult } =>
+              !('error' in outcome) && (outcome.result.verdict === 'delivered' || outcome.result.verdict === 'partial')
+          )
+          .map(outcome => outcome.result.event)
+      ),
     [fileEventsToPublish]
   );
-  const everyPublishFailed = allEvents.length === 0 && failedFiles.length > 0;
+  const filesWithOutcomes = useMemo(
+    () => fileEventsToPublish.filter(fe => (fe.publishOutcomes ?? []).length > 0),
+    [fileEventsToPublish]
+  );
+  const allOutcomes = useMemo(() => filesWithOutcomes.flatMap(fe => fe.publishOutcomes ?? []), [filesWithOutcomes]);
+  const everyPublishFailed =
+    allOutcomes.length > 0 && allOutcomes.every(outcome => 'error' in outcome || outcome.result.verdict === 'failed');
 
   return (
     <div className="flex flex-col gap-4 ">
@@ -131,19 +192,39 @@ const UploadPublished: React.FC<{ fileEventsToPublish: PublishResult[] }> = ({ f
           ))}
         </div>
       )}
-      {failedFiles.length > 0 && (
-        <div className="flex flex-col gap-3 w-full border-2 border-destructive bg-muted rounded-xl p-4 shadow-[4px_4px_0_0_hsl(var(--destructive))]">
-          <div className="font-mono text-xs uppercase text-destructive">
-            {everyPublishFailed ? 'No events were published' : 'Some events failed to publish'}
-          </div>
-          {failedFiles.map(fe => (
-            <div key={fe.x} className="border-t-2 border-destructive pt-3 text-sm">
-              <div className="font-mono text-xs uppercase">{fe.originalFile.name}</div>
-              {fe.publishErrors?.map(error => (
-                <div key={error} className="mt-1 break-words text-destructive">
-                  {error}
-                </div>
-              ))}
+      {filesWithOutcomes.length > 0 && (
+        <div className="flex flex-col gap-3 w-full border rounded-xl bg-muted p-4">
+          <div className="font-mono text-xs uppercase text-muted-foreground">Publish status</div>
+          {filesWithOutcomes.map(fe => (
+            <div key={fe.x} className="flex flex-col gap-2 border-t pt-3 text-sm first:border-t-0 first:pt-0">
+              <div className="font-mono text-xs uppercase text-muted-foreground">
+                {fe.originalFile?.name ?? fe.title ?? fe.url[0] ?? 'Untitled file'}
+              </div>
+              {(fe.publishOutcomes ?? []).map(outcome => {
+                const retryKey = `${fe.x}:${outcome.kind}`;
+                return (
+                  <div key={retryKey} className="flex items-center justify-between gap-2">
+                    <span className={`break-words ${statusClassName(outcome)}`}>
+                      {KIND_LABEL[outcome.kind]}: {outcomeStatusLabel(outcome)}
+                    </span>
+                    {isRetryable(outcome) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={retryingKey === retryKey}
+                        onClick={() => onRetry(fe.x, outcome.kind)}
+                      >
+                        {retryingKey === retryKey ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RotateCw className="h-3 w-3" />
+                        )}
+                        Retry
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>

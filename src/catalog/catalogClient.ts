@@ -48,7 +48,7 @@ type WorkerPort = {
 };
 export const catalogMethodNames = [
   'ingestServerList', 'reset', 'listAdditionalPubkeys', 'addAdditionalPubkey', 'removeAdditionalPubkey',
-  'ingestUpload', 'recordBlobsRemoved', 'syncAuthoredEvents', 'syncAdditionalEvents', 'syncReverseLookups',
+  'ingestUpload', 'recordBlobsRemoved', 'ingestAuthoredEvents', 'syncAuthoredEvents', 'syncAdditionalEvents', 'syncReverseLookups',
   'enrichHls', 'enrichBlobPrefix', 'queryPlaylistHashes', 'queryUnidentifiedBlobs', 'ingestId3',
   'getCatalogStatus', 'updateBlobServerMetadata', 'queryCatalogTimeline', 'queryCatalogAssetIds',
   'getCatalogTimelineAsset', 'getCatalogAssetContents', 'planCatalogAction', 'getAssetReplicaMap',
@@ -152,6 +152,13 @@ export class CatalogClient {
   }
   recordBlobsRemoved(pubkey: string, removals: BlobRemoval[]): Promise<void> {
     return this.call('recordBlobsRemoved', pubkey, removals) as Promise<void>;
+  }
+  ingestAuthoredEvents(
+    pubkey: string,
+    events: Parameters<Catalog['ingestAuthoredEvents']>[1],
+    relayUrl: string
+  ): Promise<void> {
+    return this.call('ingestAuthoredEvents', pubkey, events, relayUrl) as Promise<void>;
   }
   syncAuthoredEvents(pubkey: string, relayUrl: string, loadPage: EventPageLoader, limit?: number): Promise<void> {
     return this.call('syncAuthoredEvents', pubkey, relayUrl, loadPage, limit) as Promise<void>;

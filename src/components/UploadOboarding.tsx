@@ -103,7 +103,7 @@ export default function UploadOnboarding() {
           onClick={() => {
             // Persist exactly what the checkboxes show. Saving every default here
             // would hand the user servers they explicitly unchecked.
-            storeUserServers(selectedServers);
+            void storeUserServers(selectedServers);
           }}
         >
           {selectedServers.length === 0

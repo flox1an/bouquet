@@ -115,7 +115,7 @@ export default function Settings() {
       <ServerListPopup
         isOpen={serversOpen}
         onClose={() => setServersOpen(false)}
-        onSave={servers => void storeUserServers(servers)}
+        onSave={storeUserServers}
         initialServers={servers}
       />
 

@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNostr, accountManager } from '../../utils/nostr';
 import useEvents from '../../utils/useEvents';
 import dayjs from 'dayjs';
-import { relayPool, mergeRelays } from '../../nostr/core';
+import { mergeRelays } from '../../nostr/core';
+import { signAndPublish, ReadOnlyAccountError } from '../../utils/publish';
 import { ReadonlyAccount } from 'applesauce-accounts/accounts';
 
 const NPUB_DVM_THUMBNAIL_CREATION = 'npub1q8cv87l47fql2xer2uyw509y5n5s9f53h76hvf9377efdptmsvusxf3n8s';
@@ -98,10 +99,16 @@ const useVideoThumbnailDvm = (fileEventData: FileEventData, setFileEventData: (d
       pubkey: user?.pubkey || '',
     };
 
-    const signedEvent = await activeAccount.signer.signEvent(e);
-    
-    setThumbnailRequestEventId(signedEvent.id);
-    await relayPool.publish(relays, signedEvent);
+    try {
+      const result = await signAndPublish(e, relays);
+      setThumbnailRequestEventId(result.event.id);
+    } catch (error) {
+      if (error instanceof ReadOnlyAccountError) {
+        console.error('No signer available');
+        return;
+      }
+      throw error;
+    }
   };
 
   return {

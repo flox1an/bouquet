@@ -185,9 +185,7 @@ export default function Timeline() {
   }, []);
   const scrollToMonth = useCallback((key: string) => monthScrollerRef.current(key), []);
 
-  const handleSaveServers = async (newServers: Server[]) => {
-    await storeUserServers(newServers);
-  };
+  const handleSaveServers = (newServers: Server[]) => storeUserServers(newServers);
 
   const handleRescan = useCallback(async () => {
     await rescan();

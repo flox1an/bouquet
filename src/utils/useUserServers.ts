@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useNostr, accountManager } from '../utils/nostr';
+import { useNostr } from '../utils/nostr';
 import { nip19 } from 'nostr-tools';
 import type { Filter, NostrEvent } from 'nostr-tools';
 import { USER_BLOSSOM_SERVER_LIST_KIND } from 'blossom-client-sdk';
@@ -7,8 +7,8 @@ import useEvent from './useEvent';
 import { useQueries } from '@tanstack/react-query';
 import { Nip96ServerConfig, fetchNip96ServerConfig } from './nip96';
 import dayjs from 'dayjs';
-import { relayPool, mergeRelays } from '../nostr/core';
-import { ReadonlyAccount } from 'applesauce-accounts/accounts';
+import { mergeRelays } from '../nostr/core';
+import { signAndPublish, type PublishResult } from './publish';
 
 type ServerType = 'blossom' | 'nip96';
 
@@ -28,51 +28,43 @@ const getMatchingTags = (event: NostrEvent | undefined, tagName: string): string
   return event.tags.filter(t => t[0] === tagName);
 };
 
+export type StoreServersResult = { blossom: PublishResult; nip96: PublishResult };
+
 export const useUserServers = (): {
   servers: Server[];
   serversLoading: boolean;
-  storeUserServers: (newServers: Server[]) => Promise<void>;
+  storeUserServers: (newServers: Server[]) => Promise<StoreServersResult>;
 } => {
   const { user } = useNostr();
   const pubkey = user?.npub && (nip19.decode(user?.npub).data as string);
 
-  const storeUserServers = async (newServers: Server[]) => {
-    if (!pubkey) return;
+  const storeUserServers = async (newServers: Server[]): Promise<StoreServersResult> => {
+    if (!pubkey) throw new Error('No active user');
 
-    const activeAccount = accountManager.active;
-    if (!activeAccount || activeAccount instanceof ReadonlyAccount) {
-      console.error('No signer available or read-only account');
-      return;
-    }
+    const relays = mergeRelays(user?.relayUrls);
 
-    const blossomEvent: NostrEvent = {
+    const blossomTemplate: Omit<NostrEvent, 'id' | 'sig'> = {
       kind: USER_BLOSSOM_SERVER_LIST_KIND,
       created_at: dayjs().unix(),
       content: '',
       pubkey,
       tags: newServers.filter(s => s.type == 'blossom').map(s => ['server', `${s.url}`]),
-      id: '',
-      sig: '',
     };
 
-    const signedBlossom = await activeAccount.signer.signEvent(blossomEvent);
-
-    const relays = mergeRelays(user?.relayUrls);
-    await relayPool.publish(relays, signedBlossom);
-
-    const nip96Event: NostrEvent = {
+    const nip96Template: Omit<NostrEvent, 'id' | 'sig'> = {
       kind: USER_NIP96_SERVER_LIST_KIND,
       created_at: dayjs().unix(),
       content: '',
       pubkey,
       tags: newServers.filter(s => s.type == 'nip96').map(s => ['server', `${s.url}`]),
-      id: '',
-      sig: '',
     };
 
-    const signedNip96 = await activeAccount.signer.signEvent(nip96Event);
+    const [blossom, nip96] = await Promise.all([
+      signAndPublish(blossomTemplate, relays),
+      signAndPublish(nip96Template, relays),
+    ]);
 
-    await relayPool.publish(relays, signedNip96);
+    return { blossom, nip96 };
   };
 
   const blossomServerListEvent = useEvent({ kinds: [USER_BLOSSOM_SERVER_LIST_KIND], authors: [pubkey!] } as Filter, {

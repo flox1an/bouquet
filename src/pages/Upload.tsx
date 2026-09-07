@@ -18,13 +18,18 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import type { NostrEvent } from 'nostr-tools';
 import { Button } from '@/components/ui/button';
 import { Steps } from '@/components/ui/steps';
-import UploadPublished from '../components/UploadPublished';
+import UploadPublished, {
+  type FileEventPublishState,
+  type PublishJobKind,
+  type PublishOutcome,
+} from '../components/UploadPublished';
 import { Info } from 'lucide-react';
 import UploadOnboarding from '../components/UploadOboarding';
 import { toast } from '@/hooks/use-toast';
 import { getCatalogClient } from '../catalog/catalogClient';
 import { mediaServer } from '../utils/server';
 import { uploadFiles, type UploadTask } from '../utils/uploadRun';
+import { retryFailedTargets } from '../utils/publish';
 
 function Upload() {
   const { servers, serversLoading } = useUserServers();
@@ -36,12 +41,13 @@ function Upload() {
   const [cleanPrivateData, setCleanPrivateData] = useState(true);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
-  const [fileEventsToPublish, setFileEventsToPublish] = useState<(FileEventData & { publishErrors?: string[] })[]>([]);
+  const [fileEventsToPublish, setFileEventsToPublish] = useState<FileEventPublishState[]>([]);
   const [imageResize, setImageResize] = useState(0);
   const [uploadStep, setUploadStep] = useState(0);
-  const { publishFileEvent, publishAudioEvent, publishVideoEvent } = usePublishing();
+  const [retryingKey, setRetryingKey] = useState<string | undefined>();
   const [failedUploadTasks, setFailedUploadTasks] = useState<UploadTask[]>([]);
   const dimensionsRef = useRef<{ [key: string]: FileEventData }>({});
+  const { publishFileEvent, publishAudioEvent, publishVideoEvent } = usePublishing();
   const uploadedFilesRef = useRef<File[]>([]);
   const navigate = useNavigate();
 
@@ -324,11 +330,9 @@ function Upload() {
     }
   };
 
-  const publishOne = async (
-    fe: FileEventData,
-    publishFn: (data: FileEventData) => Promise<NostrEvent>,
-    persistThumbnailToState: boolean
-  ) => {
+  const publishOne = async (fe: FileEventData, kind: PublishJobKind, persistThumbnailToState: boolean) => {
+    const publishFn =
+      kind === 'file' ? publishFileEvent : kind === 'audio' ? publishAudioEvent : publishVideoEvent;
     let dataToPublish: FileEventData = fe;
     let statePatch: Partial<FileEventData> = {};
 
@@ -341,46 +345,62 @@ function Upload() {
       }
     }
 
-    const publishedEvent = await publishFn(dataToPublish);
-    setFileEventsToPublish(prev =>
-      prev.map(f => (f.x === fe.x ? { ...f, ...statePatch, events: [...f.events, publishedEvent] } : f))
-    );
+    const setOutcome = (outcome: PublishOutcome) =>
+      setFileEventsToPublish(prev =>
+        prev.map(f =>
+          f.x === fe.x
+            ? {
+                ...f,
+                ...statePatch,
+                publishOutcomes: [...(f.publishOutcomes ?? []).filter(o => o.kind !== kind), outcome],
+              }
+            : f
+        )
+      );
+
+    try {
+      const result = await publishFn(dataToPublish);
+      setOutcome({ kind, result });
+    } catch (error) {
+      setOutcome({ kind, error: error instanceof Error ? error.message : String(error) });
+    }
   };
 
   const publishAll = async () => {
     setUploadBusy(true);
-
-    const publishJobs = fileEventsToPublish.flatMap(fe => [
-      ...(fe.publish.file ? [{ fe, label: 'File event', publish: () => publishOne(fe, publishFileEvent, false) }] : []),
-      ...(fe.publish.audio
-        ? [{ fe, label: 'Audio event', publish: () => publishOne(fe, publishAudioEvent, false) }]
-        : []),
-      ...(fe.publish.video
-        ? [{ fe, label: 'Video event', publish: () => publishOne(fe, publishVideoEvent, true) }]
-        : []),
-    ]);
-
     try {
-      const results = await Promise.allSettled(publishJobs.map(job => job.publish()));
-      const errorsByFile = new Map<string, string[]>();
-
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          const { fe, label } = publishJobs[index];
-          const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
-          errorsByFile.set(fe.x, [...(errorsByFile.get(fe.x) ?? []), `${label}: ${message}`]);
-        }
-      });
-
-      if (errorsByFile.size > 0) {
-        setFileEventsToPublish(prev =>
-          prev.map(fe => (errorsByFile.has(fe.x) ? { ...fe, publishErrors: errorsByFile.get(fe.x) } : fe))
-        );
-      }
-
+      const jobs = fileEventsToPublish.flatMap(fe => [
+        ...(fe.publish.file ? [publishOne(fe, 'file', false)] : []),
+        ...(fe.publish.audio ? [publishOne(fe, 'audio', false)] : []),
+        ...(fe.publish.video ? [publishOne(fe, 'video', true)] : []),
+      ]);
+      await Promise.all(jobs);
       setUploadStep(3);
     } finally {
       setUploadBusy(false);
+    }
+  };
+
+  const retryPublishOutcome = async (fileX: string, kind: PublishJobKind) => {
+    const fe = fileEventsToPublish.find(f => f.x === fileX);
+    if (!fe) return;
+    const outcome = fe.publishOutcomes?.find(o => o.kind === kind);
+    setRetryingKey(`${fileX}:${kind}`);
+    try {
+      if (!outcome || 'error' in outcome) {
+        await publishOne(fe, kind, kind === 'video');
+        return;
+      }
+      const updated = await retryFailedTargets(outcome.result);
+      setFileEventsToPublish(prev =>
+        prev.map(f =>
+          f.x === fileX
+            ? { ...f, publishOutcomes: (f.publishOutcomes ?? []).map(o => (o.kind === kind ? { kind, result: updated } : o)) }
+            : f
+        )
+      );
+    } finally {
+      setRetryingKey(undefined);
     }
   };
 
@@ -484,7 +504,13 @@ function Upload() {
               </div>
             </div>
           )}
-          {uploadStep == 3 && <UploadPublished fileEventsToPublish={fileEventsToPublish} />}
+          {uploadStep == 3 && (
+            <UploadPublished
+              fileEventsToPublish={fileEventsToPublish}
+              onRetry={(fileX, kind) => void retryPublishOutcome(fileX, kind)}
+              retryingKey={retryingKey}
+            />
+          )}
         </>
       )}
     </div>

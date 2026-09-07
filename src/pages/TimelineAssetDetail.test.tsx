@@ -9,6 +9,7 @@ import TimelineAssetDetail from './TimelineAssetDetail';
 import type { TimelineAssetDetail as TimelineAssetDetailType } from '../catalog/catalog';
 
 const mockGetCatalogTimelineAsset = vi.fn();
+const mockIngestAuthoredEvents = vi.fn().mockResolvedValue(undefined);
 const mockNavigate = vi.fn();
 
 const mockDialogDeleted = vi.fn();
@@ -33,7 +34,7 @@ vi.mock('../utils/useUserServers', () => ({
 
 vi.mock('../utils/nostr', () => ({
   useNostr: () => ({
-    user: { pubkey: 'p'.repeat(64) },
+    user: { pubkey: 'p'.repeat(64), relayUrls: ['wss://relay.example'] },
     signEventTemplate: vi.fn(),
   }),
 }));
@@ -51,6 +52,7 @@ vi.mock('../GlobalState', () => ({
 vi.mock('../catalog/catalogClient', () => ({
   getCatalogClient: () => ({
     getCatalogTimelineAsset: (...args: unknown[]) => mockGetCatalogTimelineAsset(...args),
+    ingestAuthoredEvents: (...args: unknown[]) => mockIngestAuthoredEvents(...args),
     refreshReplicaAvailability: vi.fn().mockResolvedValue(undefined),
     refreshEventUrlAvailability: vi.fn().mockResolvedValue(undefined),
   }),
@@ -78,6 +80,21 @@ vi.mock('../components/Browse/BrowseActionPlanDialog', () => ({
         </button>
       </div>
     );
+  },
+}));
+
+let describeProps:
+  | { open: boolean; initialData: { x: string; url: string[]; m?: string; size: number }; onOpenChange: (open: boolean) => void; onPublished: (event: Record<string, unknown>) => Promise<void> }
+  | undefined;
+vi.mock('../components/Browse/DescribeUnlinkedFileDialog', () => ({
+  DescribeUnlinkedFileDialog: (props: NonNullable<typeof describeProps>) => {
+    describeProps = props;
+    return props.open ? (
+      <div role="dialog" aria-label="Describe and publish file">
+        <button onClick={() => props.onOpenChange(false)}>Cancel describing</button>
+        <button onClick={() => void props.onPublished({ id: 'published-event' })}>Publish mocked metadata</button>
+      </div>
+    ) : null;
   },
 }));
 
@@ -122,6 +139,7 @@ afterEach(() => {
   vi.clearAllMocks();
   mockUseServerInfo.mockReturnValue({ distribution: {}, serverInfo: {} });
   lastDialogProps = undefined;
+  describeProps = undefined;
 });
 
 const renderDetail = () =>
@@ -320,5 +338,44 @@ describe('TimelineAssetDetail media preview', () => {
 
     expect(await screen.findByText(/media unavailable/i)).toBeTruthy();
     expect(document.querySelector('video')).toBeFalsy();
+  });
+});
+
+describe('TimelineAssetDetail describe unlinked file', () => {
+  it('initializes known catalog metadata and ingests the delivered event', async () => {
+    const user = userEvent.setup();
+    mockGetCatalogTimelineAsset.mockResolvedValue({
+      ...detailFixture,
+      projection: { ...projection, displayMimeType: 'video/mp4', primaryUrl: 'https://server.example/a.mp4' },
+      blobs: [{ ...detailFixture.blobs[0], mimeType: 'video/mp4', size: 42, urls: ['https://server.example/a.mp4'] }],
+    });
+
+    renderDetail();
+    await user.click(await screen.findByRole('button', { name: /describe and publish/i }));
+
+    expect(describeProps?.initialData).toMatchObject({
+      x: 'a'.repeat(64),
+      url: ['https://server.example/a.mp4'],
+      m: 'video/mp4',
+      size: 42,
+    });
+    await user.click(screen.getByRole('button', { name: /publish mocked metadata/i }));
+
+    expect(mockIngestAuthoredEvents).toHaveBeenCalledWith(
+      'p'.repeat(64),
+      [{ id: 'published-event' }],
+      'wss://relay.example'
+    );
+  });
+
+  it('cancels describing an unlinked file without ingesting an event', async () => {
+    const user = userEvent.setup();
+    mockGetCatalogTimelineAsset.mockResolvedValue(detailFixture);
+
+    renderDetail();
+    await user.click(await screen.findByRole('button', { name: /describe and publish/i }));
+    await user.click(screen.getByRole('button', { name: /cancel describing/i }));
+
+    expect(mockIngestAuthoredEvents).not.toHaveBeenCalled();
   });
 });

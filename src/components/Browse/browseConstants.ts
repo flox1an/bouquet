@@ -54,6 +54,9 @@ export const SORT_FIELD_OPTIONS: Array<{ id: TimelineSortField; label: string }>
  * without a file hash or an author (unlinked files) never group.
  */
 export function groupRepeatedPosts(items: TimelineItem[]): TimelineItem[] {
+  const representedThumbnails = new Set(
+    items.flatMap(item => (item.eventId && item.previewBlobSha256 ? [item.previewBlobSha256] : []))
+  );
   const representative = new Map<string, TimelineItem>();
   for (const item of items) {
     if (!item.primaryBlobSha256 || !item.eventAuthor) continue;
@@ -63,9 +66,14 @@ export function groupRepeatedPosts(items: TimelineItem[]): TimelineItem[] {
   }
   return items.filter(
     item =>
-      !item.primaryBlobSha256 ||
-      !item.eventAuthor ||
-      representative.get(`${item.primaryBlobSha256}:${item.eventAuthor}`) === item
+      !(
+        item.displayType === 'image' &&
+        item.primaryBlobSha256 &&
+        representedThumbnails.has(item.primaryBlobSha256)
+      ) &&
+      (!item.primaryBlobSha256 ||
+        !item.eventAuthor ||
+        representative.get(`${item.primaryBlobSha256}:${item.eventAuthor}`) === item)
   );
 }
 

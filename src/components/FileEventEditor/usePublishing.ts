@@ -2,27 +2,18 @@ import type { NostrEvent } from 'nostr-tools';
 import dayjs from 'dayjs';
 import { FileEventData } from './FileEventEditor';
 const uniq = <T>(values: T[]): T[] => [...new Set(values)];
-import { useNostr, accountManager } from '../../utils/nostr';
+import { useNostr } from '../../utils/nostr';
+import { mergeRelays } from '../../nostr/core';
+import { signAndPublish, type PublishResult } from '../../utils/publish';
 import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../../utils/useFileMetaEvents';
-import { ReadonlyAccount } from 'applesauce-accounts/accounts';
 
 export const usePublishing = () => {
-  const { user, publishSignedEvent } = useNostr();
+  const { user } = useNostr();
 
-  const signAndPublish = async (event: Omit<NostrEvent, 'id' | 'sig'>): Promise<NostrEvent> => {
-    const activeAccount = accountManager.active;
-    if (!activeAccount || activeAccount instanceof ReadonlyAccount) {
-      throw new Error('No signer available');
-    }
+  const publish = (event: Omit<NostrEvent, 'id' | 'sig'>): Promise<PublishResult> =>
+    signAndPublish(event, mergeRelays(user?.relayUrls));
 
-    const signedEvent = await activeAccount.signer.signEvent(event);
-    if (!import.meta.env.VITE_DISABLE_EVENT_PUBLISH) {
-      await publishSignedEvent(signedEvent);
-    }
-    return signedEvent;
-  };
-
-  const publishFileEvent = async (data: FileEventData): Promise<NostrEvent> => {
+  const publishFileEvent = async (data: FileEventData): Promise<PublishResult> => {
     const e: Omit<NostrEvent, 'id' | 'sig'> = {
       created_at: dayjs().unix(),
       content: data.content,
@@ -56,10 +47,10 @@ export const usePublishing = () => {
       e.tags.push(['image', data.publishedThumbnail]);
     }
 
-    return signAndPublish(e);
+    return publish(e);
   };
 
-  const publishAudioEvent = async (data: FileEventData): Promise<NostrEvent> => {
+  const publishAudioEvent = async (data: FileEventData): Promise<PublishResult> => {
     const e: Omit<NostrEvent, 'id' | 'sig'> = {
       created_at: dayjs().unix(),
       content: `${data.artist} - ${data.title}`,
@@ -100,10 +91,10 @@ export const usePublishing = () => {
 
     e.tags.push(['published_at', `${dayjs().unix()}`]);
 
-    return signAndPublish(e);
+    return publish(e);
   };
 
-  const publishVideoEvent = async (data: FileEventData): Promise<NostrEvent> => {
+  const publishVideoEvent = async (data: FileEventData): Promise<PublishResult> => {
     const videoIsHorizontal = data.width == undefined || data.height == undefined || data.width > data.height;
 
     const e: Omit<NostrEvent, 'id' | 'sig'> = {
@@ -141,7 +132,7 @@ export const usePublishing = () => {
       e.tags.push(['image', data.publishedThumbnail]);
     }
 
-    return signAndPublish(e);
+    return publish(e);
   };
 
   return {

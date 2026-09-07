@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { nip19 } from 'nostr-tools';
+import { nip19, type NostrEvent } from 'nostr-tools';
 import { getCatalogClient } from '../catalog/catalogClient';
 import type { TimelineAssetDetail as TimelineAssetDetailType } from '../catalog/catalog';
 import { TimelineThumbnail, type KnownServersFor } from '../components/TimelineThumbnail';
@@ -24,6 +24,9 @@ import { NostrText } from '../components/NostrText';
 
 import { ReportDialog } from '../components/Browse/ReportDialog';
 import { BrowseActionPlanDialog } from '../components/Browse/BrowseActionPlanDialog';
+import { DescribeUnlinkedFileDialog } from '../components/Browse/DescribeUnlinkedFileDialog';
+import type { FileEventData } from '../components/FileEventEditor/FileEventEditor';
+import { mergeRelays } from '../nostr/core';
 const TYPE_ICON = {
   image: Image,
   video: Video,
@@ -97,6 +100,7 @@ type DetailReturnState = { timelineLocationKey?: string };
 export default function TimelineAssetDetail() {
   const { user, signEventTemplate } = useNostr();
   const [reportOpen, setReportOpen] = useState(false);
+  const [describeOpen, setDescribeOpen] = useState(false);
   const { distribution, serverInfo } = useServerInfo();
   const { dispatch } = useGlobalContext();
   const knownServersFor = useCallback(
@@ -245,6 +249,23 @@ export default function TimelineAssetDetail() {
     );
 
   const { projection, blobs } = detail;
+  const primaryBlob = blobs.find(blob => blob.sha256 === projection.primaryBlobSha256) ?? blobs[0];
+  const describeData: FileEventData = {
+    content: projection.displaySubtitle ?? '',
+    url: primaryBlob?.urls.length ? primaryBlob.urls : projection.primaryUrl ? [projection.primaryUrl] : [],
+    x: primaryBlob?.sha256 ?? projection.primaryBlobSha256 ?? '',
+    m: primaryBlob?.eventMimeType ?? primaryBlob?.mimeType ?? projection.displayMimeType,
+    size: primaryBlob?.size ?? 0,
+    dim: primaryBlob?.dimensions ?? projection.displayDimensions,
+    title: projection.displayTitleIsFallback ? undefined : projection.displayTitle,
+    tags: [],
+    publish: {},
+    events: [],
+  };
+  const handleDescribePublished = async (event: NostrEvent) => {
+    await getCatalogClient().ingestAuthoredEvents(user.pubkey, [event], mergeRelays(user.relayUrls)[0] ?? '');
+    setLoadAttempt(attempt => attempt + 1);
+  };
   const configuredServers = Object.values(serverInfo).filter(server => !server.virtual);
   const playAudio = () => {
     if (!projection.primaryUrl) return;
@@ -393,6 +414,9 @@ export default function TimelineAssetDetail() {
                   This file is in your local catalog but is not linked to a Nostr event. Its storage and availability
                   details remain available below.
                 </p>
+                <Button size="sm" className="mt-4" onClick={() => setDescribeOpen(true)} disabled={!describeData.x || !describeData.url.length}>
+                  Describe and publish
+                </Button>
               </div>
             )}
             {blobs.length >= 10 && !availableChecked && (
@@ -553,6 +577,14 @@ export default function TimelineAssetDetail() {
         event={detail.event ? { id: detail.event.id, pubkey: detail.event.pubkey } : undefined}
         signEventTemplate={signEventTemplate}
       />
+      {!projection.eventId && (
+        <DescribeUnlinkedFileDialog
+          open={describeOpen}
+          onOpenChange={setDescribeOpen}
+          initialData={describeData}
+          onPublished={handleDescribePublished}
+        />
+      )}
       {detailAction && user?.pubkey && (
         <BrowseActionPlanDialog
           open

@@ -16,7 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export type FileEventData = {
-  originalFile: File;
+  originalFile?: File;
   content: string;
   url: string[];
   width?: number;

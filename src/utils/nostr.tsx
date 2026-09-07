@@ -1,6 +1,6 @@
 import type { EventTemplate, SignedEvent } from 'blossom-client-sdk';
 import { nip19 } from 'nostr-tools';
-import type { NostrEvent, Filter } from 'nostr-tools';
+import type { Filter } from 'nostr-tools';
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
 // Applesauce imports
@@ -10,7 +10,7 @@ import { AccountsProvider, EventStoreProvider } from 'applesauce-react/providers
 import { useActiveAccount } from 'applesauce-react/hooks';
 
 // Local imports
-import { eventStore, relayPool, connectToRelays, mergeRelays } from '../nostr/core';
+import { eventStore, connectToRelays, mergeRelays } from '../nostr/core';
 import { restoreAccountsToManager } from '../nostr/accountPersistence';
 import { useBatchedProfileLoader } from '../hooks/useBatchedProfiles';
 import useEvent from './useEvent';
@@ -33,7 +33,6 @@ type NostrContextType = {
   setUserFromPubkey: (pubkey: string) => void;
   clearUser: () => void;
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>;
-  publishSignedEvent: (signedEvent: SignedEvent) => Promise<void>;
 };
 
 // Create AccountManager at module level
@@ -48,7 +47,6 @@ export const NostrContext = createContext<NostrContextType>({
   setUserFromPubkey: () => {},
   clearUser: () => {},
   signEventTemplate: () => Promise.reject(),
-  publishSignedEvent: () => Promise.reject(),
 });
 
 function AccountRestoreInit({ onRestore }: { onRestore: (pubkey: string) => void }) {
@@ -208,14 +206,6 @@ export const NostrProvider = ({ children }: { children: React.ReactElement }) =>
     return signedEvent as SignedEvent;
   }, []);
 
-  const publishSignedEvent = useCallback(
-    async (signedEvent: SignedEvent) => {
-      const relays = mergeRelays(user?.relayUrls);
-      await relayPool.publish(relays, signedEvent as NostrEvent);
-    },
-    [user]
-  );
-
   // Connect to relays on mount and when user relays change
   useEffect(() => {
     const relays = mergeRelays(user?.relayUrls);
@@ -228,7 +218,6 @@ export const NostrProvider = ({ children }: { children: React.ReactElement }) =>
     setUserFromPubkey,
     clearUser,
     signEventTemplate,
-    publishSignedEvent,
   };
 
   return (

@@ -9,6 +9,9 @@ import Upload from './Upload';
 
 const mockNavigate = vi.fn();
 const mockPublishFileEvent = vi.fn();
+const mockPublishAudioEvent = vi.fn();
+const mockPublishVideoEvent = vi.fn();
+const mockRelayPoolPublish = vi.fn();
 const mockUploadFiles = vi.fn();
 const mockIngestUpload = vi.fn();
 
@@ -23,8 +26,8 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../components/FileEventEditor/usePublishing', () => ({
   usePublishing: () => ({
     publishFileEvent: (...args: unknown[]) => mockPublishFileEvent(...args),
-    publishAudioEvent: vi.fn(),
-    publishVideoEvent: vi.fn(),
+    publishAudioEvent: (...args: unknown[]) => mockPublishAudioEvent(...args),
+    publishVideoEvent: (...args: unknown[]) => mockPublishVideoEvent(...args),
   }),
 }));
 vi.mock('../utils/transfer', () => ({
@@ -36,7 +39,7 @@ vi.mock('../utils/transfer', () => ({
   }),
 }));
 vi.mock('@/nostr/core', () => ({
-  relayPool: { publish: vi.fn() },
+  relayPool: { publish: (...args: unknown[]) => mockRelayPoolPublish(...args) },
   mergeRelays: (userRelays: string[] = []) => userRelays,
 }));
 
@@ -45,6 +48,7 @@ vi.mock('../utils/nostr', () => ({
     user: { pubkey: 'test-pubkey' },
     signEventTemplate: vi.fn(),
   }),
+  accountManager: { active: undefined },
 }));
 
 let currentServers = [{ name: 'primary', url: 'https://primary.example', type: 'blossom' as const }];
@@ -178,13 +182,17 @@ describe('Upload workflow', () => {
     });
     mockIngestUpload.mockResolvedValue(undefined);
     mockPublishFileEvent.mockResolvedValue({
-      id: 'a'.repeat(64),
-      pubkey: 'b'.repeat(64),
-      created_at: 1700000000,
-      kind: 1063,
-      tags: [],
-      content: '',
-      sig: '',
+      event: {
+        id: 'a'.repeat(64),
+        pubkey: 'b'.repeat(64),
+        created_at: 1700000000,
+        kind: 1063,
+        tags: [],
+        content: '',
+        sig: '',
+      },
+      verdict: 'delivered',
+      targets: [{ url: 'wss://relay.example', ok: true }],
     });
 
     const { container } = render(
@@ -213,6 +221,19 @@ describe('Upload workflow', () => {
       { name: 'primary', url: 'https://primary.example', type: 'blossom' },
       { name: 'secondary', url: 'https://secondary.example', type: 'blossom' },
     ];
+    mockPublishFileEvent.mockResolvedValue({
+      event: {
+        id: 'a'.repeat(64),
+        pubkey: 'b'.repeat(64),
+        created_at: 1700000000,
+        kind: 1063,
+        tags: [],
+        content: '',
+        sig: '',
+      },
+      verdict: 'delivered',
+      targets: [{ url: 'wss://relay.example', ok: true }],
+    });
 
     const uploadedFile = new File(['image-bytes'], 'vacation.jpg', { type: 'image/jpeg' });
     const descriptor1 = {
@@ -312,5 +333,157 @@ describe('Upload workflow', () => {
         ]),
       })
     );
+  });
+
+  it('shows a disabled-publishing state distinctly, neither delivered nor a hard failure', async () => {
+    const user = userEvent.setup();
+    const uploadedFile = new File(['image-bytes'], 'photo.jpg', { type: 'image/jpeg' });
+    mockUploadFiles.mockResolvedValue({
+      verdict: 'allSucceeded',
+      outcomes: [
+        {
+          state: 'done',
+          value: {
+            task: { server: currentServers[0], file: uploadedFile },
+            descriptor: {
+              sha256: 'a'.repeat(64),
+              url: 'https://primary.example/photo.jpg',
+              type: 'image/jpeg',
+              size: 11,
+              uploaded: 1700000000,
+            },
+          },
+        },
+      ],
+      failed: [],
+    });
+    mockIngestUpload.mockResolvedValue(undefined);
+    mockPublishFileEvent.mockResolvedValue({
+      event: { id: 'a'.repeat(64), pubkey: 'b'.repeat(64), created_at: 1700000000, kind: 1063, tags: [], content: '', sig: '' },
+      verdict: 'disabled',
+      targets: [],
+    });
+
+    const { container } = render(
+      <MemoryRouter>
+        <Upload />
+      </MemoryRouter>
+    );
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, uploadedFile);
+    await user.click(await screen.findByRole('button', { name: /upload 1 file/i }));
+    await user.click(await screen.findByRole('button', { name: /^publish/i }));
+
+    expect(await screen.findByText(/skipped \(publishing disabled\)/i)).toBeTruthy();
+    expect(screen.getByText('Publishing results')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeFalsy();
+  });
+
+  it('shows partial delivery and retries only the relay that failed, preserving the signed event', async () => {
+    const user = userEvent.setup();
+    const uploadedFile = new File(['image-bytes'], 'photo.jpg', { type: 'image/jpeg' });
+    mockUploadFiles.mockResolvedValue({
+      verdict: 'allSucceeded',
+      outcomes: [
+        {
+          state: 'done',
+          value: {
+            task: { server: currentServers[0], file: uploadedFile },
+            descriptor: {
+              sha256: 'a'.repeat(64),
+              url: 'https://primary.example/photo.jpg',
+              type: 'image/jpeg',
+              size: 11,
+              uploaded: 1700000000,
+            },
+          },
+        },
+      ],
+      failed: [],
+    });
+    mockIngestUpload.mockResolvedValue(undefined);
+    const signedEvent = {
+      id: 'e'.repeat(64),
+      pubkey: 'b'.repeat(64),
+      created_at: 1700000000,
+      kind: 1063,
+      tags: [],
+      content: '',
+      sig: '',
+    };
+    mockPublishFileEvent.mockResolvedValue({
+      event: signedEvent,
+      verdict: 'partial',
+      targets: [
+        { url: 'wss://good.example', ok: true },
+        { url: 'wss://bad.example', ok: false, message: 'timeout' },
+      ],
+    });
+
+    const { container } = render(
+      <MemoryRouter>
+        <Upload />
+      </MemoryRouter>
+    );
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, uploadedFile);
+    await user.click(await screen.findByRole('button', { name: /upload 1 file/i }));
+    await user.click(await screen.findByRole('button', { name: /^publish/i }));
+
+    expect(await screen.findByText(/partial \(1\/2 relays\)/i)).toBeTruthy();
+
+    mockRelayPoolPublish.mockResolvedValue([{ from: 'wss://bad.example', ok: true }]);
+    await user.click(screen.getByRole('button', { name: /retry/i }));
+
+    expect(mockRelayPoolPublish).toHaveBeenCalledWith(['wss://bad.example'], expect.objectContaining({ id: signedEvent.id }));
+    expect(await screen.findByText(/^file event: delivered$/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeFalsy();
+  });
+
+  it('shows complete failure for one publication type while another for the same file still delivers', async () => {
+    const user = userEvent.setup();
+    const uploadedFile = new File(['video-bytes'], 'clip.mp4', { type: 'video/mp4' });
+    mockUploadFiles.mockResolvedValue({
+      verdict: 'allSucceeded',
+      outcomes: [
+        {
+          state: 'done',
+          value: {
+            task: { server: currentServers[0], file: uploadedFile },
+            descriptor: {
+              sha256: 'a'.repeat(64),
+              url: 'https://primary.example/clip.mp4',
+              type: 'video/mp4',
+              size: 11,
+              uploaded: 1700000000,
+            },
+          },
+        },
+      ],
+      failed: [],
+    });
+    mockIngestUpload.mockResolvedValue(undefined);
+    mockPublishFileEvent.mockResolvedValue({
+      event: { id: 'a'.repeat(64), pubkey: 'b'.repeat(64), created_at: 1700000000, kind: 1063, tags: [], content: '', sig: '' },
+      verdict: 'delivered',
+      targets: [{ url: 'wss://relay.example', ok: true }],
+    });
+    mockPublishVideoEvent.mockResolvedValue({
+      event: { id: 'c'.repeat(64), pubkey: 'b'.repeat(64), created_at: 1700000000, kind: 34235, tags: [], content: '', sig: '' },
+      verdict: 'failed',
+      targets: [{ url: 'wss://relay.example', ok: false, message: 'rejected' }],
+    });
+
+    const { container } = render(
+      <MemoryRouter>
+        <Upload />
+      </MemoryRouter>
+    );
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, uploadedFile);
+    await user.click(await screen.findByRole('button', { name: /upload 1 file/i }));
+    await user.click(await screen.findByRole('button', { name: /^publish/i }));
+
+    expect(await screen.findByText(/^file event: delivered$/i)).toBeTruthy();
+    expect(screen.getByText(/^video event: failed$/i)).toBeTruthy();
+    // One succeeded, so this is not a total loss - the heading must not say every publish failed.
+    expect(screen.getByText('Publishing results')).toBeTruthy();
   });
 });

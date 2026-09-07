@@ -45,4 +45,16 @@ describe('groupRepeatedPosts', () => {
     const second = item({ assetId: 'second', eventAuthor: undefined });
     expect(groupRepeatedPosts([first, second])).toEqual([first, second]);
   });
+
+  it('hides an unlinked thumbnail already represented by a video event', () => {
+    const video = item({
+      assetId: 'video',
+      eventId: 'video-event',
+      primaryBlobSha256: 'b'.repeat(64),
+      previewBlobSha256: HASH,
+    });
+    const thumbnail = item({ assetId: 'thumbnail', displayType: 'image', eventAuthor: undefined });
+
+    expect(groupRepeatedPosts([video, thumbnail])).toEqual([video]);
+  });
 });

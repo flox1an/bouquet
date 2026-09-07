@@ -1,6 +1,7 @@
-import { ArrowUp, ArrowDown, Trash2, Plus, GripVertical, Star, Server as ServerIcon } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus, GripVertical, Star, Server as ServerIcon, Loader2, RotateCw } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
-import { Server } from '../../utils/useUserServers';
+import { Server, type StoreServersResult } from '../../utils/useUserServers';
+import { retryFailedTargets, type PublishResult } from '../../utils/publish';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,9 +20,45 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 interface ServerListPopupProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (servers: Server[]) => void;
+  onSave: (servers: Server[]) => Promise<StoreServersResult>;
   initialServers: Server[];
 }
+
+const LIST_LABEL = { blossom: 'Blossom server list', nip96: 'NIP-96 server list' } as const;
+
+function publishFailed(result: PublishResult): boolean {
+  return result.verdict === 'partial' || result.verdict === 'failed';
+}
+
+function publishStatusLabel(result: PublishResult): string {
+  switch (result.verdict) {
+    case 'delivered':
+      return 'Delivered';
+    case 'disabled':
+      return 'Skipped (publishing disabled)';
+    case 'partial':
+      return `Partial (${result.targets.filter(t => t.ok).length}/${result.targets.length} relays)`;
+    case 'failed':
+      return 'Failed';
+  }
+}
+
+function publishSucceeded(result: PublishResult): boolean {
+  return result.verdict === 'delivered' || result.verdict === 'disabled';
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Could not sign the server lists.';
+}
+
+function allListsSucceeded(result: StoreServersResult): boolean {
+  return publishSucceeded(result.blossom) && publishSucceeded(result.nip96);
+}
+
+function hasFailedList(result: StoreServersResult): boolean {
+  return publishFailed(result.blossom) || publishFailed(result.nip96);
+}
+
 
 const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSave, initialServers }) => {
   const [servers, setServers] = useState<Server[]>([]);
@@ -30,6 +67,9 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
   const [newServerError, setNewServerError] = useState('');
   const [removalCandidate, setRemovalCandidate] = useState<Server | null>(null);
   const [removedServers, setRemovedServers] = useState<{ server: Server; index: number }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<StoreServersResult>();
+  const [signingError, setSigningError] = useState<string>();
 
   useEffect(() => {
     setServers(initialServers);
@@ -80,9 +120,38 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
     }
   };
 
-  const handleSave = () => {
-    onSave(servers);
-    onClose();
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    setSigningError(undefined);
+    setSaveResult(undefined);
+    try {
+      const result = await onSave(servers);
+      setSaveResult(result);
+      if (allListsSucceeded(result)) onClose();
+    } catch (error) {
+      setSigningError(errorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!saveResult || saving) return;
+    setSaving(true);
+    setSigningError(undefined);
+    try {
+      const result = {
+        blossom: publishFailed(saveResult.blossom) ? await retryFailedTargets(saveResult.blossom) : saveResult.blossom,
+        nip96: publishFailed(saveResult.nip96) ? await retryFailedTargets(saveResult.nip96) : saveResult.nip96,
+      };
+      setSaveResult(result);
+      if (allListsSucceeded(result)) onClose();
+    } catch (error) {
+      setSigningError(errorMessage(error));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const shortenUrl = (url: string, maxLength = 44) => {
@@ -268,11 +337,45 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
           </RadioGroup>
         </div>
 
+        {signingError && (
+          <p className="rounded-lg border border-destructive bg-destructive/10 p-3 text-sm text-destructive" role="alert">
+            {signingError}
+          </p>
+        )}
+        {saveResult && (
+          <div className="space-y-1 rounded-lg border p-3 text-sm" role="status">
+            {(['blossom', 'nip96'] as const).map(kind => {
+              const result = saveResult[kind];
+              return (
+                <p key={kind} className={publishFailed(result) ? 'text-destructive' : undefined}>
+                  {LIST_LABEL[kind]}: {publishStatusLabel(result)}
+                </p>
+              );
+            })}
+          </div>
+        )}
+
         <DialogFooter className="pt-1">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>Save Changes</Button>
+          <Button onClick={saveResult && hasFailedList(saveResult) ? handleRetry : handleSave} disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                Saving…
+              </>
+            ) : saveResult && hasFailedList(saveResult) ? (
+              <>
+                <RotateCw className="mr-1 h-4 w-4" />
+                Retry failed
+              </>
+            ) : signingError ? (
+              'Retry save'
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
