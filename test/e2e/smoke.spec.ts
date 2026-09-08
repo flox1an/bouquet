@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import type { NostrEvent } from 'nostr-tools';
@@ -137,4 +138,32 @@ test('shows uploaded blobs on the browse view', async ({ page }) => {
 
   // Both copies of each blob have to be visible as such, not just one.
   await expect(page.getByText(/2 copies/).first()).toBeVisible();
+});
+
+test('publishes a described nostr event and tracks it into the timeline', async ({ page }) => {
+  const { file, sha256 } = uniqueUpload('described');
+  const caption = `Nesting box clip ${randomUUID()}`;
+
+  await uploadFiles(page, [file]);
+
+  // Step 3 is where the user writes the event: the caption becomes the kind 1063
+  // content, which is what the timeline titles the item by.
+  await page.getByLabel('Summary / Description').fill(caption);
+  await publishEvents(page, 1);
+
+  const event = await fileEventFor(sha256);
+  expect(event.kind).toBe(1063);
+  expect(event.content).toBe(caption);
+
+  await page.getByRole('link', { name: 'Browse' }).click();
+  // The row is titled by the event, not by the file name - so this asserts the
+  // published event reached the timeline, not just the blob listing.
+  await page.getByRole('link', { name: `Open details for ${caption}` }).click();
+
+  // And that the item really hangs off that one event id, not another of the
+  // run's events that happens to carry the same hash.
+  await page.getByRole('button', { name: 'Open item actions' }).click();
+  await page.getByRole('menuitem', { name: 'Raw event' }).click();
+  await expect(page.getByRole('dialog').locator('pre')).toContainText(event.id);
+  await expect(page.getByRole('dialog').locator('pre')).toContainText(sha256);
 });
