@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { APIRequestContext, Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { hexToBytes } from '@noble/hashes/utils.js';
 import { getPublicKey, nip19 } from 'nostr-tools';
 import type { Filter, NostrEvent, VerifiedEvent } from 'nostr-tools';
@@ -19,7 +19,7 @@ export const PUBKEY = getPublicKey(SECRET_KEY);
 export const NSEC = nip19.nsecEncode(SECRET_KEY);
 
 /** BUD-11 authorization header, so a test can query the media server directly. */
-export function blossomAuth(verb: 'list' | 'get') {
+export function blossomAuth(verb: 'list' | 'get' | 'upload', sha256?: string) {
   const created_at = Math.floor(Date.now() / 1000);
   const event = finalizeEvent(
     {
@@ -29,6 +29,7 @@ export function blossomAuth(verb: 'list' | 'get') {
       tags: [
         ['t', verb],
         ['expiration', String(created_at + 300)],
+        ...(sha256 ? [['x', sha256]] : []),
       ],
     },
     SECRET_KEY
@@ -124,4 +125,53 @@ export async function listBlobs(request: APIRequestContext, serverUrl: string): 
   const response = await request.get(`${serverUrl}/list/${PUBKEY}`, { headers: blossomAuth('list') });
   if (!response.ok()) throw new Error(`GET ${serverUrl}/list failed: ${response.status()}`);
   return (await response.json()) as ListedBlob[];
+}
+
+/** PUTs bytes straight onto a server, bypassing the app. Used to seed state the
+    app must discover (the sync page diffs its login-time listings), never to
+    assert - proofs still go through listBlobs/GET. */
+export async function seedBlob(request: APIRequestContext, serverUrl: string, file: UploadFixture['file']) {
+  const sha256 = createHash('sha256').update(file.buffer).digest('hex');
+  const response = await request.put(`${serverUrl}/upload`, {
+    data: file.buffer,
+    headers: { ...blossomAuth('upload', sha256), 'Content-Type': file.mimeType, 'X-SHA-256': sha256 },
+  });
+  if (!response.ok()) throw new Error(`PUT ${serverUrl}/upload failed: ${response.status()}`);
+  return sha256;
+}
+
+/** Waits until the catalog IndexedDB (read straight from the page, bypassing the
+    catalog worker) shows the blob present on both servers - and still present
+    after a beat. A login-time listing ingest landing late re-ingests as `full`
+    and flips rows that were written before it finished back to `absent`, which is
+    exactly what the delete planner reads. */
+export async function waitForCatalogReplicas(page: Page, sha256: string) {
+  const expected = ['http://localhost:3300:present', 'http://localhost:3301:present'];
+  // Read the rows twice, a beat apart: a single sample can sit inside the window
+  // where a late full listing ingest is about to withdraw the rows.
+  const stablePairs = () =>
+    page.evaluate(async sha => {
+      const read = async (): Promise<string[]> => {
+        const open = indexedDB.open('bouquet-user-blob-catalog');
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          open.onsuccess = () => resolve(open.result);
+          open.onerror = () => reject(open.error);
+        });
+        const rows = (await new Promise(resolve => {
+          const request = db.transaction('blob_location', 'readonly').objectStore('blob_location').getAll();
+          request.onsuccess = () => resolve(request.result);
+        })) as { sha256: string; serverId: string; state: string }[];
+        db.close();
+        return rows
+          .filter(row => row.sha256 === sha)
+          .map(row => `${row.serverId}:${row.state}`)
+          .sort();
+      };
+      const first = await read();
+      const { promise: beat, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 400);
+      await beat;
+      return { first, second: await read() };
+    }, sha256);
+  await expect.poll(stablePairs).toEqual({ first: expected, second: expected });
 }

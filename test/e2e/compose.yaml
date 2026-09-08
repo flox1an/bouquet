@@ -17,10 +17,17 @@ services:
   blossom:
     image: ghcr.io/flox1an/almond:latest
     platform: linux/amd64
+    # Both servers publish through this container: blossom-ref below joins its
+    # network namespace, so "localhost:3300"/"localhost:3301" mean the same
+    # inside the stack as they do in the browser. That is what lets the servers
+    # mirror blobs from each other's public URLs (BUD-04) like real deployments.
     ports:
-      - '3300:3000'
+      - '3300:3300'
+      - '3301:3301'
     environment:
-      BIND_ADDR: 0.0.0.0:3000
+      # BIND must match the published port, or the netns-local mirror fetch to
+      # localhost:3300 would find nothing listening.
+      BIND_ADDR: 0.0.0.0:3300
       # Blob descriptor URLs must be reachable from the browser under test.
       PUBLIC_URL: http://localhost:3300
       # The predefined test user from fixtures.ts. almond keeps no per-blob
@@ -40,7 +47,7 @@ services:
   # and blobs live under /tmp inside the container - nothing to clean up.
   blossom-ref:
     image: ghcr.io/hzrd149/blossom-server:master
-    ports:
-      - '3301:3000'
+    network_mode: 'service:blossom'
     volumes:
       - ./blossom-server.yml:/app/config.yml:ro
+

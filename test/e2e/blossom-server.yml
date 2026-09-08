@@ -1,6 +1,6 @@
 # Config for the Blossom reference implementation (hzrd149/blossom-server).
 # Only what the tests need: local storage, listing on, every MIME type accepted.
-port: 3000
+port: 3301
 host: 0.0.0.0
 
 database:
