@@ -1,0 +1,46 @@
+name: bouquet-e2e
+
+# Ephemeral by design: no volumes, so `docker compose down` wipes the relay's
+# events and every stored blob. Each run starts from an empty relay and two empty
+# media servers. The relay and almond images are amd64-only; emulation is fine for
+# the load a smoke test produces.
+services:
+  relay:
+    image: scsibug/nostr-rs-relay:latest
+    platform: linux/amd64
+    ports:
+      - '7777:8080'
+    volumes:
+      - ./relay.toml:/usr/src/app/config.toml:ro
+
+  # almond: filesystem-only Blossom server, no database to seed or migrate.
+  blossom:
+    image: ghcr.io/flox1an/almond:latest
+    platform: linux/amd64
+    ports:
+      - '3300:3000'
+    environment:
+      BIND_ADDR: 0.0.0.0:3000
+      # Blob descriptor URLs must be reachable from the browser under test.
+      PUBLIC_URL: http://localhost:3300
+      # The predefined test user from fixtures.ts. almond keeps no per-blob
+      # ownership, so this whitelist is what makes GET /list/<pubkey> return the
+      # catalogue that bouquet browses.
+      ALLOWED_NPUBS: npub1c9zl6yt3rh0gylskdlylntgzt0fehtnp2fl2z5mn4xz4r093jmtstav5l0
+      FEATURE_UPLOAD_ENABLED: public
+      FEATURE_LIST_ENABLED: 'true'
+      # almond has no per-blob limit, only this aggregate cap in MB. A blob that
+      # alone exceeds it is refused with 507, which is the size-rejection the
+      # tests exercise. Every other test file is a few dozen bytes, so 1 MB of
+      # headroom is plenty for a whole run.
+      MAX_TOTAL_SIZE: '1'
+
+  # blossom-server: the Blossom reference implementation. Second target, so the
+  # tests cover an upload fanning out to two independent servers. Its SQLite db
+  # and blobs live under /tmp inside the container - nothing to clean up.
+  blossom-ref:
+    image: ghcr.io/hzrd149/blossom-server:master
+    ports:
+      - '3301:3000'
+    volumes:
+      - ./blossom-server.yml:/app/config.yml:ro

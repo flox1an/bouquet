@@ -35,3 +35,8 @@ bun.lockb
 *.mp4
 *.llc
 audio.txt
+
+# Playwright integration test output
+test-results/
+playwright-report/
+*.tsbuildinfo

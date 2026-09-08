@@ -1,0 +1,28 @@
+# Config for the Blossom reference implementation (hzrd149/blossom-server).
+# Only what the tests need: local storage, listing on, every MIME type accepted.
+port: 3000
+host: 0.0.0.0
+
+database:
+  path: /tmp/blossom/sqlite.db
+
+storage:
+  backend: local
+  local:
+    dir: /tmp/blossom/blobs
+  # An empty rule list makes every upload a 415, so allow everything explicitly
+  # with an expiry far beyond any test run.
+  rules:
+    - type: '*'
+      expiration: 1 year
+
+upload:
+  enabled: true
+  requireAuth: true
+
+list:
+  enabled: true
+  requireAuth: false
+
+media:
+  enabled: false

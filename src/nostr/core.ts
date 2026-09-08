@@ -8,16 +8,23 @@ import { NostrConnectSigner } from 'applesauce-signers';
 import type { NostrSubscriptionMethod, NostrPublishMethod } from 'applesauce-signers';
 import { filter, mergeMap, race, throwError, timer } from 'rxjs';
 
-// Default relays
-export const DEFAULT_RELAYS = [
-  'wss://relay.nostr.band',
-  'wss://relay.snort.social',
-  'wss://nos.lol',
-  'wss://nostr.wine',
-  'wss://relay.primal.net',
-  'wss://purplepag.es/',
-  'wss://relay.nostu.be',
-];
+// Default relays. VITE_RELAYS points the whole app at a local relay instead,
+// which is what the integration stack in test/e2e relies on.
+const configuredRelays = import.meta.env.VITE_RELAYS?.split(',')
+  .map(relay => relay.trim())
+  .filter(Boolean);
+
+export const DEFAULT_RELAYS = configuredRelays?.length
+  ? configuredRelays
+  : [
+      'wss://relay.nostr.band',
+      'wss://relay.snort.social',
+      'wss://nos.lol',
+      'wss://nostr.wine',
+      'wss://relay.primal.net',
+      'wss://purplepag.es/',
+      'wss://relay.nostu.be',
+    ];
 
 /**
  * Merges default relays with user relays, removing duplicates

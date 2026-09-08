@@ -2,10 +2,13 @@
   "compilerOptions": {
     "composite": true,
     "skipLibCheck": true,
+    "target": "ES2023",
+    "lib": ["ES2024", "DOM"],
+    "types": ["node"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "strict": true
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts", "playwright.config.ts", "test/e2e"]
 }
