@@ -16,7 +16,9 @@ vi.mock('../nostr/core', () => ({
 }));
 vi.mock('./nostr', () => ({
   accountManager: mockAccountManager,
-  useNostr: () => ({ user: { npub: 'npub1424242424242424242424242424242424242424242424242424qamrcaj', relayUrls: [] } }),
+  useNostr: () => ({
+    user: { npub: 'npub1424242424242424242424242424242424242424242424242424qamrcaj', relayUrls: [] },
+  }),
 }));
 vi.mock('./useEvent', () => ({ default: () => ({ isSuccess: false, isLoading: false, data: undefined }) }));
 vi.mock('./nip96', () => ({ fetchNip96ServerConfig: vi.fn() }));
@@ -44,7 +46,9 @@ describe('useUserServers.storeUserServers', () => {
     mockAccountManager.active = { signer: { signEvent: vi.fn(signedTemplate) } };
 
     const { result } = renderStoreHook();
-    const outcome = await result.current.storeUserServers([{ type: 'blossom', name: 'a.example', url: 'https://a.example' }]);
+    const outcome = await result.current.storeUserServers([
+      { type: 'blossom', name: 'a.example', url: 'https://a.example' },
+    ]);
 
     expect(mockRelayPoolPublish).not.toHaveBeenCalled();
     expect(outcome.blossom.verdict).toBe('disabled');

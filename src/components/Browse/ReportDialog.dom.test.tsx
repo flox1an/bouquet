@@ -58,7 +58,13 @@ describe('ReportDialog', () => {
     expect(report.mock.calls.map(call => call[0]).sort()).toEqual(['https://one.example', 'https://two.example']);
     const event = report.mock.calls[0][1] as { kind: number; tags: string[][] };
     expect(event.kind).toBe(1984);
-    expect(event.tags).toEqual(expect.arrayContaining([['x', 'a'.repeat(64), 'other'], ['e', 'evt'], ['p', 'pk']]));
+    expect(event.tags).toEqual(
+      expect.arrayContaining([
+        ['x', 'a'.repeat(64), 'other'],
+        ['e', 'evt'],
+        ['p', 'pk'],
+      ])
+    );
   });
 
   it('still publishes to relays when a server rejects the report', async () => {
@@ -76,9 +82,7 @@ describe('ReportDialog', () => {
     publish.mockResolvedValue([{ from: 'wss://relay.example', ok: true }]);
     report.mockResolvedValue(undefined);
     const onOpenChange = vi.fn();
-    render(
-      <ReportDialog open onOpenChange={onOpenChange} hashes={['a'.repeat(64)]} signEventTemplate={sign} />
-    );
+    render(<ReportDialog open onOpenChange={onOpenChange} hashes={['a'.repeat(64)]} signEventTemplate={sign} />);
 
     await userEvent.click(screen.getByRole('button', { name: /send report/i }));
 
@@ -91,9 +95,7 @@ describe('ReportDialog', () => {
       url === 'https://one.example' ? Promise.resolve(undefined) : Promise.reject(new Error('502 bad gateway'))
     );
     const onOpenChange = vi.fn();
-    render(
-      <ReportDialog open onOpenChange={onOpenChange} hashes={['a'.repeat(64)]} signEventTemplate={sign} />
-    );
+    render(<ReportDialog open onOpenChange={onOpenChange} hashes={['a'.repeat(64)]} signEventTemplate={sign} />);
 
     await userEvent.click(screen.getByRole('button', { name: /send report/i }));
 
@@ -124,9 +126,7 @@ describe('ReportDialog', () => {
     vi.stubEnv('VITE_DISABLE_EVENT_PUBLISH', '1');
     report.mockResolvedValue(undefined);
     const onOpenChange = vi.fn();
-    render(
-      <ReportDialog open onOpenChange={onOpenChange} hashes={['a'.repeat(64)]} signEventTemplate={sign} />
-    );
+    render(<ReportDialog open onOpenChange={onOpenChange} hashes={['a'.repeat(64)]} signEventTemplate={sign} />);
 
     await userEvent.click(screen.getByRole('button', { name: /send report/i }));
 
@@ -139,9 +139,7 @@ describe('ReportDialog', () => {
     publish.mockResolvedValue([{ from: 'wss://relay.example', ok: false, message: 'down' }]);
     report.mockRejectedValue(new Error('502'));
     const onOpenChange = vi.fn();
-    render(
-      <ReportDialog open onOpenChange={onOpenChange} hashes={['a'.repeat(64)]} signEventTemplate={sign} />
-    );
+    render(<ReportDialog open onOpenChange={onOpenChange} hashes={['a'.repeat(64)]} signEventTemplate={sign} />);
 
     await userEvent.click(screen.getByRole('button', { name: /send report/i }));
 

@@ -12,17 +12,8 @@ const ThemeSwitcher = () => {
     document.querySelector('html')?.setAttribute('data-theme', theme);
   }, [theme]);
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={toggleTheme}
-      title="Switch theme"
-    >
-      {theme === 'mydark' ? (
-        <Sun className="h-5 w-5" />
-      ) : (
-        <Moon className="h-5 w-5" />
-      )}
+    <Button variant="ghost" size="icon" onClick={toggleTheme} title="Switch theme">
+      {theme === 'mydark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
     </Button>
   );
 };

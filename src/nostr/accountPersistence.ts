@@ -15,11 +15,7 @@ export interface PersistedAccount {
   createdAt: number;
 }
 
-export function saveAccountToStorage(
-  account: IAccount,
-  method: AccountMethod,
-  data?: string
-): void {
+export function saveAccountToStorage(account: IAccount, method: AccountMethod, data?: string): void {
   try {
     const accounts = loadAccountsFromStorage();
     const existingIndex = accounts.findIndex(acc => acc.pubkey === account.pubkey);

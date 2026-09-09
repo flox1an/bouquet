@@ -23,7 +23,7 @@ export function Steps({ steps, currentStep, className }: StepsProps) {
           return (
             <div
               key={index}
-                className={cn(
+              className={cn(
                 'flex items-center gap-2 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
                 isCompleted && 'text-muted-foreground',
                 isCurrent && 'bg-background text-foreground shadow-sm',

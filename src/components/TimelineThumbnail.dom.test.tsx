@@ -5,7 +5,7 @@ import { describe, expect, it, afterEach } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { createElement as h } from 'react';
 import { TimelineThumbnail } from './TimelineThumbnail';
-import type { TimelineProjection } from '../catalog/catalog'
+import type { TimelineProjection } from '../catalog/catalog';
 
 afterEach(cleanup);
 

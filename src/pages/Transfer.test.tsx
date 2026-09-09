@@ -136,8 +136,20 @@ describe('Transfer inventory status', () => {
 describe('Transfer cancellation recovery', () => {
   it('preserves a completed transfer and lets the user resume a task cancelled before it started', async () => {
     const user = userEvent.setup();
-    const blobA = { sha256: 'a'.repeat(64), size: 10, type: 'image/jpeg', uploaded: 1, url: 'https://source.example/a' };
-    const blobB = { sha256: 'b'.repeat(64), size: 10, type: 'image/jpeg', uploaded: 1, url: 'https://source.example/b' };
+    const blobA = {
+      sha256: 'a'.repeat(64),
+      size: 10,
+      type: 'image/jpeg',
+      uploaded: 1,
+      url: 'https://source.example/a',
+    };
+    const blobB = {
+      sha256: 'b'.repeat(64),
+      size: 10,
+      type: 'image/jpeg',
+      uploaded: 1,
+      url: 'https://source.example/b',
+    };
     currentServerInfo = {
       source: baseServer({ name: 'source', blobs: [blobA, blobB] }),
       target: baseServer({ name: 'target', blobs: [] }),

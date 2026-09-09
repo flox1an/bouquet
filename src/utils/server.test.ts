@@ -9,8 +9,7 @@ vi.mock('./blossom', async importOriginal => ({ ...(await importOriginal<typeof 
 vi.mock('./nip96', async importOriginal => ({ ...(await importOriginal<typeof nip96>()) }));
 vi.mock('blossom-client-sdk/actions/delete', () => ({ deleteBlob: vi.fn() }));
 
-const sign = async (template: EventTemplate) =>
-  ({ ...template, id: '', pubkey: '', sig: '' }) as SignedEvent;
+const sign = async (template: EventTemplate) => ({ ...template, id: '', pubkey: '', sig: '' }) as SignedEvent;
 
 const httpError = (status: number) => Object.assign(new Error(`HTTP ${status}`), { response: { status } });
 
@@ -104,9 +103,14 @@ describe('syncServerList', () => {
     };
     const ingested: Array<ServerListProgress & { full?: boolean }> = [];
 
-    await syncServerList(fake, 'pubkey', async () => ({ id: '', pubkey: '', created_at: 0, kind: 0, tags: [], content: '', sig: '' }), update => {
-      ingested.push(update);
-    });
+    await syncServerList(
+      fake,
+      'pubkey',
+      async () => ({ id: '', pubkey: '', created_at: 0, kind: 0, tags: [], content: '', sig: '' }),
+      update => {
+        ingested.push(update);
+      }
+    );
 
     expect(ingested).toEqual([
       { blobs: [first], cursor: '0', received: 1, state: 'pending' },

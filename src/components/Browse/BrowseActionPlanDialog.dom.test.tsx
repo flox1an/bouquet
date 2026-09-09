@@ -217,7 +217,9 @@ describe('BrowseActionPlanDialog', () => {
     await vi.waitFor(() => expect(screen.getByRole('button', { name: /Choose a destination server/i })).toBeTruthy());
     await userEvent.click(screen.getByRole('button', { name: /Choose a destination server/i }));
     await userEvent.click(screen.getByRole('menuitemradio', { name: /destination/i }));
-    await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Mirror 1 file' }).hasAttribute('disabled')).toBe(false));
+    await vi.waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Mirror 1 file' }).hasAttribute('disabled')).toBe(false)
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Mirror 1 file' }));
 
     await vi.waitFor(() =>

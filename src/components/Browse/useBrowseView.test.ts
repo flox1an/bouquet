@@ -34,7 +34,11 @@ describe('applyBrowseView', () => {
   it('admits a hash-matched asset even when its text does not contain the hash term', () => {
     const hashTerm = 'a'.repeat(16);
     const items = [item({ assetId: 'hit', searchText: 'sunset photo' })];
-    const result = applyBrowseView(items, { ...filters, search: hashTerm }, { displayMode: 'media', hashMatchAssetIds: new Set(['hit']) });
+    const result = applyBrowseView(
+      items,
+      { ...filters, search: hashTerm },
+      { displayMode: 'media', hashMatchAssetIds: new Set(['hit']) }
+    );
     expect(result.map(entry => entry.assetId)).toEqual(['hit']);
   });
 });

@@ -13,7 +13,13 @@ export function groupByMonth<T extends { displayDate: number }>(items: T[]): Mon
   for (const item of items) {
     const d = new Date(item.displayDate);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const existing = groups.get(key) ?? { key, label: `${d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`, year: d.getFullYear(), month: d.getMonth(), itemCount: 0 };
+    const existing = groups.get(key) ?? {
+      key,
+      label: `${d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`,
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      itemCount: 0,
+    };
     existing.itemCount += 1;
     groups.set(key, existing);
   }
@@ -41,19 +47,27 @@ export function TimelineNavigation({
         <div className="space-y-1">
           {yearLabels.map(year => (
             <div key={year}>
-              <p className="mb-1 font-mono text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{year}</p>
-              {months.filter(m => m.year === year).map(month => (
-                <button
-                  key={month.key}
-                  onClick={() => onSelect(month.key)}
-                  className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors hover:bg-accent ${
-                    activeMonth === month.key ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground'
-                  }`}
-                >
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${activeMonth === month.key ? 'bg-primary' : 'bg-border'}`} />
-                  {month.label}
-                </button>
-              ))}
+              <p className="mb-1 font-mono text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                {year}
+              </p>
+              {months
+                .filter(m => m.year === year)
+                .map(month => (
+                  <button
+                    key={month.key}
+                    onClick={() => onSelect(month.key)}
+                    className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors hover:bg-accent ${
+                      activeMonth === month.key
+                        ? 'bg-accent font-medium text-accent-foreground'
+                        : 'text-muted-foreground'
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${activeMonth === month.key ? 'bg-primary' : 'bg-border'}`}
+                    />
+                    {month.label}
+                  </button>
+                ))}
             </div>
           ))}
           {months.length === 0 && <p className="px-2 text-xs text-muted-foreground">No items</p>}

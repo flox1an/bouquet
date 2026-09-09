@@ -30,16 +30,22 @@ export async function uploadFiles(input: {
 }): Promise<RunResult<UploadResult> & { verdict: 'allSucceeded' | 'failed' | 'cancelled' }> {
   const tasks =
     input.tasks ??
-    (input.servers && input.files
-      ? input.servers.flatMap(server => input.files!.map(file => ({ file, server })))
-      : []);
+    (input.servers && input.files ? input.servers.flatMap(server => input.files!.map(file => ({ file, server }))) : []);
   const result = await runTasks(
     tasks,
     async task => {
       const target = input.resolveServer(task.server);
       const hash = target.capabilities.exists ? await calculateFileHash(task.file) : undefined;
       const existing = hash && target.exists ? await target.exists(hash) : null;
-      const descriptor = existing ?? (await target.upload(task.file, task.file.name, input.sign, progress => input.onProgress?.(task, progress), input.signal));
+      const descriptor =
+        existing ??
+        (await target.upload(
+          task.file,
+          task.file.name,
+          input.sign,
+          progress => input.onProgress?.(task, progress),
+          input.signal
+        ));
       return { task, descriptor, skipped: !!existing };
     },
     { concurrency: input.concurrency ?? 3, signal: input.signal }

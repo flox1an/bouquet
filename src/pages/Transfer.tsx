@@ -22,7 +22,6 @@ import { mediaServer } from '../utils/server';
 import { runTasks } from '../utils/run';
 import { formatTransferError } from '../utils/upload';
 
-
 type TransferStatus = {
   [key: string]: {
     sha256: string;
@@ -159,43 +158,48 @@ export const Transfer = () => {
         }));
 
         try {
-          await transferBlob(`${serverInfo[sourceServer].url}/${b.sha256}`, serverInfo[targetServer], signEventTemplate, {
-            signal: controller.signal,
-            timeout: 120000,
-            maxRetries: 2,
-            allowMirror: mirrorSupport[targetServer] !== false,
-            onMirrorUnsupported: () => {
-              setMirrorSupport(ms => ({ ...ms, [targetServer]: false }));
-            },
-            onPhaseChange: phase => {
-              setTransferLog(ts => ({
-                ...ts,
-                [b.sha256]: { ...ts[b.sha256], phase },
-              }));
-            },
-            onProgress: progressEvent => {
-              setTransferLog(ts => ({
-                ...ts,
-                [b.sha256]: {
-                  ...ts[b.sha256],
-                  uploaded: progressEvent.loaded,
-                  downloaded: progressEvent.loaded,
-                  rate: progressEvent.rate || 0,
-                },
-              }));
-            },
-            onCompleted: (blob, method) => {
-              if (!user?.pubkey) return;
-              return getCatalogClient()
-                .ingestUpload(
-                  user.pubkey,
-                  { url: serverInfo[targetServer].url, type: serverInfo[targetServer].type },
-                  blob,
-                  method === 'mirror'
-                )
-                .catch(() => undefined);
-            },
-          });
+          await transferBlob(
+            `${serverInfo[sourceServer].url}/${b.sha256}`,
+            serverInfo[targetServer],
+            signEventTemplate,
+            {
+              signal: controller.signal,
+              timeout: 120000,
+              maxRetries: 2,
+              allowMirror: mirrorSupport[targetServer] !== false,
+              onMirrorUnsupported: () => {
+                setMirrorSupport(ms => ({ ...ms, [targetServer]: false }));
+              },
+              onPhaseChange: phase => {
+                setTransferLog(ts => ({
+                  ...ts,
+                  [b.sha256]: { ...ts[b.sha256], phase },
+                }));
+              },
+              onProgress: progressEvent => {
+                setTransferLog(ts => ({
+                  ...ts,
+                  [b.sha256]: {
+                    ...ts[b.sha256],
+                    uploaded: progressEvent.loaded,
+                    downloaded: progressEvent.loaded,
+                    rate: progressEvent.rate || 0,
+                  },
+                }));
+              },
+              onCompleted: (blob, method) => {
+                if (!user?.pubkey) return;
+                return getCatalogClient()
+                  .ingestUpload(
+                    user.pubkey,
+                    { url: serverInfo[targetServer].url, type: serverInfo[targetServer].type },
+                    blob,
+                    method === 'mirror'
+                  )
+                  .catch(() => undefined);
+              },
+            }
+          );
           setTransferLog(ts => ({
             ...ts,
             [b.sha256]: {

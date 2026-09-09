@@ -5,9 +5,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const { signAndPublish, retryFailedTargets } = vi.hoisted(() => ({ signAndPublish: vi.fn(), retryFailedTargets: vi.fn() }));
+const { signAndPublish, retryFailedTargets } = vi.hoisted(() => ({
+  signAndPublish: vi.fn(),
+  retryFailedTargets: vi.fn(),
+}));
 vi.mock('../../utils/publish', () => ({ signAndPublish, retryFailedTargets }));
-vi.mock('../../utils/nostr', () => ({ useNostr: () => ({ user: { pubkey: 'p'.repeat(64), relayUrls: ['wss://relay.example'] } }) }));
+vi.mock('../../utils/nostr', () => ({
+  useNostr: () => ({ user: { pubkey: 'p'.repeat(64), relayUrls: ['wss://relay.example'] } }),
+}));
 vi.mock('../../nostr/core', () => ({ mergeRelays: (relays: string[]) => relays }));
 vi.mock('../FileEventEditor/FileEventEditor', () => ({
   default: ({ fileEventData }: { fileEventData: { x: string } }) => <p>Editing {fileEventData.x}</p>,
@@ -46,17 +51,21 @@ describe('DescribeUnlinkedFileDialog', () => {
     }));
     const onOpenChange = vi.fn();
     const onPublished = vi.fn().mockResolvedValue(undefined);
-    render(<DescribeUnlinkedFileDialog open onOpenChange={onOpenChange} initialData={data} onPublished={onPublished} />);
+    render(
+      <DescribeUnlinkedFileDialog open onOpenChange={onOpenChange} initialData={data} onPublished={onPublished} />
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /publish metadata/i }));
 
     const template = signAndPublish.mock.calls[0][0] as { tags: string[][] };
-    expect(template.tags).toEqual(expect.arrayContaining([
-      ['url', 'https://server.example/file.mp4'],
-      ['x', 'a'.repeat(64)],
-      ['size', '42'],
-      ['m', 'video/mp4'],
-    ]));
+    expect(template.tags).toEqual(
+      expect.arrayContaining([
+        ['url', 'https://server.example/file.mp4'],
+        ['x', 'a'.repeat(64)],
+        ['size', '42'],
+        ['m', 'video/mp4'],
+      ])
+    );
     expect(onPublished).toHaveBeenCalledWith(expect.objectContaining({ id: 'e'.repeat(64) }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

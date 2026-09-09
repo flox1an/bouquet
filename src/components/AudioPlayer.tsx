@@ -89,9 +89,15 @@ const AudioPlayer: React.FC = () => {
         <div className="flex items-center gap-3 min-w-0 shrink-0">
           <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md shadow-sm">
             {currentSong.id3?.cover ? (
-              <img className="h-full w-full object-cover" src={currentSong.id3.cover} alt={currentSong.id3.title ?? ''} />
+              <img
+                className="h-full w-full object-cover"
+                src={currentSong.id3.cover}
+                alt={currentSong.id3.title ?? ''}
+              />
             ) : (
-              <div className="flex h-full w-full items-center justify-center bg-primary/10"><Music2 className="h-5 w-5 text-primary" /></div>
+              <div className="flex h-full w-full items-center justify-center bg-primary/10">
+                <Music2 className="h-5 w-5 text-primary" />
+              </div>
             )}
           </div>
           {currentSong.id3 && (
@@ -118,7 +124,7 @@ const AudioPlayer: React.FC = () => {
               value={[progress]}
               max={100}
               step={0.1}
-              onValueChange={(value) => {
+              onValueChange={value => {
                 if (audioRef.current) {
                   audioRef.current.currentTime = (value[0] / 100) * audioRef.current.duration;
                 }
@@ -156,13 +162,7 @@ const AudioPlayer: React.FC = () => {
               )}
             </Button>
 
-            <Slider
-              value={[volume]}
-              max={1}
-              step={0.01}
-              onValueChange={changeVolume}
-              className="w-24"
-            />
+            <Slider value={[volume]} max={1} step={0.01} onValueChange={changeVolume} className="w-24" />
           </div>
 
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetPlayer}>

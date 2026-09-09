@@ -114,9 +114,7 @@ export type PublishJobKind = 'file' | 'audio' | 'video';
     e.g. no signer) or it reached the shared publish module and got a per-relay
     verdict back (issue #9's `PublishResult` - never discarded, so a retry can
     target exactly the relays that failed). */
-export type PublishOutcome =
-  | { kind: PublishJobKind; result: PublishResult }
-  | { kind: PublishJobKind; error: string };
+export type PublishOutcome = { kind: PublishJobKind; result: PublishResult } | { kind: PublishJobKind; error: string };
 export type FileEventPublishState = FileEventData & { publishOutcomes?: PublishOutcome[] };
 
 const KIND_LABEL: Record<PublishJobKind, string> = { file: 'File event', audio: 'Audio event', video: 'Video event' };

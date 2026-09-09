@@ -144,8 +144,8 @@ function Upload() {
       if (filesToUpload && filesToUpload.length) {
         const enabledServers = servers.filter(server => transfers[server.name]?.enabled);
         const primaryServerName = servers[0]?.name;
-        const orderedServers = [...enabledServers].sort((left, right) =>
-          Number(right.name === primaryServerName) - Number(left.name === primaryServerName)
+        const orderedServers = [...enabledServers].sort(
+          (left, right) => Number(right.name === primaryServerName) - Number(left.name === primaryServerName)
         );
         const uploadTasks: UploadTask[] = isRetry
           ? (retryTasks as UploadTask[])
@@ -331,8 +331,7 @@ function Upload() {
   };
 
   const publishOne = async (fe: FileEventData, kind: PublishJobKind, persistThumbnailToState: boolean) => {
-    const publishFn =
-      kind === 'file' ? publishFileEvent : kind === 'audio' ? publishAudioEvent : publishVideoEvent;
+    const publishFn = kind === 'file' ? publishFileEvent : kind === 'audio' ? publishAudioEvent : publishVideoEvent;
     let dataToPublish: FileEventData = fe;
     let statePatch: Partial<FileEventData> = {};
 
@@ -395,7 +394,10 @@ function Upload() {
       setFileEventsToPublish(prev =>
         prev.map(f =>
           f.x === fileX
-            ? { ...f, publishOutcomes: (f.publishOutcomes ?? []).map(o => (o.kind === kind ? { kind, result: updated } : o)) }
+            ? {
+                ...f,
+                publishOutcomes: (f.publishOutcomes ?? []).map(o => (o.kind === kind ? { kind, result: updated } : o)),
+              }
             : f
         )
       );

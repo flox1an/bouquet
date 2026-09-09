@@ -30,8 +30,6 @@ import { useCatalogRefresh } from '../components/Browse/useCatalogRefresh';
 
 type TimelineReturnState = { timelineLocationKey?: string };
 
-
-
 export default function Timeline() {
   const { user, signEventTemplate, relaysReady } = useNostr();
   const { dispatch } = useGlobalContext();
@@ -117,7 +115,6 @@ export default function Timeline() {
     });
   }, [eventSyncGeneration, relaysReady, user?.pubkey, user?.relayUrls]);
 
-
   // Files no server ever typed only become recognisable once their first bytes are
   // read - and a playlist among them is what folds hundreds of segments into one
   // item. The sweep is resumable and skips what it has already read, so it is started
@@ -129,9 +126,6 @@ export default function Timeline() {
     void identifyUnexplainedBlobs(user.pubkey);
   }, [projectionState, user?.pubkey]);
 
-
-
-
   const orderedAssetIds = useMemo(() => filteredItems.map(item => item.assetId), [filteredItems]);
   const { selectedAssetIds, handleSelectAsset, clearSelection, selectAll } = useAssetSelection(orderedAssetIds);
   const selectedItems = useMemo(
@@ -139,14 +133,15 @@ export default function Timeline() {
     [filteredItems, selectedAssetIds]
   );
 
-
-
   const scheduleAudioProjection = () => {
     if (!user?.pubkey) return;
     if (audioProjectionTimer.current !== undefined) window.clearTimeout(audioProjectionTimer.current);
     audioProjectionTimer.current = window.setTimeout(() => {
       const catalog = getCatalogClient();
-      void catalog.queryCatalogTimeline(user.pubkey).then(setItems).catch(() => undefined);
+      void catalog
+        .queryCatalogTimeline(user.pubkey)
+        .then(setItems)
+        .catch(() => undefined);
     }, 200);
   };
 
@@ -388,10 +383,7 @@ export default function Timeline() {
           />
           {/* Describing how to clear filters and not offering it is the trap this
               page kept falling into: the user has to undo each control by hand. */}
-          <Button
-            className="mt-4"
-            onClick={clearAllFilters}
-          >
+          <Button className="mt-4" onClick={clearAllFilters}>
             Clear all filters
           </Button>
         </div>

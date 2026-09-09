@@ -14,9 +14,7 @@ const initialState: State = {
   currentSong: undefined,
 };
 
-type Action =
-  | { type: 'SET_CURRENT_SONG'; song: Song }
-  | { type: 'RESET_CURRENT_SONG' };
+type Action = { type: 'SET_CURRENT_SONG'; song: Song } | { type: 'RESET_CURRENT_SONG' };
 
 const reducer = (state: State, action: Action): State => {
   switch (action.type) {

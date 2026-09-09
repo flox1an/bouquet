@@ -1,4 +1,14 @@
-import { ArrowUp, ArrowDown, Trash2, Plus, GripVertical, Star, Server as ServerIcon, Loader2, RotateCw } from 'lucide-react';
+import {
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Plus,
+  GripVertical,
+  Star,
+  Server as ServerIcon,
+  Loader2,
+  RotateCw,
+} from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { Server, type StoreServersResult } from '../../utils/useUserServers';
 import { retryFailedTargets, type PublishResult } from '../../utils/publish';
@@ -58,7 +68,6 @@ function allListsSucceeded(result: StoreServersResult): boolean {
 function hasFailedList(result: StoreServersResult): boolean {
   return publishFailed(result.blossom) || publishFailed(result.nip96);
 }
-
 
 const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSave, initialServers }) => {
   const [servers, setServers] = useState<Server[]>([]);
@@ -338,7 +347,10 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
         </div>
 
         {signingError && (
-          <p className="rounded-lg border border-destructive bg-destructive/10 p-3 text-sm text-destructive" role="alert">
+          <p
+            className="rounded-lg border border-destructive bg-destructive/10 p-3 text-sm text-destructive"
+            role="alert"
+          >
             {signingError}
           </p>
         )}

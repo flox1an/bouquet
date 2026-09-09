@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ImageOff, Music2 } from 'lucide-react';
-import type { TimelineProjection } from '../catalog/catalog'
+import type { TimelineProjection } from '../catalog/catalog';
 
 const IMGPROXY_BASE_URL = 'https://imgproxy.nostu.be';
 

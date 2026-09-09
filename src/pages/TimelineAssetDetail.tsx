@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Code2, ExternalLink, FileText, Flag, Image, Loader2, MoreVertical, Music2, Play, Video } from 'lucide-react';
+import {
+  ArrowLeft,
+  Code2,
+  ExternalLink,
+  FileText,
+  Flag,
+  Image,
+  Loader2,
+  MoreVertical,
+  Music2,
+  Play,
+  Video,
+} from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -82,7 +94,11 @@ function serverCopyRows(
     if (server.isError) return { name: server.name, state: 'unreachable' };
     if (server.blobs) {
       const present = server.blobs.some(blob => blob.sha256 === sha256);
-      return { name: server.name, state: present ? 'confirmed' : 'confirmed-missing', url: present ? matchedUrl : undefined };
+      return {
+        name: server.name,
+        state: present ? 'confirmed' : 'confirmed-missing',
+        url: present ? matchedUrl : undefined,
+      };
     }
     return { name: server.name, state: 'unchecked' };
   });
@@ -414,7 +430,12 @@ export default function TimelineAssetDetail() {
                   This file is in your local catalog but is not linked to a Nostr event. Its storage and availability
                   details remain available below.
                 </p>
-                <Button size="sm" className="mt-4" onClick={() => setDescribeOpen(true)} disabled={!describeData.x || !describeData.url.length}>
+                <Button
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => setDescribeOpen(true)}
+                  disabled={!describeData.x || !describeData.url.length}
+                >
                   Describe and publish
                 </Button>
               </div>
@@ -504,9 +525,7 @@ export default function TimelineAssetDetail() {
                 </dl>
                 {configuredServers.length > 0 && (
                   <div className="mt-4 border-t pt-3">
-                    <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                      Server copies
-                    </p>
+                    <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Server copies</p>
                     <ul className="mt-2 space-y-1">
                       {copyRows.map(row => (
                         <li key={row.name} className="flex items-center justify-between gap-2 text-sm">
@@ -642,9 +661,7 @@ function MediaPreview({
     );
   }
   if (projection.displayType === 'video' && !failed) {
-    return (
-      <video src={url} controls onError={() => setFailed(true)} className="max-h-[70vh] w-full border bg-black" />
-    );
+    return <video src={url} controls onError={() => setFailed(true)} className="max-h-[70vh] w-full border bg-black" />;
   }
   if (projection.displayType === 'audio') {
     return (

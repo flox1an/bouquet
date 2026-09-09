@@ -33,4 +33,3 @@ export function formatTransferError(error: unknown, sourceServer: string): strin
   if (value.code === 'ECONNRESET' || value.code === 'ETIMEDOUT') return 'Network error';
   return value.message ?? 'Unknown error';
 }
-

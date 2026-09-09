@@ -2,11 +2,7 @@ import { nip19 } from 'nostr-tools';
 import { decrypt } from 'nostr-tools/nip49';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { useAccountManager } from 'applesauce-react/hooks';
-import {
-  ExtensionAccount,
-  NostrConnectAccount,
-  PrivateKeyAccount,
-} from 'applesauce-accounts/accounts';
+import { ExtensionAccount, NostrConnectAccount, PrivateKeyAccount } from 'applesauce-accounts/accounts';
 import { ExtensionSigner, NostrConnectSigner } from 'applesauce-signers';
 import {
   saveAccountToStorage,

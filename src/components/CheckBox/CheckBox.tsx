@@ -19,7 +19,7 @@ const CheckBox = ({
       id={name}
       disabled={disabled}
       checked={checked}
-      onCheckedChange={(checked) => setChecked(checked === true)}
+      onCheckedChange={checked => setChecked(checked === true)}
     />
     <label htmlFor={name} className="cursor-pointer select-none flex flex-row gap-2">
       {children}

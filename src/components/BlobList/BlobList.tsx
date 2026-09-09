@@ -41,7 +41,6 @@ const BlobList = ({ blobs, title, className = '' }: BlobListProps) => {
     setCurrentPage(1);
   };
 
-
   return (
     <div className={`flex flex-col gap-4 ${className}`}>
       {/* Header bar */}
@@ -241,7 +240,6 @@ const BlobList = ({ blobs, title, className = '' }: BlobListProps) => {
           </Button>
         </div>
       </div>
-
     </div>
   );
 };

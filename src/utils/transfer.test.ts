@@ -6,8 +6,7 @@ import type { Server } from './useUserServers';
 
 vi.mock('./blossom', async importOriginal => ({ ...(await importOriginal<typeof blossom>()) }));
 
-const sign = async () =>
-  ({ id: '', pubkey: '', created_at: 0, kind: 0, tags: [], content: '', sig: '' }) as never;
+const sign = async () => ({ id: '', pubkey: '', created_at: 0, kind: 0, tags: [], content: '', sig: '' }) as never;
 
 const target: Server = { type: 'blossom', name: 'target', url: 'https://target.example' };
 const descriptor = (sha256: string): BlobDescriptor => ({
@@ -59,5 +58,4 @@ describe('transferBlob mirror fallback', () => {
     expect(result.url).toContain('target.example');
     expect(vi.mocked(blossom.uploadBlossomBlob)).toHaveBeenCalled();
   });
-
 });

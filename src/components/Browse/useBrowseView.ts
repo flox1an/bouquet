@@ -68,11 +68,7 @@ export type BrowseLookups = {
 };
 
 /** The page's filter predicate, pure so it can be tested without a mounted page. */
-export function applyBrowseView(
-  items: TimelineItem[],
-  filters: BrowseFilters,
-  lookups: BrowseLookups
-): TimelineItem[] {
+export function applyBrowseView(items: TimelineItem[], filters: BrowseFilters, lookups: BrowseLookups): TimelineItem[] {
   const searchTerms = splitSearchTerms(filters.search);
   const hashTerms = searchTerms.filter(isHashSearchTerm);
   const textTerms = searchTerms.filter(term => !isHashSearchTerm(term));
@@ -216,7 +212,17 @@ export function useBrowseView(input: {
       sort,
       typeFilter,
     }),
-    [availabilityFilter, descriptiveOnly, eventOnly, unlinkedOnly, groupDuplicates, search, selectedServerName, sort, typeFilter]
+    [
+      availabilityFilter,
+      descriptiveOnly,
+      eventOnly,
+      unlinkedOnly,
+      groupDuplicates,
+      search,
+      selectedServerName,
+      sort,
+      typeFilter,
+    ]
   );
   const filteredItems = useMemo(
     () =>
@@ -269,7 +275,19 @@ export function useBrowseView(input: {
         typeFilter,
       });
     },
-    [timelineLocationKey, availabilityFilter, descriptiveOnly, displayMode, eventOnly, groupDuplicates, unlinkedOnly, search, selectedServerName, sort, typeFilter]
+    [
+      timelineLocationKey,
+      availabilityFilter,
+      descriptiveOnly,
+      displayMode,
+      eventOnly,
+      groupDuplicates,
+      unlinkedOnly,
+      search,
+      selectedServerName,
+      sort,
+      typeFilter,
+    ]
   );
 
   const clearAllFilters = useCallback(() => {

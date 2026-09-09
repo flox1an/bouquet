@@ -46,9 +46,7 @@ const UploadProgress: React.FC<UploadProgressProps> = ({
                     max={transfers[s.name].size}
                     description={transfers[s.name].rate > 0 ? formatFileSize(transfers[s.name].rate) + '/s' : ''}
                   />
-                  {transfers[s.name].error && (
-                    <div className="text-sm text-destructive">{transfers[s.name].error}</div>
-                  )}
+                  {transfers[s.name].error && <div className="text-sm text-destructive">{transfers[s.name].error}</div>}
                 </div>
               </div>
             )

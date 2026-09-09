@@ -84,7 +84,12 @@ vi.mock('../components/Browse/BrowseActionPlanDialog', () => ({
 }));
 
 let describeProps:
-  | { open: boolean; initialData: { x: string; url: string[]; m?: string; size: number }; onOpenChange: (open: boolean) => void; onPublished: (event: Record<string, unknown>) => Promise<void> }
+  | {
+      open: boolean;
+      initialData: { x: string; url: string[]; m?: string; size: number };
+      onOpenChange: (open: boolean) => void;
+      onPublished: (event: Record<string, unknown>) => Promise<void>;
+    }
   | undefined;
 vi.mock('../components/Browse/DescribeUnlinkedFileDialog', () => ({
   DescribeUnlinkedFileDialog: (props: NonNullable<typeof describeProps>) => {

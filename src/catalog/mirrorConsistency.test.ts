@@ -50,14 +50,16 @@ describe('mirror catalog consistency', () => {
 
     // Only hashA's transfer completed; hashB's failed transfer creates no upload evidence.
     await catalog.ingestUpload(pubkey, serverB, blob(hashA), true);
-    await catalog.refreshReplicaAvailability(pubkey,
-    async (server, sha256) => ({
-      status: server.id === serverAId || (server.id === serverBId && sha256 === hashA) ? 200 : 404,
-      size: 42,
-      mimeType: 'image/jpeg',
-    }),
-    100,
-    [hashA]);
+    await catalog.refreshReplicaAvailability(
+      pubkey,
+      async (server, sha256) => ({
+        status: server.id === serverAId || (server.id === serverBId && sha256 === hashA) ? 200 : 404,
+        size: 42,
+        mimeType: 'image/jpeg',
+      }),
+      100,
+      [hashA]
+    );
     await catalog.queryCatalogTimeline(pubkey);
 
     const timeline = await catalog.queryCatalogTimeline(pubkey);

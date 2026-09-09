@@ -15,7 +15,8 @@ export type ServerListProgress = {
   error?: string;
 };
 
-export type MediaServerErrorKind = 'unsupported' | 'not-found' | 'auth' | 'conflict' | 'rate_limited' | 'network' | 'server';
+export type MediaServerErrorKind =
+  'unsupported' | 'not-found' | 'auth' | 'conflict' | 'rate_limited' | 'network' | 'server';
 
 export class MediaServerError extends Error {
   constructor(
@@ -30,7 +31,8 @@ export class MediaServerError extends Error {
 
 export const normalizeMediaServerError = (error: unknown): MediaServerError => {
   if (error instanceof MediaServerError) return error;
-  const status = (error as { response?: { status?: number }; status?: number })?.response?.status ??
+  const status =
+    (error as { response?: { status?: number }; status?: number })?.response?.status ??
     (error as { status?: number })?.status;
   const kind: MediaServerErrorKind =
     status === 404 || status === 410
@@ -60,9 +62,23 @@ export type MediaServerCapabilities = {
 export type MediaServer = {
   source: Server;
   capabilities: MediaServerCapabilities;
-  list(pubkey: string, sign: (template: EventTemplate) => Promise<SignedEvent>, onProgress?: (progress: ServerListProgress) => void | Promise<void>): Promise<BlobDescriptor[]>;
-  upload(file: File, filename: string, sign: (template: EventTemplate) => Promise<SignedEvent>, onProgress?: (progress: AxiosProgressEvent) => void, signal?: AbortSignal): Promise<BlobDescriptor>;
-  mirror(sourceUrl: string, sign: (template: EventTemplate) => Promise<SignedEvent>, signal?: AbortSignal): Promise<BlobDescriptor>;
+  list(
+    pubkey: string,
+    sign: (template: EventTemplate) => Promise<SignedEvent>,
+    onProgress?: (progress: ServerListProgress) => void | Promise<void>
+  ): Promise<BlobDescriptor[]>;
+  upload(
+    file: File,
+    filename: string,
+    sign: (template: EventTemplate) => Promise<SignedEvent>,
+    onProgress?: (progress: AxiosProgressEvent) => void,
+    signal?: AbortSignal
+  ): Promise<BlobDescriptor>;
+  mirror(
+    sourceUrl: string,
+    sign: (template: EventTemplate) => Promise<SignedEvent>,
+    signal?: AbortSignal
+  ): Promise<BlobDescriptor>;
   exists(hash: string): Promise<BlobDescriptor | null>;
   report(event: NostrEvent): Promise<void>;
   delete(hash: string, sign: (template: EventTemplate) => Promise<SignedEvent>): Promise<void>;

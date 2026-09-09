@@ -2,7 +2,14 @@ import { useRef, useState } from 'react';
 import { Loader2, RotateCw } from 'lucide-react';
 import type { NostrEvent } from 'nostr-tools';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import FileEventEditor, { type FileEventData } from '../FileEventEditor/FileEventEditor';
 import { usePublishing } from '../FileEventEditor/usePublishing';
 import { retryFailedTargets, type PublishResult } from '../../utils/publish';
@@ -25,7 +32,8 @@ function retryable(result: PublishResult | undefined): boolean {
 function resultLabel(result: PublishResult): string {
   if (result.verdict === 'delivered') return 'Delivered';
   if (result.verdict === 'disabled') return 'Skipped (publishing disabled)';
-  if (result.verdict === 'partial') return `Partial (${result.targets.filter(target => target.ok).length}/${result.targets.length} relays)`;
+  if (result.verdict === 'partial')
+    return `Partial (${result.targets.filter(target => target.ok).length}/${result.targets.length} relays)`;
   return 'Failed';
 }
 
@@ -87,19 +95,41 @@ export function DescribeUnlinkedFileDialog({
           <DialogDescription>Review the catalog metadata, then publish a Nostr file metadata event.</DialogDescription>
         </DialogHeader>
         <FileEventEditor fileEventData={data} setFileEventData={setData} />
-        {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
         {result && (
           <div className="space-y-1 rounded-lg border p-3 text-sm" role="status">
             <p>{resultLabel(result)}</p>
-            {result.targets.filter(target => !target.ok).map(target => (
-              <p key={target.url} className="text-destructive">{target.url}: {target.message ?? 'Rejected'}</p>
-            ))}
+            {result.targets
+              .filter(target => !target.ok)
+              .map(target => (
+                <p key={target.url} className="text-destructive">
+                  {target.url}: {target.message ?? 'Rejected'}
+                </p>
+              ))}
           </div>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={publishing}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={publishing}>
+            Cancel
+          </Button>
           <Button onClick={retryable(result) ? retry : publish} disabled={publishing}>
-            {publishing ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Publishing…</> : retryable(result) ? <><RotateCw className="mr-1 h-4 w-4" />Retry failed</> : 'Publish metadata'}
+            {publishing ? (
+              <>
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                Publishing…
+              </>
+            ) : retryable(result) ? (
+              <>
+                <RotateCw className="mr-1 h-4 w-4" />
+                Retry failed
+              </>
+            ) : (
+              'Publish metadata'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

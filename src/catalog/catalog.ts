@@ -2036,7 +2036,7 @@ function imageDimensions(
   if (mimeType === 'image/gif' && bytes.length >= 10)
     return { width: view.getUint16(6, true), height: view.getUint16(8, true) };
   if (mimeType !== 'image/jpeg') return undefined;
-  for (let offset = 2; offset + 9 < bytes.length; ) {
+  for (let offset = 2; offset + 9 < bytes.length;) {
     if (bytes[offset] !== 0xff) {
       offset += 1;
       continue;

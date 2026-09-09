@@ -47,12 +47,32 @@ type WorkerPort = {
   removeEventListener(type: string, listener: (event: MessageEvent) => void): void;
 };
 export const catalogMethodNames = [
-  'ingestServerList', 'reset', 'listAdditionalPubkeys', 'addAdditionalPubkey', 'removeAdditionalPubkey',
-  'ingestUpload', 'recordBlobsRemoved', 'ingestAuthoredEvents', 'syncAuthoredEvents', 'syncAdditionalEvents', 'syncReverseLookups',
-  'enrichHls', 'enrichBlobPrefix', 'queryPlaylistHashes', 'queryUnidentifiedBlobs', 'ingestId3',
-  'getCatalogStatus', 'updateBlobServerMetadata', 'queryCatalogTimeline', 'queryCatalogAssetIds',
-  'getCatalogTimelineAsset', 'getCatalogAssetContents', 'planCatalogAction', 'getAssetReplicaMap',
-  'refreshReplicaAvailability', 'refreshEventUrlAvailability',
+  'ingestServerList',
+  'reset',
+  'listAdditionalPubkeys',
+  'addAdditionalPubkey',
+  'removeAdditionalPubkey',
+  'ingestUpload',
+  'recordBlobsRemoved',
+  'ingestAuthoredEvents',
+  'syncAuthoredEvents',
+  'syncAdditionalEvents',
+  'syncReverseLookups',
+  'enrichHls',
+  'enrichBlobPrefix',
+  'queryPlaylistHashes',
+  'queryUnidentifiedBlobs',
+  'ingestId3',
+  'getCatalogStatus',
+  'updateBlobServerMetadata',
+  'queryCatalogTimeline',
+  'queryCatalogAssetIds',
+  'getCatalogTimelineAsset',
+  'getCatalogAssetContents',
+  'planCatalogAction',
+  'getAssetReplicaMap',
+  'refreshReplicaAvailability',
+  'refreshEventUrlAvailability',
 ] as const satisfies readonly (keyof Catalog)[];
 type CatalogMethodName = (typeof catalogMethodNames)[number];
 

@@ -60,7 +60,6 @@ const useVideoThumbnailDvm = (fileEventData: FileEventData, setFileEventData: (d
     const doASync = async () => {
       const firstEvent = await ensureDecrypted(dvmPubkey, thumbnailSubscription.events[0]);
       if (firstEvent) {
-        
         const urls = firstEvent.tags.filter(t => t[0] === 'thumb').map(t => t[1]);
         const dim = firstEvent.tags.find(t => t[0] === 'dim')?.[1];
         const duration = firstEvent.tags.find(t => t[0] === 'duration')?.[1];

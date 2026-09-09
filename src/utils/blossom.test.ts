@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import axios from 'axios';
 import type { BlobDescriptor } from 'blossom-client-sdk';
-import { checkBlobExists, collectBlossomListPages, downloadBlossomBlob, extractHashFromUrl, mirrordBlossomBlob, uploadBlossomBlob } from './blossom';
+import {
+  checkBlobExists,
+  collectBlossomListPages,
+  downloadBlossomBlob,
+  extractHashFromUrl,
+  mirrordBlossomBlob,
+  uploadBlossomBlob,
+} from './blossom';
 
 const hashA = 'a'.repeat(64);
 const hashB = 'b'.repeat(64);
@@ -99,7 +106,14 @@ describe('BUD-04 mirror', () => {
 });
 describe('blob descriptor validation (lenient for old servers)', () => {
   it('drops entries with a malformed sha256 or missing url from list pages', async () => {
-    const pages = [[blob(hashA), { ...blob(hashB), sha256: 'not-a-hash' }, { ...blob(hashC), url: undefined } as unknown as BlobDescriptor], []];
+    const pages = [
+      [
+        blob(hashA),
+        { ...blob(hashB), sha256: 'not-a-hash' },
+        { ...blob(hashC), url: undefined } as unknown as BlobDescriptor,
+      ],
+      [],
+    ];
     const blobs = await collectBlossomListPages(async () => pages.shift() ?? []);
     expect(blobs.map(blob => blob.sha256)).toEqual([hashA]);
   });

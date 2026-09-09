@@ -67,7 +67,9 @@ export function ReportDialog({ open, onOpenChange, hashes, event, signEventTempl
     try {
       let signed = signedEvent;
       if (!signed) {
-        signed = (await signEventTemplate(buildReportTemplate({ hashes, type, content, event }))) as unknown as NostrEvent;
+        signed = (await signEventTemplate(
+          buildReportTemplate({ hashes, type, content, event })
+        )) as unknown as NostrEvent;
         setSignedEvent(signed);
       }
 
@@ -94,7 +96,8 @@ export function ReportDialog({ open, onOpenChange, hashes, event, signEventTempl
       );
       setServerResults(nextServerResults);
 
-      const relayOk = !nextRelayResult || nextRelayResult.verdict === 'delivered' || nextRelayResult.verdict === 'disabled';
+      const relayOk =
+        !nextRelayResult || nextRelayResult.verdict === 'delivered' || nextRelayResult.verdict === 'disabled';
       const serversOk = reportServers.every(server => nextServerResults[server.name]?.ok);
       if (relayOk && serversOk) onOpenChange(false);
     } catch (error) {
@@ -109,12 +112,18 @@ export function ReportDialog({ open, onOpenChange, hashes, event, signEventTempl
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80" />
         <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border bg-background p-6 shadow-lg">
-          <DialogPrimitive.Title className="text-lg font-bold">Report blob{hashes.length > 1 ? `s (${hashes.length})` : ''}</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="text-lg font-bold">
+            Report blob{hashes.length > 1 ? `s (${hashes.length})` : ''}
+          </DialogPrimitive.Title>
           <DialogPrimitive.Description className="text-sm text-muted-foreground">
             Sends a NIP-56 report event to your relays and to your blossom servers (BUD-09).
           </DialogPrimitive.Description>
 
-          <RadioGroup value={type} onValueChange={value => setType(value as ReportType)} className="grid grid-cols-3 gap-2">
+          <RadioGroup
+            value={type}
+            onValueChange={value => setType(value as ReportType)}
+            className="grid grid-cols-3 gap-2"
+          >
             {REPORT_TYPES.map(reportType => (
               <Label key={reportType} className="flex cursor-pointer items-center gap-2 border p-2 font-normal">
                 <RadioGroupItem value={reportType} />

@@ -327,10 +327,7 @@ describe('Upload workflow', () => {
 
     expect(mockPublishFileEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: expect.arrayContaining([
-          'https://primary.example/vacation.jpg',
-          'https://secondary.example/vacation.jpg',
-        ]),
+        url: expect.arrayContaining(['https://primary.example/vacation.jpg', 'https://secondary.example/vacation.jpg']),
       })
     );
   });
@@ -359,7 +356,15 @@ describe('Upload workflow', () => {
     });
     mockIngestUpload.mockResolvedValue(undefined);
     mockPublishFileEvent.mockResolvedValue({
-      event: { id: 'a'.repeat(64), pubkey: 'b'.repeat(64), created_at: 1700000000, kind: 1063, tags: [], content: '', sig: '' },
+      event: {
+        id: 'a'.repeat(64),
+        pubkey: 'b'.repeat(64),
+        created_at: 1700000000,
+        kind: 1063,
+        tags: [],
+        content: '',
+        sig: '',
+      },
       verdict: 'disabled',
       targets: [],
     });
@@ -433,7 +438,10 @@ describe('Upload workflow', () => {
     mockRelayPoolPublish.mockResolvedValue([{ from: 'wss://bad.example', ok: true }]);
     await user.click(screen.getByRole('button', { name: /retry/i }));
 
-    expect(mockRelayPoolPublish).toHaveBeenCalledWith(['wss://bad.example'], expect.objectContaining({ id: signedEvent.id }));
+    expect(mockRelayPoolPublish).toHaveBeenCalledWith(
+      ['wss://bad.example'],
+      expect.objectContaining({ id: signedEvent.id })
+    );
     expect(await screen.findByText(/^file event: delivered$/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /retry/i })).toBeFalsy();
   });
@@ -462,12 +470,28 @@ describe('Upload workflow', () => {
     });
     mockIngestUpload.mockResolvedValue(undefined);
     mockPublishFileEvent.mockResolvedValue({
-      event: { id: 'a'.repeat(64), pubkey: 'b'.repeat(64), created_at: 1700000000, kind: 1063, tags: [], content: '', sig: '' },
+      event: {
+        id: 'a'.repeat(64),
+        pubkey: 'b'.repeat(64),
+        created_at: 1700000000,
+        kind: 1063,
+        tags: [],
+        content: '',
+        sig: '',
+      },
       verdict: 'delivered',
       targets: [{ url: 'wss://relay.example', ok: true }],
     });
     mockPublishVideoEvent.mockResolvedValue({
-      event: { id: 'c'.repeat(64), pubkey: 'b'.repeat(64), created_at: 1700000000, kind: 34235, tags: [], content: '', sig: '' },
+      event: {
+        id: 'c'.repeat(64),
+        pubkey: 'b'.repeat(64),
+        created_at: 1700000000,
+        kind: 34235,
+        tags: [],
+        content: '',
+        sig: '',
+      },
       verdict: 'failed',
       targets: [{ url: 'wss://relay.example', ok: false, message: 'rejected' }],
     });

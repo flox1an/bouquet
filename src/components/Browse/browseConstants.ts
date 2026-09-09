@@ -1,5 +1,5 @@
 import { FileText, Image, Music2, Video } from 'lucide-react';
-import type { TimelineProjection, TimelineSortField } from '../../catalog/catalog'
+import type { TimelineProjection, TimelineSortField } from '../../catalog/catalog';
 
 export type TimelineItem = TimelineProjection;
 export type TypeFilter = 'all' | 'media' | 'website' | TimelineItem['displayType'];
@@ -66,11 +66,7 @@ export function groupRepeatedPosts(items: TimelineItem[]): TimelineItem[] {
   }
   return items.filter(
     item =>
-      !(
-        item.displayType === 'image' &&
-        item.primaryBlobSha256 &&
-        representedThumbnails.has(item.primaryBlobSha256)
-      ) &&
+      !(item.displayType === 'image' && item.primaryBlobSha256 && representedThumbnails.has(item.primaryBlobSha256)) &&
       (!item.primaryBlobSha256 ||
         !item.eventAuthor ||
         representative.get(`${item.primaryBlobSha256}:${item.eventAuthor}`) === item)

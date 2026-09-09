@@ -1,13 +1,7 @@
 import * as React from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
 
@@ -36,7 +30,7 @@ export function Pagination({
     <div className="flex items-center justify-between px-2 py-4">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <span>Show</span>
-        <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+        <Select value={String(pageSize)} onValueChange={v => onPageSizeChange(Number(v))}>
           <SelectTrigger className="h-8 w-[70px]">
             <SelectValue />
           </SelectTrigger>

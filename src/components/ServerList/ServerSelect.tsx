@@ -39,11 +39,7 @@ export const ServerSelect = ({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
-        <Button
-          variant="outline"
-          className={cn('w-full justify-between h-auto py-2', className)}
-          disabled={disabled}
-        >
+        <Button variant="outline" className={cn('w-full justify-between h-auto py-2', className)} disabled={disabled}>
           {selected ? (
             <div className="flex items-center gap-3 text-left">
               <Server className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -93,9 +89,7 @@ export const ServerSelect = ({
                       {server.type}
                     </Badge>
                   )}
-                  {server.isLoading && (
-                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                  )}
+                  {server.isLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
                 </div>
                 {server.isError ? (
                   <span className="flex items-center gap-1 text-xs text-destructive">
@@ -108,11 +102,7 @@ export const ServerSelect = ({
                       <span>{server.count} files</span>
                       <span>{formatFileSize(server.size)}</span>
                     </div>
-                    {getPreviewText && (
-                      <span className="text-xs text-primary mt-0.5">
-                        {getPreviewText(server)}
-                      </span>
-                    )}
+                    {getPreviewText && <span className="text-xs text-primary mt-0.5">{getPreviewText(server)}</span>}
                   </>
                 )}
               </div>

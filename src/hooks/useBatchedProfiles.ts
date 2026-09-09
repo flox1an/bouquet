@@ -66,9 +66,7 @@ export function useBatchedProfileLoader() {
     };
 
     // Expose global function to request profiles
-    (window as unknown as { __requestProfile: (pubkey: string) => void }).__requestProfile = (
-      pubkey: string
-    ) => {
+    (window as unknown as { __requestProfile: (pubkey: string) => void }).__requestProfile = (pubkey: string) => {
       if (!pubkey || pubkey.trim() === '') return;
       pendingPubkeys.add(pubkey);
       scheduleBatch();

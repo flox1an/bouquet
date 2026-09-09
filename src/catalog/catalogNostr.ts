@@ -3,7 +3,9 @@ import type { Filter, NostrEvent } from 'nostr-tools';
 import { mergeRelays, relayPool } from '../nostr/core';
 import type { AdditionalPubkey, Catalog } from './catalog';
 
-export const CATALOG_EVENT_KINDS = [1, 20, 21, 22, 1063, 5128, 15128, 30563, 31337, 34128, 34235, 34236, 35128] as const;
+export const CATALOG_EVENT_KINDS = [
+  1, 20, 21, 22, 1063, 5128, 15128, 30563, 31337, 34128, 34235, 34236, 35128,
+] as const;
 
 /**
  * Both the in-thread catalog and the worker client expose these two methods with the
@@ -36,12 +38,18 @@ export async function syncAdditionalPubkeyFromRelays(
   const relayList = newestOfKind(seedMetadata, 10002);
   const sourceRelays = mergeRelays([
     ...source.relayHints,
-    ...(relayList?.tags.filter(tag => tag[0] === 'r').map(tag => tag[1]).filter(Boolean) ?? []),
+    ...(relayList?.tags
+      .filter(tag => tag[0] === 'r')
+      .map(tag => tag[1])
+      .filter(Boolean) ?? []),
     ...ownerRelayUrls,
   ]);
   const metadata = [...seedMetadata, ...(await loadSourceMetadata(source.pubkey, sourceRelays))];
   const serverUrls =
-    newestOfKind(metadata, 10063)?.tags.filter(tag => tag[0] === 'server').map(tag => tag[1]).filter(Boolean) ?? [];
+    newestOfKind(metadata, 10063)
+      ?.tags.filter(tag => tag[0] === 'server')
+      .map(tag => tag[1])
+      .filter(Boolean) ?? [];
 
   for (const relayUrl of sourceRelays) {
     try {
@@ -75,7 +83,9 @@ async function loadSourceMetadata(pubkey: string, relayUrls: string[]) {
   }
 }
 function newestOfKind(events: NostrEvent[], kind: number) {
-  return events.filter(event => event.kind === kind).sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id))[0];
+  return events
+    .filter(event => event.kind === kind)
+    .sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id))[0];
 }
 
 export async function syncReverseLookupsFromRelays(catalog: EventSyncTarget, pubkey: string, relayUrls: string[]) {

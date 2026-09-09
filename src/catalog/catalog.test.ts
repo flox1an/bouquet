@@ -624,23 +624,26 @@ describe('user blob catalog', () => {
     const catalog = new Catalog(new MemoryCatalogStore());
     await catalog.addAdditionalPubkey(hashA, { pubkey: hashB, relayHints: [] });
     const website = {
-      ...event('external-site', 100, [['d', '/index.html'], ['x', hashC]], '', 34128),
+      ...event(
+        'external-site',
+        100,
+        [
+          ['d', '/index.html'],
+          ['x', hashC],
+        ],
+        '',
+        34128
+      ),
       pubkey: hashB,
     };
     const unrelated = { ...event('unrelated', 100, [['x', hashD]]), pubkey: hashD };
 
-    await catalog.syncAdditionalEvents(
-      hashA,
-      hashB,
-      'wss://relay.example',
-      async () => [website, unrelated],
-      ['https://files.example/']
-    );
+    await catalog.syncAdditionalEvents(hashA, hashB, 'wss://relay.example', async () => [website, unrelated], [
+      'https://files.example/',
+    ]);
     await catalog.queryCatalogTimeline(hashA);
 
-    const imported = (await catalog.queryCatalogTimeline(hashA)).find(
-      item => item.eventId === 'external-site'
-    );
+    const imported = (await catalog.queryCatalogTimeline(hashA)).find(item => item.eventId === 'external-site');
     expect(imported).toMatchObject({
       eventAuthor: hashB,
       primaryBlobSha256: hashC,
