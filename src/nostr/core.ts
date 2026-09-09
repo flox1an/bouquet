@@ -47,7 +47,7 @@ export function mergeRelays(userRelays: string[] = []): string[] {
   }
 
   const merged = Array.from(relaySet);
-  
+
   return merged;
 }
 
@@ -62,7 +62,7 @@ async function ensureCache() {
 }
 ensureCache();
 
-export async function cacheRequest(filters: Filter[]) {
+export async function cacheRequest(filters: Filter[]): Promise<NostrEvent[]> {
   const db = await ensureCache();
   return getEventsForFilters(db, filters);
 }
@@ -113,5 +113,4 @@ export function connectToRelays(relays: string[] = DEFAULT_RELAYS) {
   for (const url of relays) {
     relayPool.relay(url);
   }
-  
 }

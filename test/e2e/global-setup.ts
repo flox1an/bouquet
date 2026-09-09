@@ -24,7 +24,7 @@ async function waitForHttp(url: string, label: string, timeoutMs = 90_000) {
       await fetch(url);
       return;
     } catch (error) {
-      if (Date.now() > deadline) throw new Error(`${label} did not come up at ${url}: ${String(error)}`);
+      if (Date.now() > deadline) throw new Error(`${label} did not come up at ${url}: ${String(error)}`, { cause: error });
       await new Promise(resolve => setTimeout(resolve, 250));
     }
   }
