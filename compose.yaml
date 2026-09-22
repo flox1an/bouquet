@@ -2,7 +2,5 @@ services:
   bouquet:
     build:
       context: .
-    environment:
-      NODE_ENV: production
     ports:
-      - 3000:3000
+      - 3000:80
