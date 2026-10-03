@@ -120,5 +120,5 @@ Set `VITE_THUMBNAIL_PROXY=off` to disable gallery proxying. Upload previews use
 
 ## Docker
 
-See [README.Docker.md](/Users/flox/dev/nostr/bouquet/README.Docker.md) for container build and run instructions.
+See [README.Docker.md](README.Docker.md) for container build and run instructions.
 
