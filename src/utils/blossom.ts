@@ -75,7 +75,16 @@ export async function fetchBlossomList(
 ): Promise<BlobDescriptor[]> {
   const listAuthEvent = await createListAuth(signEventTemplate);
   return collectBlossomListPages(
-    cursor => listBlobs(serverUrl, pubkey, { auth: listAuthEvent, cursor, limit: BLOSSOM_LIST_PAGE_SIZE }),
+    cursor =>
+      listBlobs(serverUrl, pubkey, { auth: listAuthEvent, cursor, limit: BLOSSOM_LIST_PAGE_SIZE }).catch(err => {
+        // The list endpoint is optional in Blossom (BUD-02). Some servers disable
+        // it (404) while upload/download/mirror keep working — treat that as
+        // "no listable blobs" instead of failing the whole server. The SDK throws
+        // HTTPError (extends Error, carries `status`) but does not export it, so
+        // match the same shape normalizeMediaServerError uses.
+        if (err instanceof Error && 'status' in err && err.status === 404) return [];
+        throw err;
+      }),
     onProgress,
     BLOSSOM_LIST_PAGE_SIZE
   );
@@ -226,9 +235,13 @@ export const mirrordBlossomBlob = async (
   targetServer: string,
   sourceUrl: string,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sha256?: string
 ) => {
-  const hash = extractHashFromUrl(sourceUrl);
+  // Prefer the caller-provided hash: extraction fails for sources without a
+  // hash-shaped path, and the server verifies the downloaded bytes against the
+  // auth event's `x` tag, so a wrong hash yields a 403.
+  const hash = sha256 || extractHashFromUrl(sourceUrl);
 
   if (!hash) throw new Error('The sourceUrl does not contain a blossom hash.');
 

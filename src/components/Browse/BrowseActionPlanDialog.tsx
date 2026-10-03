@@ -295,6 +295,7 @@ export function BrowseActionPlanDialog({
         if (!target) throw new Error('Destination server is no longer available.');
         return transferBlob(`${op.sourceBaseUrl}/${op.sha256}`, target, signEventTemplate, {
           signal: controller.signal,
+          sourceSha256: op.sha256,
           allowMirror: mirrorSupport[op.targetServerId] !== false,
           onMirrorUnsupported: () => setMirrorSupport(current => ({ ...current, [op.targetServerId]: false })),
           onPhaseChange: (transferPhase: TransferPhase) =>

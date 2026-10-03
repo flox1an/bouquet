@@ -189,11 +189,13 @@ describe('Transfer cancellation recovery', () => {
     await user.click(resumeButton);
 
     expect(mockTransferBlob).toHaveBeenCalledTimes(1);
+    // PR #6 port: the descriptor's real URL is the source, and the known sha256
+    // rides along for the mirror auth `x` tag.
     expect(mockTransferBlob).toHaveBeenCalledWith(
-      expect.stringContaining(blobB.sha256),
+      blobB.url,
       expect.anything(),
       expect.anything(),
-      expect.anything()
+      expect.objectContaining({ sourceSha256: blobB.sha256 })
     );
   });
 });

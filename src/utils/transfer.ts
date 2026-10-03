@@ -15,6 +15,8 @@ export interface TransferOptions {
   allowMirror?: boolean;
   onMirrorUnsupported?: () => void;
   onCompleted?: (blob: BlobDescriptor, method: 'mirror' | 'upload') => void | Promise<void>;
+  /** Known sha256 of the source blob, used for the mirror auth `x` tag. */
+  sourceSha256?: string;
 }
 
 class SourceBlobNotFoundError extends Error {
@@ -89,6 +91,7 @@ export const transferBlob = async (
     allowMirror = true,
     onMirrorUnsupported,
     onCompleted,
+    sourceSha256,
   } = options;
   const target = mediaServer(targetServer);
 
@@ -122,7 +125,7 @@ export const transferBlob = async (
     if (target.capabilities.mirror && allowMirror) {
       try {
         onPhaseChange?.('mirroring');
-        const mirrorFn = () => target.mirror(sourceUrl, signEventTemplate, signal);
+        const mirrorFn = () => target.mirror(sourceUrl, signEventTemplate, signal, sourceSha256);
         const blob = await withTimeout(retryWithBackoff(mirrorFn, maxRetries, signal), timeout, signal);
         onProgress?.({
           loaded: blob.size,

@@ -77,7 +77,8 @@ export type MediaServer = {
   mirror(
     sourceUrl: string,
     sign: (template: EventTemplate) => Promise<SignedEvent>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    sha256?: string
   ): Promise<BlobDescriptor>;
   exists(hash: string): Promise<BlobDescriptor | null>;
   report(event: NostrEvent): Promise<void>;
@@ -106,7 +107,8 @@ export const mediaServer = (source: Server): MediaServer => {
       upload: (file, _filename, sign, onProgress, signal) =>
         guard(() => uploadBlossomBlob(source.url, file, sign, onProgress, signal)),
       exists: hash => guard(() => checkBlobExists(source.url, hash)),
-      mirror: (sourceUrl, sign, signal) => guard(() => mirrordBlossomBlob(source.url, sourceUrl, sign, signal)),
+      mirror: (sourceUrl, sign, signal, sha256) =>
+        guard(() => mirrordBlossomBlob(source.url, sourceUrl, sign, signal, sha256)),
       report: event => guard(() => reportBlobs(source.url, event)),
       delete: async (hash, sign) => {
         const auth = await createDeleteAuth(sign, hash, { servers: [new URL(source.url).hostname.toLowerCase()] });
