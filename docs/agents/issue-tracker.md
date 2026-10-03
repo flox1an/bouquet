@@ -13,7 +13,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
-This repo has two remotes: `github` (github.com/flox1an/bouquet) and `origin` (git.v0l.io, self-hosted Gitea). Issues are tracked on the **GitHub** remote; pass `--repo flox1an/bouquet` if `gh` picks the wrong one.
+`origin` is GitHub (github.com/flox1an/bouquet), where issues are tracked. The old self-hosted Gitea mirror is the `v0l` remote (git.v0l.io, no longer updated). Pass `--repo flox1an/bouquet` if `gh` picks the wrong one.
 
 ## Pull requests as a triage surface
 
