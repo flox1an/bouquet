@@ -1,13 +1,17 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, expect, it, afterEach } from 'vitest';
+import { describe, expect, it, afterEach, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { createElement as h } from 'react';
 import { TimelineThumbnail } from './TimelineThumbnail';
 import type { TimelineProjection } from '../catalog/catalog';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+  vi.resetModules();
+});
 
 type Item = Pick<
   TimelineProjection,
@@ -160,5 +164,59 @@ describe('TimelineThumbnail', () => {
 
     expect(box.querySelector('img')).toBeNull();
     expect(box.querySelector('svg')).toBeTruthy();
+  });
+
+  // THUMBNAIL_PROXY_MODE is captured from import.meta.env at module load, so each
+  // mode case re-imports the component after stubbing the env — a module loading
+  // boundary test, hence the dynamic imports below.
+  it('uses the plain VITE_IMAGE_PROXY template when VITE_THUMBNAIL_PROXY=plain', async () => {
+    vi.stubEnv('VITE_THUMBNAIL_PROXY', 'plain');
+    vi.stubEnv('VITE_IMAGE_PROXY', 'https://resize.example/{size}/{url}');
+    vi.resetModules();
+    const { TimelineThumbnail: Thumb } = await import('./TimelineThumbnail');
+    const { container } = render(h(Thumb, { item: item() }));
+    expect((container.querySelector('img') as HTMLImageElement).src).toBe(
+      'https://resize.example/480/https://media.example/pic.jpg'
+    );
+  });
+
+  it('loads original URLs when VITE_THUMBNAIL_PROXY=off', async () => {
+    vi.stubEnv('VITE_THUMBNAIL_PROXY', 'off');
+    vi.resetModules();
+    const { TimelineThumbnail: Thumb } = await import('./TimelineThumbnail');
+    const { container } = render(h(Thumb, { item: item() }));
+    expect((container.querySelector('img') as HTMLImageElement).src).toBe('https://media.example/pic.jpg');
+  });
+
+  it('loads original URLs when the Nostube proxy base is explicitly empty', async () => {
+    vi.stubEnv('VITE_THUMBNAIL_PROXY', 'nostube');
+    vi.stubEnv('VITE_NOSTUBE_IMAGE_PROXY_BASE_URL', '');
+    vi.resetModules();
+    const { TimelineThumbnail: Thumb } = await import('./TimelineThumbnail');
+    const { container } = render(h(Thumb, { item: item() }));
+    expect((container.querySelector('img') as HTMLImageElement).src).toBe('https://media.example/pic.jpg');
+  });
+
+  it('uses the configured nostube base when VITE_NOSTUBE_IMAGE_PROXY_BASE_URL is set', async () => {
+    vi.stubEnv('VITE_NOSTUBE_IMAGE_PROXY_BASE_URL', 'https://imgproxy.selfhosted.example');
+    vi.resetModules();
+    const { TimelineThumbnail: Thumb } = await import('./TimelineThumbnail');
+    const { container } = render(
+      h(Thumb, {
+        item: {
+          ...item(),
+          displayType: 'video',
+          displayMimeType: 'video/mp4',
+          previewUrl: undefined,
+          primaryUrl: `https://24242.io/${hashA}`,
+          previewBlobSha256: undefined,
+          primaryBlobSha256: hashA,
+        },
+        knownServersFor: () => ['nostr.download'],
+      })
+    );
+    const proxyUrl = new URL((container.querySelector('img') as HTMLImageElement).src);
+    expect(proxyUrl.host).toBe('imgproxy.selfhosted.example');
+    expect(proxyUrl.pathname).toBe(`/v1/preset/feed-preview-v1/${hashA}.mp4`);
   });
 });

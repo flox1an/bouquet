@@ -87,7 +87,30 @@ afterwards, so runs never share state.
 | --- | --- | --- |
 | `VITE_DISABLE_EVENT_PUBLISH` | unset | Set to `1` to skip broadcasting file/audio/video Nostr events (kind 1063/31137/34235/34236) to relays. Events are still signed; useful for local testing without polluting your feed. |
 | `VITE_RELAYS` | unset | Comma-separated relay list replacing the built-in defaults. Used by the integration tests to talk to a local relay only. |
-| `VITE_IMAGE_PROXY` | `https://images.slidestr.net/insecure/f:webp/rs:fill:{size}/plain/{url}` | Image-proxy URL template for thumbnails. Placeholders: `{url}` (raw source URL), `{encodedUrl}` (URL-encoded source URL), `{size}` (edge size in px). With neither `{url}` nor `{encodedUrl}` the source URL is appended. Set to an empty value to load images directly without a proxy. |
+| `VITE_IMAGE_PROXY` | `https://images.slidestr.net/insecure/f:webp/rs:fill:{size}/plain/{url}` | Plain image-resizing proxy URL template. Placeholders: `{url}` (raw source URL), `{encodedUrl}` (URL-encoded source URL), `{size}` (edge size in px). With neither `{url}` nor `{encodedUrl}` the source URL is appended. Set to an empty value to load images directly without a proxy. Used by the upload-flow previews always, and by the gallery when `VITE_THUMBNAIL_PROXY=plain`. |
+| `VITE_THUMBNAIL_PROXY` | `nostube` | Which proxy implementation the Browse/Timeline gallery uses for thumbnails: `nostube` (signed imgproxy preset, extracts video frames and audio artwork), `plain` (the `VITE_IMAGE_PROXY` template above — images only, no video thumbnails), or `off` (load original URLs directly). |
+| `VITE_NOSTUBE_IMAGE_PROXY_BASE_URL` | `https://imgproxy.nostu.be` | Base URL of the nostube-compatible imgproxy used when `VITE_THUMBNAIL_PROXY=nostube`. Point it at a self-hosted, nostube-compatible proxy (the `/v1/preset/feed-preview-v1/` signing preset must exist there). An empty value disables gallery proxying. |
+
+These `VITE_*` settings are applied at **build time**. Set them in `.env.local`
+before building (or before starting the dev server); changing a running
+container's environment does not change an already-built frontend.
+
+For a self-hosted image-only resizing proxy:
+
+```dotenv
+VITE_THUMBNAIL_PROXY=plain
+VITE_IMAGE_PROXY=https://resize.example/insecure/f:webp/rs:fill:{size}/plain/{url}
+```
+
+For a self-hosted Nostube-compatible proxy with video/audio extraction:
+
+```dotenv
+VITE_THUMBNAIL_PROXY=nostube
+VITE_NOSTUBE_IMAGE_PROXY_BASE_URL=https://nostube-proxy.example
+```
+
+Set `VITE_THUMBNAIL_PROXY=off` to disable gallery proxying. Upload previews use
+`VITE_IMAGE_PROXY` independently; set `VITE_IMAGE_PROXY=` to disable those too.
 
 ## Release Notes
 
