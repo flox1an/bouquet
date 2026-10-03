@@ -5,6 +5,11 @@ When you're ready, start your application by running:
 
 Your application will be available at http://localhost:3000.
 
+The image uses Node 22 and `npm ci`. After changing dependencies, commit the
+updated `package-lock.json`, including transitive peer dependencies. To refresh
+it with the same runtime as the image build, run:
+`docker run --rm -v "$PWD:/app" -w /app node:22-alpine npm install --package-lock-only --ignore-scripts`.
+
 ### Deploying your application to the cloud
 
 First, build your image, e.g.: `docker build -t bouquet .`.
