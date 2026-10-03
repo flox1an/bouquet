@@ -1,8 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ImageOff, Music2 } from 'lucide-react';
 import type { TimelineProjection } from '../catalog/catalog';
+import { getProxyUrl } from '../utils/imageProxy';
 
-const IMGPROXY_BASE_URL = 'https://imgproxy.nostu.be';
+// Which thumbnail proxy implementation the gallery uses:
+// - "nostube" (default): signed preset route + video frame / audio artwork
+//   extraction, host from VITE_NOSTUBE_IMAGE_PROXY_BASE_URL.
+// - "plain": the VITE_IMAGE_PROXY URL template (plain resizing proxy, images
+//   only — no video thumbnails).
+// - "off": load original URLs directly.
+const THUMBNAIL_PROXY_MODE = ['nostube', 'plain', 'off'].includes(import.meta.env.VITE_THUMBNAIL_PROXY ?? '')
+  ? import.meta.env.VITE_THUMBNAIL_PROXY!
+  : 'nostube';
+
+// Nostube's imgproxy deployment: signs Blossom fetches via the feed-preview
+// preset and extracts video frames / audio artwork. Override with a
+// nostube-compatible, self-hosted proxy; set to an empty value to disable
+// proxying so the gallery loads original URLs directly.
+const IMGPROXY_BASE_URL = import.meta.env.VITE_NOSTUBE_IMAGE_PROXY_BASE_URL ?? 'https://imgproxy.nostu.be';
 
 /** imgproxy has no route to `.fips` hosts - a local/dev-only domain suffix, not a
     public address - so passing one as an `xs` hint just wastes the fetch attempt. */
@@ -42,6 +57,9 @@ function proxiedThumbnailUrl(
   extensionHint?: string
 ): string {
   if (url.startsWith('data:')) return url;
+  if (THUMBNAIL_PROXY_MODE === 'plain') return getProxyUrl(url, 480);
+  // "nostube" with an empty base, or "off": plain URL only.
+  if (THUMBNAIL_PROXY_MODE === 'off' || !IMGPROXY_BASE_URL) return url;
   const blossom = parseBlossomUrl(url);
   if (blossom) {
     // A listing is direct evidence that a server has this hash. Prefer that
