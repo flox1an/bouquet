@@ -87,6 +87,7 @@ afterwards, so runs never share state.
 | --- | --- | --- |
 | `VITE_DISABLE_EVENT_PUBLISH` | unset | Set to `1` to skip broadcasting file/audio/video Nostr events (kind 1063/31137/34235/34236) to relays. Events are still signed; useful for local testing without polluting your feed. |
 | `VITE_RELAYS` | unset | Comma-separated relay list replacing the built-in defaults. Used by the integration tests to talk to a local relay only. |
+| `VITE_IMAGE_PROXY` | `https://images.slidestr.net/insecure/f:webp/rs:fill:{size}/plain/{url}` | Image-proxy URL template for thumbnails. Placeholders: `{url}` (raw source URL), `{encodedUrl}` (URL-encoded source URL), `{size}` (edge size in px). With neither `{url}` nor `{encodedUrl}` the source URL is appended. Set to an empty value to load images directly without a proxy. |
 
 ## Release Notes
 

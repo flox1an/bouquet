@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { extractDomain, formatFileSize } from '../../utils/utils';
+import { getProxyUrl } from '../../utils/imageProxy';
 import { fetchId3Tag } from '../../utils/id3';
 import useVideoThumbnailDvm from './dvm';
 import TagInput from '../TagInput';
@@ -102,13 +103,6 @@ const FileEventEditor = ({
         .catch(() => undefined); // Audio without readable tags is still publishable.
     }
   }, [fileEventData]);
-
-  const getProxyUrl = (url: string) => {
-    if (url.startsWith('blob:')) {
-      return url;
-    }
-    return `https://images.slidestr.net/insecure/f:webp/rs:fill:600/plain/${url}`;
-  };
 
   useEffect(() => {
     if (fileEventData.selectedThumbnail == undefined) {
