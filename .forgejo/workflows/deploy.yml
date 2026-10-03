@@ -1,5 +1,6 @@
 # Push auf main: Image bauen, in die Forgejo-Registry pushen, Coolify deployen.
-# Laeuft auf dem Forgejo-Runner (CT 112, tag:runner) -- siehe home-network, Ticket 040.
+# Laeuft auf dem Forgejo-Runner. Hostnamen kommen aus Forgejo (Server-URL, User-Variable
+# COOLIFY_TAILNET_HOST), weil dieses Repo auf GitHub oeffentlich ist.
 name: deploy
 on:
   push:
@@ -10,14 +11,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      REGISTRY: forgejo.tail238b01.ts.net
-      IMAGE: forgejo.tail238b01.ts.net/${{ github.repository }}
+      COOLIFY_TAILNET_HOST: ${{ vars.COOLIFY_TAILNET_HOST }}
       COOLIFY_UUID: yt3qxsjx9f6u4v61ibmyyqtq
     steps:
       - uses: actions/checkout@v4
 
       - name: Build und Push
         run: |
+          REGISTRY="${GITHUB_SERVER_URL#https://}"
+          IMAGE="$REGISTRY/${{ github.repository }}"
           echo "${{ secrets.REGISTRY_TOKEN }}" | docker login "$REGISTRY" -u "${{ github.repository_owner }}" --password-stdin
           docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" .
           docker push "$IMAGE:${{ github.sha }}"
@@ -27,4 +29,4 @@ jobs:
         run: |
           curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_DEPLOY_TOKEN }}" \
-            "http://coolify.tail238b01.ts.net:8000/api/v1/deploy?uuid=$COOLIFY_UUID"
+            "http://${COOLIFY_TAILNET_HOST}:8000/api/v1/deploy?uuid=$COOLIFY_UUID"

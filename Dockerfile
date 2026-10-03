@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
-# Build im Node-Container, Auslieferung als nginx:alpine. Laeuft auf dem Forgejo-Runner
-# (home-network, Ticket 040); gleiche nginx-Konfiguration wie ops/static-site.
+# Build im Node-Container, Auslieferung als nginx:alpine.
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
