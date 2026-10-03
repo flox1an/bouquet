@@ -81,13 +81,26 @@ async function createNip98UploadAuthToken(
 
 const getValueByTag = (tags: string[][] | undefined, t: string) => tags && tags.find(v => v[0] == t)?.[1];
 
+/** The NIP-96 API lives at `api_url` (from /.well-known/nostr/nip96.json), which is
+    not necessarily the `server.url` the user added (e.g. cdn.nostrcheck.me vs
+    nostrcheck.me). Resolve it lazily so list/upload/delete never hit the
+    user-facing homepage — that returns HTML and looks like an empty file list. */
+async function resolveNip96BaseUrl(server: Server): Promise<string> {
+  if (server.nip96?.api_url) return server.nip96.api_url;
+  try {
+    return (await fetchNip96ServerConfig(server.url)).api_url || server.url;
+  } catch {
+    return server.url;
+  }
+}
+
 export async function fetchNip96List(
   server: Server,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>,
   onProgress?: (progress: ServerListProgress) => void | Promise<void>
 ): Promise<BlobDescriptor[]> {
   const count = 100;
-  const baseUrl = server.nip96?.api_url || server.url;
+  const baseUrl = await resolveNip96BaseUrl(server);
   const allFiles: Nip96BlobDescriptor[] = [];
   let page = 0;
 
@@ -178,7 +191,7 @@ export async function uploadNip96File(
   formData.append('content_type', file.type || '');
   formData.append('no_transform', 'true'); // we don't use any transform for blossom compatibility
 
-  const baseUrl = server.nip96?.api_url || server.url;
+  const baseUrl = await resolveNip96BaseUrl(server);
 
   const response = await axios.post(baseUrl, formData, {
     headers: { Authorization: `Nostr ${await createNip98UploadAuthToken(baseUrl, 'POST', signEventTemplate)}` },
@@ -235,7 +248,7 @@ export async function deleteNip96File(
   sha256: string,
   signEventTemplate: (template: EventTemplate) => Promise<SignedEvent>
 ) {
-  const baseUrl = server.nip96?.api_url || server.url;
+  const baseUrl = await resolveNip96BaseUrl(server);
 
   const url = `${baseUrl}/${sha256}`;
   const headers = {
