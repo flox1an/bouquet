@@ -83,5 +83,8 @@
     "vite": "^8.3.0",
     "vite-bundle-visualizer": "^1.2.1",
     "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "seroval": "1.6.8"
   }
 }
