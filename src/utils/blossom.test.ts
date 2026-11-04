@@ -57,6 +57,17 @@ describe('Blossom list pagination', () => {
       { blobs: [], received: 3, state: 'complete' },
     ]);
   });
+
+  it('finishes cleanly when the server ignores the cursor and re-sends the full list', async () => {
+    const cursors: Array<string | undefined> = [];
+    const blobs = await collectBlossomListPages(async cursor => {
+      cursors.push(cursor);
+      // Primal-style: full list every time, in varying order.
+      return cursor ? [blob(hashB), blob(hashA)] : [blob(hashA), blob(hashB)];
+    }, undefined, 100);
+    expect(blobs.map(b => b.sha256)).toEqual([hashA, hashB]);
+    expect(cursors).toEqual([undefined, hashB]);
+  });
 });
 
 describe('BUD-03 hash extraction', () => {

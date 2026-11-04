@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { use$ } from 'applesauce-react/hooks';
 import { createTimelineLoader } from 'applesauce-loaders/loaders';
 import type { Filter, NostrEvent } from 'nostr-tools';
@@ -14,6 +14,8 @@ export default function useEvent(
   relays?: string[]
 ): { data: NostrEvent | undefined; isLoading: boolean; isSuccess: boolean } {
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+  // Loader finished (EOSE or timeout) without the store necessarily holding a match: stop reporting "loading".
+  const [loaderDone, setLoaderDone] = useState(false);
   const { user, relaysReady } = useNostr();
 
   const effectiveRelays = useMemo(() => mergeRelays(relays || user?.relayUrls), [relays, user?.relayUrls]);
@@ -31,6 +33,7 @@ export default function useEvent(
 
     // Clean up previous subscription
     subscriptionRef.current?.unsubscribe();
+    setLoaderDone(false);
 
     const loader = createTimelineLoader(relayPool, effectiveRelays, filter, {
       eventStore,
@@ -39,7 +42,11 @@ export default function useEvent(
     });
 
     const sub = loader().subscribe({
-      error: err => console.error('Event loader error:', err),
+      complete: () => setLoaderDone(true),
+      error: err => {
+        console.error('Event loader error:', err);
+        setLoaderDone(true);
+      },
     });
 
     subscriptionRef.current = sub;
@@ -61,7 +68,7 @@ export default function useEvent(
 
   return {
     data: event,
-    isLoading: !opts?.disable && event === undefined,
+    isLoading: !opts?.disable && event === undefined && !loaderDone,
     isSuccess: event !== undefined,
   };
 }

@@ -97,7 +97,6 @@ export async function collectBlossomListPages(
 ): Promise<BlobDescriptor[]> {
   const allBlobs: BlobDescriptor[] = [];
   const seenHashes = new Set<string>();
-  const seenCursors = new Set<string>();
   let cursor: string | undefined;
 
   try {
@@ -116,16 +115,13 @@ export async function collectBlossomListPages(
         return allBlobs.map(blob => ({ ...blob, uploaded: blob.uploaded || dayjs().unix() }));
       }
 
-      const nextCursor = usable.at(-1)?.sha256;
-      if (!nextCursor || seenCursors.has(nextCursor)) {
-        throw new Error('Blossom list returned a non-advancing cursor');
-      }
-      seenCursors.add(nextCursor);
-
+      // A page with nothing new means the server ignored the cursor and re-sent its full list
+      // (blossom.primal.net ignores both `cursor` and `limit`), so the listing is complete.
       const newBlobs = usable.filter(blob => !seenHashes.has(blob.sha256));
+      if (newBlobs.length === 0) break;
       for (const blob of newBlobs) seenHashes.add(blob.sha256);
       allBlobs.push(...newBlobs);
-      cursor = nextCursor;
+      cursor = usable.at(-1)!.sha256;
 
       await onProgress?.({ blobs: newBlobs, cursor, state: 'pending', received: allBlobs.length });
     }
