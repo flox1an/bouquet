@@ -370,31 +370,33 @@ function MediaCard({
       {/* Overlay layer over the full-bleed square preview: keeps the controls
           off the text gradient without nesting buttons inside the link. */}
       <div className="pointer-events-none absolute inset-0">
-        <Checkbox
-          checked={selected}
-          onClick={event => {
-            event.stopPropagation();
-            onSelect(item.assetId, event);
-          }}
-          aria-label={`Select ${item.displayTitle}`}
-          className="pointer-events-auto absolute left-1 top-1 bg-background"
-        />
-        <div className="absolute right-1 top-1 flex items-center gap-1">
-          {segments > 0 && <span className={OVERLAY_BADGE}>HLS · {plural(segments, 'segment')}</span>}
-          {item.displayDurationSeconds !== undefined && (
-            <span className={OVERLAY_BADGE}>{formatDuration(item.displayDurationSeconds)}</span>
-          )}
+        <div className="absolute left-1 top-1 flex items-center gap-1">
+          <Checkbox
+            checked={selected}
+            onClick={event => {
+              event.stopPropagation();
+              onSelect(item.assetId, event);
+            }}
+            aria-label={`Select ${item.displayTitle}`}
+            className="pointer-events-auto bg-background"
+          />
           <span
             role="img"
             aria-label={availabilityLabel}
             title={availabilityLabel}
-            className="flex h-5 w-5 items-center justify-center border border-border bg-background/85"
+            className="flex h-5 w-5 items-center justify-center"
           >
             <AvailabilityIcon
               className={`h-3.5 w-3.5 ${AVAILABILITY_CLASS[item.availabilityState]}`}
               aria-hidden="true"
             />
           </span>
+        </div>
+        <div className="absolute right-1 top-1 flex items-center gap-1">
+          {segments > 0 && <span className={OVERLAY_BADGE}>HLS · {plural(segments, 'segment')}</span>}
+          {item.displayDurationSeconds !== undefined && (
+            <span className={OVERLAY_BADGE}>{formatDuration(item.displayDurationSeconds)}</span>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
