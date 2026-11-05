@@ -1,17 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ArrowLeft,
-  Code2,
-  ExternalLink,
-  FileText,
-  Flag,
-  Image,
-  Loader2,
-  MoreVertical,
-  Music2,
-  Play,
-  Video,
-} from 'lucide-react';
+import { ArrowLeft, Code2, Copy, ExternalLink, Flag, Loader2, MoreVertical, Play, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -29,6 +17,7 @@ import { useNostr } from '../utils/nostr';
 import { useGlobalContext } from '../GlobalState';
 import { useServerInfo, type ServerInfo } from '../utils/useServerInfo';
 import { formatDate, formatFileSize } from '../utils/utils';
+import { useToast } from '@/hooks/use-toast';
 import { probeNativeUrl } from '../catalog/availabilityFetch';
 import { eventKindLabel } from '../catalog/eventKinds';
 import { eventBody } from '../catalog/timelineMetadata';
@@ -39,28 +28,15 @@ import { BrowseActionPlanDialog } from '../components/Browse/BrowseActionPlanDia
 import { DescribeUnlinkedFileDialog } from '../components/Browse/DescribeUnlinkedFileDialog';
 import type { FileEventData } from '../components/FileEventEditor/FileEventEditor';
 import { mergeRelays } from '../nostr/core';
-const TYPE_ICON = {
-  image: Image,
-  video: Video,
-  audio: Music2,
-  document: FileText,
-  unknown: FileText,
-};
-
-const AVAILABILITY_LABEL = {
-  complete: '✅ Available',
-  partial: 'Partially available',
-  unavailable: 'Unavailable',
-  unknown: 'Not checked',
-};
+import { AVAILABILITY_LABEL, TYPE_ICON } from '../components/Browse/browseConstants';
 
 type CopyState = 'confirmed' | 'confirmed-missing' | 'unreachable' | 'unchecked';
 
 const COPY_STATE_LABEL: Record<CopyState, string> = {
-  confirmed: '✅ Confirmed',
-  'confirmed-missing': 'Confirmed missing',
-  unreachable: '☒ Unreachable',
-  unchecked: 'Not checked',
+  confirmed: 'Available',
+  'confirmed-missing': 'Missing',
+  unreachable: 'Unreachable',
+  unchecked: 'Unknown',
 };
 
 function sameHost(a: string, b: string): boolean {
@@ -115,6 +91,7 @@ type DetailReturnState = { timelineLocationKey?: string };
 
 export default function TimelineAssetDetail() {
   const { user, signEventTemplate } = useNostr();
+  const { toast } = useToast();
   const [reportOpen, setReportOpen] = useState(false);
   const [describeOpen, setDescribeOpen] = useState(false);
   const { distribution, serverInfo } = useServerInfo();
@@ -136,7 +113,7 @@ export default function TimelineAssetDetail() {
     Record<string, Array<{ serverId: string; state: string; httpStatus?: number }>>
   >({});
   const [rawEventOpen, setRawEventOpen] = useState(false);
-  const [detailAction, setDetailAction] = useState<'mirror' | 'sync' | 'delete'>();
+  const [detailAction, setDetailAction] = useState<'mirror' | 'delete'>();
   const availabilityStarted = useRef(false);
 
   const checkAvailability = useCallback(
@@ -216,6 +193,15 @@ export default function TimelineAssetDetail() {
     navigate('/browse', { state: timelineLocationKey ? { timelineLocationKey } : null });
   };
 
+  const copyToClipboard = (text: string) =>
+    void Promise.resolve()
+      .then(() => navigator.clipboard.writeText(text))
+      .then(
+        () => toast({ title: 'Copied' }),
+        () =>
+          toast({ variant: 'destructive', title: "Couldn't copy", description: 'Clipboard access was blocked.' })
+      );
+
   const closeDetailAction = () => setDetailAction(undefined);
   const handleActionCompleted = () => {
     const completedAction = detailAction;
@@ -223,8 +209,8 @@ export default function TimelineAssetDetail() {
     if (completedAction === 'delete') {
       navigate('/browse');
     } else {
-      // Mirror/sync add copies without removing the item - refetch so the
-      // header's replica count and availability agree with the new state.
+      // Copying adds server copies without removing the item - refetch so the
+      // header's copy count and availability agree with the new state.
       setLoadAttempt(attempt => attempt + 1);
     }
   };
@@ -239,12 +225,13 @@ export default function TimelineAssetDetail() {
     );
   if (state === 'loading')
     return (
-      <DetailMessage
-        title="Loading item details"
-        detail="Reading your local catalog and how this media fits together."
-        onBack={returnToTimeline}
-        loading
-      />
+      <main
+        role="status"
+        className="mx-auto flex min-h-[55vh] items-center justify-center gap-2 px-6 text-sm text-muted-foreground"
+      >
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        Loading item…
+      </main>
     );
   if (state === 'missing')
     return (
@@ -329,16 +316,18 @@ export default function TimelineAssetDetail() {
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8">
       <Button variant="outline" onClick={returnToTimeline} className="mb-6">
-        <ArrowLeft className="h-4 w-4" />
-        Back to timeline
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Back to Browse
       </Button>
       <header className="border-b-2 border-primary pb-5">
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Nostr event</p>
+        {projection.eventId && (
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Post</p>
+        )}
         <div className="mt-3 flex flex-col gap-6 md:flex-row md:items-start">
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-primary bg-primary/10">
-                <Icon className="h-5 w-5" />
+                <Icon className="h-5 w-5" aria-hidden />
               </div>
               <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -357,29 +346,37 @@ export default function TimelineAssetDetail() {
                     {AVAILABILITY_LABEL[projection.availabilityState]}
                   </p>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="shrink-0" aria-label="Open item actions">
-                      <MoreVertical className="h-5 w-5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setDetailAction('mirror')}>Mirror</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setDetailAction('sync')}>Sync</DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onSelect={() => setDetailAction('delete')}
-                    >
-                      Delete
-                    </DropdownMenuItem>
-                    {detail.event && (
-                      <DropdownMenuItem onSelect={() => setRawEventOpen(true)}>
-                        <Code2 className="mr-2 h-4 w-4" />
-                        Raw event
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button variant="outline" size="sm" onClick={() => setDetailAction('mirror')}>
+                    Copy
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label="More actions">
+                        <MoreVertical className="h-5 w-5" aria-hidden />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => setReportOpen(true)}>
+                        <Flag className="mr-2 h-4 w-4" aria-hidden />
+                        Report
                       </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      {detail.event && (
+                        <DropdownMenuItem onSelect={() => setRawEventOpen(true)}>
+                          <Code2 className="mr-2 h-4 w-4" aria-hidden />
+                          Raw event (JSON)
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => setDetailAction('delete')}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             </div>
             {projection.eventId ? (
@@ -405,7 +402,7 @@ export default function TimelineAssetDetail() {
                     <button
                       type="button"
                       title={`Copy ${authorNpub}`}
-                      onClick={() => void navigator.clipboard.writeText(authorNpub).catch(() => undefined)}
+                      onClick={() => copyToClipboard(authorNpub)}
                       className="select-all underline-offset-4 hover:text-foreground hover:underline"
                     >
                       AUTHOR · {shortAuthor}
@@ -418,7 +415,8 @@ export default function TimelineAssetDetail() {
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 uppercase text-primary underline-offset-4 hover:underline"
                     >
-                      Open elsewhere <ExternalLink className="h-3 w-3" aria-label="Opens in a new tab" />
+                      Open elsewhere <ExternalLink className="h-3 w-3" aria-hidden />
+                      <span className="sr-only">(opens in a new tab)</span>
                     </a>
                   )}
                 </div>
@@ -427,8 +425,8 @@ export default function TimelineAssetDetail() {
               <div className="mt-5 max-w-2xl border bg-muted/30 p-4 shadow-[3px_3px_0_hsl(var(--border))]">
                 <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Unlinked file</p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  This file is in your local catalog but is not linked to a Nostr event. Its storage and availability
-                  details remain available below.
+                  This file is in your local catalog but is not linked to a post. Its storage and availability details
+                  remain available below.
                 </p>
                 <Button
                   size="sm"
@@ -448,14 +446,10 @@ export default function TimelineAssetDetail() {
                 onClick={() => void checkAvailability(blobs.map(b => b.sha256))}
                 className="mt-5"
               >
-                {checkingAvailability ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}Check availability (
-                {blobs.length} blobs)
+                {checkingAvailability ? <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden /> : null}
+                Check availability ({blobs.length} files)
               </Button>
             )}
-            <Button size="sm" variant="outline" onClick={() => setReportOpen(true)} className="mt-5">
-              <Flag className="mr-1 h-4 w-4" />
-              Report
-            </Button>
             {availableChecked && <p className="mt-3 text-xs text-muted-foreground">Availability checked</p>}
           </div>
           <div className="shrink-0 md:w-96">
@@ -483,27 +477,50 @@ export default function TimelineAssetDetail() {
         </dl>
         {projection.unknownBlobSizeCount > 0 && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Size is unknown for {projection.unknownBlobSizeCount} attached blob
-            {projection.unknownBlobSizeCount === 1 ? '' : 's'}.
+            Size is unknown for {projection.unknownBlobSizeCount} attached{' '}
+            {projection.unknownBlobSizeCount === 1 ? 'file' : 'files'}.
           </p>
         )}
         <ul className="mt-4 space-y-3">
           {blobs.map(blob => {
             const copyRows = serverCopyRows(blob.sha256, blob.urls, configuredServers, serverResults[blob.sha256]);
             const eventUrls = eventUrlsFor(blob.urls, configuredServers);
+            const type =
+              projection.displayType === 'video' && blob.eventMimeType
+                ? blob.eventMimeType
+                : (blob.mimeType ?? 'Unknown type');
             return (
               <li
                 key={`${blob.sha256}:${blob.role}:${blob.ordinal}`}
                 className="border bg-card p-4 shadow-[3px_3px_0_hsl(var(--border))]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">{blob.role}</p>
-                    <p className="mt-1 truncate font-mono text-sm">{blob.sha256}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      <span className="capitalize">{blob.role}</span> · {type} ·{' '}
+                      {blob.size !== undefined ? formatFileSize(blob.size) : 'Unknown size'}
+                    </p>
+                    <div className="mt-1 flex min-w-0 items-center gap-1">
+                      <p className="truncate font-mono text-xs text-muted-foreground" title={blob.sha256}>
+                        {blob.sha256}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        aria-label="Copy hash"
+                        onClick={() => copyToClipboard(blob.sha256)}
+                      >
+                        <Copy className="h-3 w-3" aria-hidden />
+                      </Button>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {checkingAvailability && serverResults[blob.sha256]?.length ? (
-                      <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-green-500" />
+                      <>
+                        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-success" aria-hidden />
+                        <span className="sr-only">Checking availability</span>
+                      </>
                     ) : null}
                     <span className="font-mono text-xs uppercase text-muted-foreground">
                       {AVAILABILITY_LABEL[blob.availabilityState]}
@@ -511,15 +528,6 @@ export default function TimelineAssetDetail() {
                   </div>
                 </div>
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
-                  <DetailStat
-                    label="MIME type"
-                    value={
-                      projection.displayType === 'video' && blob.eventMimeType
-                        ? blob.eventMimeType
-                        : (blob.mimeType ?? 'Unknown')
-                    }
-                  />
-                  <DetailStat label="Size" value={blob.size !== undefined ? formatFileSize(blob.size) : 'Unknown'} />
                   <DetailStat label="Copies" value={`${blob.replicaCount}`} />
                   {blob.dimensions && <DetailStat label="Dimensions" value={blob.dimensions} />}
                 </dl>
@@ -552,7 +560,7 @@ export default function TimelineAssetDetail() {
                 {eventUrls.length > 0 && (
                   <div className="mt-4 border-t pt-3">
                     <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                      From event metadata
+                      From post metadata
                     </p>
                     <ul className="mt-2 space-y-1">
                       {eventUrls.map(url => (
@@ -564,7 +572,8 @@ export default function TimelineAssetDetail() {
                             className="inline-flex max-w-full items-center gap-1 break-all text-sm text-primary underline-offset-4 hover:underline"
                           >
                             <span>{url}</span>
-                            <ExternalLink className="h-3 w-3 shrink-0" aria-label="Opens in a new tab" />
+                            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
+                            <span className="sr-only">(opens in a new tab)</span>
                           </a>
                         </li>
                       ))}
@@ -580,8 +589,8 @@ export default function TimelineAssetDetail() {
         <Dialog open={rawEventOpen} onOpenChange={setRawEventOpen}>
           <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
             <DialogHeader className="border-b px-6 py-5">
-              <DialogTitle>Raw event</DialogTitle>
-              <DialogDescription>The native Nostr event stored in your local catalog.</DialogDescription>
+              <DialogTitle>Raw event (JSON)</DialogTitle>
+              <DialogDescription>This post's data as stored in your local catalog.</DialogDescription>
             </DialogHeader>
             <pre className="min-h-0 overflow-auto bg-muted/30 px-6 py-5 font-mono text-xs leading-5 text-foreground">
               {rawEventOpen ? JSON.stringify(detail.event, null, 2) : null}
@@ -623,7 +632,7 @@ export default function TimelineAssetDetail() {
 function DetailStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</dt>
+      <dt className="font-mono text-xs uppercase tracking-[0.16em] text-muted-foreground">{label}</dt>
       <dd className="mt-1 font-medium">{value}</dd>
     </div>
   );
@@ -666,7 +675,7 @@ function MediaPreview({
   if (projection.displayType === 'audio') {
     return (
       <Button onClick={onPlayAudio} size="lg" className="w-full">
-        <Play className="mr-2 h-5 w-5" />
+        <Play className="mr-2 h-5 w-5" aria-hidden />
         Play
       </Button>
     );
@@ -680,7 +689,8 @@ function MediaPreview({
         rel="noreferrer"
         className="inline-flex items-center justify-center gap-1 border px-3 py-2 text-sm text-primary underline-offset-4 hover:underline"
       >
-        Open externally <ExternalLink className="h-3 w-3" aria-label="Opens in a new tab" />
+        Open externally <ExternalLink className="h-3 w-3" aria-hidden />
+        <span className="sr-only">(opens in a new tab)</span>
       </a>
     </div>
   );
@@ -690,25 +700,22 @@ function DetailMessage({
   title,
   detail,
   onBack,
-  loading = false,
   onRetry,
 }: {
   title: string;
   detail: string;
   onBack: () => void;
-  loading?: boolean;
   onRetry?: () => void;
 }) {
   return (
     <main className="mx-auto flex min-h-[55vh] max-w-2xl flex-col justify-center px-6">
-      {loading && <Loader2 className="mb-4 h-6 w-6 animate-spin text-primary" />}
       <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Item details</p>
       <h1 className="mt-3 text-4xl font-black tracking-tight">{title}</h1>
       <p className="mt-3 text-muted-foreground">{detail}</p>
       <div className="mt-6 flex flex-wrap gap-2">
         <Button variant="outline" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" />
-          Back to timeline
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Back to Browse
         </Button>
         {onRetry && <Button onClick={onRetry}>Try again</Button>}
       </div>

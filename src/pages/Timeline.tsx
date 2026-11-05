@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { getCatalogClient } from '../catalog/catalogClient';
 import { identifyUnexplainedBlobs } from '../catalog/identifyBlobs';
@@ -191,8 +191,8 @@ export default function Timeline() {
     return (
       <main className="mx-auto flex min-h-[55vh] max-w-2xl flex-col justify-center px-6">
         <EmptyState
-          title="Sign in to open your media catalog"
-          detail="Bouquet keeps the timeline local to each Nostr identity."
+          title="Log in to open your media catalog"
+          detail="Bouquet keeps your media list separate for each Nostr identity."
         />
       </main>
     );
@@ -202,11 +202,10 @@ export default function Timeline() {
       <main className="mx-auto flex min-h-[55vh] max-w-2xl flex-col justify-center px-6">
         <EmptyState
           title="Your catalog is waiting for its first source"
-          detail="Add a media server, or publish an event, and your media appears here as discovery finishes."
-        />
-        <div className="mt-6">
+          detail="Add a media server or publish a post, and your media appears here."
+        >
           <Button onClick={() => setIsServerListDialogOpen(true)}>Add a media server</Button>
-        </div>
+        </EmptyState>
         <ServerListPopup
           isOpen={isServerListDialogOpen}
           onClose={() => setIsServerListDialogOpen(false)}
@@ -356,76 +355,60 @@ export default function Timeline() {
       )}
       {items.length === 0 && projectionState === 'complete' && (
         <EmptyState
-          title="No media items found yet"
-          detail="Your catalog finished indexing. Media references from new events and server lists will appear here."
-        />
+          title="No media found yet"
+          detail="Your catalog is up to date. Files from new posts and your servers will appear here."
+        >
+          <Button asChild>
+            <Link to="/upload">Upload files</Link>
+          </Button>
+        </EmptyState>
       )}
       {items.length === 0 && projectionState === 'failed' && (
-        <div>
-          <EmptyState
-            title="Could not build your media list"
-            detail={
-              projectionError
-                ? `Your catalog is intact; reading it failed: ${projectionError}`
-                : 'Your catalog is intact, but reading it failed.'
-            }
-          />
-          <Button className="mt-4" onClick={retry}>
-            Try again
-          </Button>
-        </div>
+        <EmptyState
+          title="Could not build your media list"
+          detail={
+            projectionError
+              ? `Your catalog is intact; reading it failed: ${projectionError}`
+              : 'Your catalog is intact, but reading it failed.'
+          }
+        >
+          <Button onClick={retry}>Try again</Button>
+        </EmptyState>
       )}
       {items.length > 0 && filteredItems.length === 0 && (
-        <div>
-          <EmptyState
-            title="No matching media"
-            detail={`None of your ${items.length} items match the current filters.`}
-          />
+        <EmptyState
+          title="No matching media"
+          detail={`None of your ${items.length === 1 ? 'item matches' : `${items.length.toLocaleString()} items match`} the current filters.`}
+        >
           {/* Describing how to clear filters and not offering it is the trap this
               page kept falling into: the user has to undo each control by hand. */}
-          <Button className="mt-4" onClick={clearAllFilters}>
-            Clear all filters
-          </Button>
-        </div>
+          <Button onClick={clearAllFilters}>Clear all filters</Button>
+        </EmptyState>
       )}
     </main>
   );
 }
 
-function EmptyState({ title, detail }: { title: string; detail: string }) {
+function EmptyState({ title, detail, children }: { title: string; detail: string; children?: React.ReactNode }) {
   return (
     <section className="max-w-lg">
-      <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Browse</p>
-      <h1 className="mt-3 text-4xl font-black tracking-tight">{title}</h1>
-      <p className="mt-3 text-muted-foreground">{detail}</p>
+      <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+      <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
+      {children && <div className="mt-4">{children}</div>}
     </section>
   );
 }
 
 function ProjectionNotice({ knownHashes }: { knownHashes: number }) {
   return (
-    <section className="mx-auto max-w-xl border bg-card p-6 shadow-[4px_4px_0_hsl(var(--border))]" aria-live="polite">
-      <div className="flex items-center gap-3">
+    <section className="mx-auto max-w-xl border bg-card p-6" role="status" aria-live="polite">
+      <h2 className="flex items-center gap-2 text-xl font-semibold">
         <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-        <div>
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Indexing local media</p>
-          <h2 className="mt-1 text-xl font-bold">Building your media list</h2>
-        </div>
-      </div>
-      <p className="mt-4 text-sm text-muted-foreground">
-        Reading event and server-list evidence for {knownHashes.toLocaleString()} known blob
-        {knownHashes === 1 ? '' : 's'}.
-      </p>
-      <div
-        className="mt-5 h-2 overflow-hidden border bg-muted"
-        role="progressbar"
-        aria-label="Updating your media list"
-        aria-valuetext="In progress"
-      >
-        <div className="h-full w-2/3 bg-primary animate-pulse motion-reduce:animate-none" />
-      </div>
-      <p className="mt-3 font-mono text-xs text-muted-foreground">
-        This can take a moment. Your catalog stays available while it runs.
+        Building your media list…
+      </h2>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Checking your posts and servers for {knownHashes === 1 ? '1 file' : `${knownHashes.toLocaleString()} files`}.
+        This can take a moment.
       </p>
     </section>
   );

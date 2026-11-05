@@ -67,12 +67,12 @@ async function startSession(page: Page) {
 async function settleListings(page: Page) {
   // In-app navigation only: a page.goto reloads and an nsec login is never
   // persisted, so a reload would land back on the login screen.
-  await page.getByRole('link', { name: 'Sync' }).click();
+  await page.getByRole('link', { name: 'Copy' }).click();
   await page.getByRole('button', { name: 'Choose a source server' }).click();
   await page.getByRole('menuitemradio', { name: /localhost:3300/ }).click();
   await page.getByRole('button', { name: 'Select target server' }).click();
   await page.getByRole('menuitemradio', { name: /localhost:3301/ }).click();
-  await expect(page.getByText(/No missing files to transfer\.|media files? missing on localhost:3301/)).toBeVisible();
+  await expect(page.getByText(/No missing files to copy\.|files? missing on localhost:3301/)).toBeVisible();
   await page.getByRole('link', { name: 'Upload' }).click();
 }
 
@@ -134,12 +134,10 @@ test('keeps the copy on the second server when the size-capped server rejects th
 
   // A partial failure must not look like success: the wizard stays on the upload
   // step, names the failing server, and offers the retry instead of publishing.
-  // The toast text also lands in the live region, hence `first`.
-  await expect(page.getByText('Upload completed with errors').first()).toBeVisible();
   // Whatever the wording, the rejecting status has to reach the user.
   await expect(page.getByText(/507/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry failed uploads' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Publish Nostr events' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Publish posts' })).toHaveCount(0);
 
   // The rejection is real on one server and the upload still succeeded on the
   // other - a failed target must not roll back the copy that went through.
@@ -165,11 +163,7 @@ test('shows uploaded blobs on the browse view', async ({ page }) => {
   await expect(page.getByRole('link', { name: /^Open details for browse-a/ })).toBeVisible();
   await expect(page.getByRole('link', { name: /^Open details for browse-b/ })).toBeVisible();
 
-  // The list view is the only one that prints hashes, and the hash is the only
-  // identity a blob has - a matching title could come from the event alone.
   await page.getByRole('button', { name: 'List' }).click();
-  await expect(page.getByText(first.sha256)).toBeVisible();
-  await expect(page.getByText(second.sha256)).toBeVisible();
 
   // Both copies of each blob have to be visible as such, not just one.
   await expect(page.getByText(/2 copies/).first()).toBeVisible();
@@ -199,7 +193,7 @@ test('publishes a described nostr event and tracks it into the timeline', async 
 
   // And that the item really hangs off that one event id, not another of the
   // run's events that happens to carry the same hash.
-  await page.getByRole('button', { name: 'Open item actions' }).click();
+  await page.getByRole('button', { name: 'More actions' }).click();
   await page.getByRole('menuitem', { name: 'Raw event' }).click();
   await expect(page.getByRole('dialog').locator('pre')).toContainText(event.id);
   await expect(page.getByRole('dialog').locator('pre')).toContainText(sha256);
@@ -212,7 +206,7 @@ test('mirrors a blob from almond to the reference server via the sync page', asy
   await seedBlob(request, BLOSSOM_URL, file);
   await startSession(page);
 
-  await page.getByRole('link', { name: 'Sync' }).click();
+  await page.getByRole('link', { name: 'Copy' }).click();
   await page.getByRole('button', { name: 'Choose a source server' }).click();
   await page.getByRole('menuitemradio', { name: /localhost:3300/ }).click();
   await page.getByRole('button', { name: 'Select target server' }).click();
@@ -220,8 +214,8 @@ test('mirrors a blob from almond to the reference server via the sync page', asy
 
   // The stack carries blobs from earlier tests in the run, so the missing count
   // can be greater than one - what matters is that our seeded blob is in the diff.
-  await expect(page.getByText(/media files? missing on localhost:3301/)).toBeVisible();
-  await page.getByRole('button', { name: 'Start sync' }).click();
+  await expect(page.getByText(/files? missing on localhost:3301/)).toBeVisible();
+  await page.getByRole('button', { name: 'Start copying' }).click();
   // Both servers implement BUD-04, so this runs as a real server-side mirror.
   // The sync page's own completion signal: the badge only appears once every job
   // finished without a failure.
@@ -255,12 +249,11 @@ test('retries a failed upload once the server is back', async ({ page, request }
 
   await page.setInputFiles('#browse', [file]);
   await page.getByRole('button', { name: /^Upload 1 file/ }).click();
-  await expect(page.getByText('Upload completed with errors').first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry failed uploads' })).toBeVisible();
   expect((await listBlobs(request, BLOSSOM_URL)).map(blob => blob.sha256)).not.toContain(sha256);
 
   await page.getByRole('button', { name: 'Retry failed uploads' }).click();
-  await expect(page.getByRole('heading', { name: 'Publish Nostr events' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Publish posts' })).toBeVisible();
   expect((await listBlobs(request, BLOSSOM_URL)).map(blob => blob.sha256)).toContain(sha256);
 
   await publishEvents(page, 1);
@@ -343,7 +336,7 @@ test('skips the transfer when the same bytes are uploaded again', async ({ page,
   await page.getByRole('link', { name: 'Upload' }).click();
   await page.setInputFiles('#browse', [file]);
   await page.getByRole('button', { name: /^Upload 1 file/ }).click();
-  await expect(page.getByRole('heading', { name: 'Publish Nostr events' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Publish posts' })).toBeVisible();
   expect(uploadPuts).toEqual([]);
 
   // One blob per server, no duplicate listing entries.

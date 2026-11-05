@@ -5,21 +5,26 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { TimelineProjection } from '../../catalog/catalog';
+import type { ServerInfo } from '../../utils/useServerInfo';
+import { formatFileSize } from '../../utils/utils';
+import { AVAILABILITY_LABEL } from './browseConstants';
 
 export type AvailabilityFilter = TimelineProjection['availabilityState'];
 
-const AVAILABILITY_OPTIONS: Array<{ id: AvailabilityFilter; label: string }> = [
-  { id: 'complete', label: 'Complete' },
-  { id: 'partial', label: 'Partial' },
-  { id: 'unavailable', label: 'Unavailable' },
-  { id: 'unknown', label: 'Not checked' },
-];
+const AVAILABILITY_OPTIONS = Object.entries(AVAILABILITY_LABEL) as Array<[AvailabilityFilter, string]>;
+
+const ANY_SERVER = '__all__';
 
 type BrowseFilterMenuProps = {
+  servers: ServerInfo[];
+  selectedServerName?: string;
+  onServerChange: (name: string | undefined) => void;
   eventOnly: boolean;
   onEventOnlyChange: (value: boolean) => void;
   unlinkedOnly: boolean;
@@ -33,6 +38,9 @@ type BrowseFilterMenuProps = {
 };
 
 export function BrowseFilterMenu({
+  servers,
+  selectedServerName,
+  onServerChange,
   eventOnly,
   onEventOnlyChange,
   unlinkedOnly,
@@ -44,8 +52,20 @@ export function BrowseFilterMenu({
   availabilityFilter,
   onAvailabilityFilterChange,
 }: BrowseFilterMenuProps) {
+  // "Has post" and "No post" exclude each other, so they are one radio choice
+  // driving both flags: the menu can never ask for both at once.
+  const postFilter = eventOnly ? 'linked' : unlinkedOnly ? 'unlinked' : 'all';
+  const setPostFilter = (value: string) => {
+    onEventOnlyChange(value === 'linked');
+    onUnlinkedOnlyChange(value === 'unlinked');
+  };
+
+  // Grouping is a view option, not a filter, so it does not count here.
   const activeCount =
-    (eventOnly ? 1 : 0) + (unlinkedOnly ? 1 : 0) + (descriptiveOnly ? 1 : 0) + availabilityFilter.length;
+    (postFilter === 'all' ? 0 : 1) +
+    (descriptiveOnly ? 1 : 0) +
+    (selectedServerName ? 1 : 0) +
+    availabilityFilter.length;
 
   const toggleAvailability = (id: AvailabilityFilter) => {
     onAvailabilityFilterChange(
@@ -56,41 +76,57 @@ export function BrowseFilterMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" aria-label="More filters">
-          <Filter className="h-4 w-4" />
+        <Button variant="outline" size="sm">
+          <Filter className="h-4 w-4" aria-hidden="true" />
           Filters
           {activeCount > 0 && (
-            <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
+            <span className="ml-1 rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
               {activeCount}
+              <span className="sr-only"> active</span>
             </span>
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>Visibility</DropdownMenuLabel>
-        <DropdownMenuCheckboxItem checked={eventOnly} onCheckedChange={onEventOnlyChange}>
-          Only media with a Nostr event
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuCheckboxItem checked={unlinkedOnly} onCheckedChange={onUnlinkedOnlyChange}>
-          Only unlinked content (no Nostr event)
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuCheckboxItem checked={groupRepeated} onCheckedChange={onGroupRepeatedChange}>
-          Group repeated posts of the same file
-        </DropdownMenuCheckboxItem>
+      <DropdownMenuContent align="end" className="max-h-[70vh] w-64 overflow-y-auto">
+        <DropdownMenuLabel>Posts</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={postFilter} onValueChange={setPostFilter}>
+          <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="linked">Has post</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="unlinked">No post</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
         <DropdownMenuCheckboxItem checked={descriptiveOnly} onCheckedChange={onDescriptiveOnlyChange}>
           Only descriptive titles
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Availability</DropdownMenuLabel>
-        {AVAILABILITY_OPTIONS.map(option => (
+        {AVAILABILITY_OPTIONS.map(([id, label]) => (
           <DropdownMenuCheckboxItem
-            key={option.id}
-            checked={availabilityFilter.includes(option.id)}
-            onCheckedChange={() => toggleAvailability(option.id)}
+            key={id}
+            checked={availabilityFilter.includes(id)}
+            onCheckedChange={() => toggleAvailability(id)}
           >
-            {option.label}
+            {label}
           </DropdownMenuCheckboxItem>
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Server</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={selectedServerName ?? ANY_SERVER}
+          onValueChange={value => onServerChange(value === ANY_SERVER ? undefined : value)}
+        >
+          <DropdownMenuRadioItem value={ANY_SERVER}>Any server</DropdownMenuRadioItem>
+          {servers.map(server => (
+            <DropdownMenuRadioItem key={server.name} value={server.name}>
+              <span className="truncate">{server.name}</span>
+              <span className="ml-auto pl-2 text-xs text-muted-foreground">{formatFileSize(server.size)}</span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>View</DropdownMenuLabel>
+        <DropdownMenuCheckboxItem checked={groupRepeated} onCheckedChange={onGroupRepeatedChange}>
+          Group repeated posts
+        </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

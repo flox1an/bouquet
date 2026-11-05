@@ -297,6 +297,7 @@ export function useBrowseView(input: {
     setSelectedServerName(undefined);
     setEventOnly(false);
     setDescriptiveOnly(false);
+    setUnlinkedOnly(false);
   }, [setEventOnly]);
 
   return {

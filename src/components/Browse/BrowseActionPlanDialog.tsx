@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { BlobDescriptor } from 'blossom-client-sdk';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, CircleSlash, Loader2, ShieldAlert, Trash2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, CircleSlash, Loader2, ShieldAlert, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '../../utils/utils';
@@ -38,6 +38,8 @@ const TRANSFER_CONCURRENCY = 2;
 type Row = {
   key: string;
   label: string;
+  /** Short hash and target server - secondary to the item title. */
+  detail: string;
   state: RunRowState;
   message?: string;
   phase?: string;
@@ -47,7 +49,7 @@ type Row = {
 
 type BrowseActionPlanDialogProps = {
   open: boolean;
-  action: 'mirror' | 'sync' | 'delete';
+  action: 'mirror' | 'delete';
   assets: TimelineItem[];
   pubkey: string;
   serverInfo: { [name: string]: ServerInfo };
@@ -56,7 +58,7 @@ type BrowseActionPlanDialogProps = {
   onDeleted: () => void;
 };
 
-const ACTION_LABEL: Record<'mirror' | 'sync' | 'delete', string> = { mirror: 'Mirror', sync: 'Sync', delete: 'Delete' };
+const ACTION_LABEL: Record<'mirror' | 'delete', string> = { mirror: 'Copy', delete: 'Delete' };
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : 'Unknown error');
 
 export function BrowseActionPlanDialog({
@@ -76,6 +78,7 @@ export function BrowseActionPlanDialog({
   const [rows, setRows] = useState<Row[]>([]);
   const [chosenServerName, setChosenServerName] = useState<string>();
   const [mirrorSupport, setMirrorSupport] = useState<Record<string, boolean>>({});
+  const [cancelled, setCancelled] = useState(false);
   const deleteAbortRef = useRef<AbortController | undefined>(undefined);
   const transferAbortRef = useRef<AbortController | undefined>(undefined);
   const diagnosticRunRef = useRef<DiagnosticRun | undefined>(undefined);
@@ -90,15 +93,22 @@ export function BrowseActionPlanDialog({
   const eligibleServers = Object.values(serverInfo)
     .filter(server => mediaServer(server).capabilities.mirror && !server.virtual)
     .sort((a, b) => a.name.localeCompare(b.name));
-  const destination = eligibleServers.find(server => server.name === chosenServerName);
-  const destinationServerId = action === 'mirror' && destination ? normalizeServerUrl(destination.url) : undefined;
+  // The virtual "All servers" entry fills every enabled server's gaps. Its
+  // aggregated isError would disable it whenever any one server is down.
+  const allServers = Object.values(serverInfo).find(server => server.virtual);
+  const destinationOptions = allServers ? [{ ...allServers, isError: false }, ...eligibleServers] : eligibleServers;
+  const destination = destinationOptions.find(server => server.name === chosenServerName);
+  const destinationServerId =
+    action === 'mirror' && destination && !destination.virtual ? normalizeServerUrl(destination.url) : undefined;
 
   useEffect(() => {
     if (!open) return;
     diagnosticRunRef.current = action === 'delete' ? startDiagnosticRun(assets.length) : undefined;
     setFailureMessage(undefined);
     setRows([]);
-    setChosenServerName(undefined);
+    setCancelled(false);
+    // Default to filling every server's gaps; a single server stays selectable.
+    setChosenServerName(Object.values(serverInfo).find(server => server.virtual)?.name);
     setMirrorSupport({});
     // eslint-disable-next-line react-hooks/exhaustive-deps -- assetIdsKey stands in for `assets`
   }, [open, assetIdsKey, action, pubkey]);
@@ -167,8 +177,7 @@ export function BrowseActionPlanDialog({
     }, {})
   ).sort((a, b) => a.serverName.localeCompare(b.serverName));
   const hashesOnNoServer = targetHashes.filter(hash => !deleteTasks.some(task => task.hash === hash));
-  const gapCount =
-    action === 'sync' ? (plan?.ops.length ?? 0) : action === 'mirror' ? (plan?.ops.length ?? 0) : undefined;
+  const gapCount = plan?.ops.length ?? 0;
 
   const updateRow = (key: string, update: Partial<Row>) =>
     setRows(previous => previous.map(row => (row.key === key ? { ...row, ...update } : row)));
@@ -191,7 +200,8 @@ export function BrowseActionPlanDialog({
     setRows(
       plan.deleteTasks.map(task => ({
         key: `${task.hash}:${task.serverId}`,
-        label: `${titleByHash.get(task.hash) ?? task.hash.slice(0, 12)} — ${task.hash.slice(0, 12)} → ${serverNameFor(task)}`,
+        label: titleByHash.get(task.hash) ?? 'Untitled',
+        detail: `${task.hash.slice(0, 12)} → ${serverNameFor(task)}`,
         state: 'pending' as const,
       }))
     );
@@ -273,7 +283,8 @@ export function BrowseActionPlanDialog({
       plan.ops.map(op => ({
         key: `${op.sha256}:${op.targetServerId}`,
         // Name the media being copied, not just the digest of one of its blobs.
-        label: `${titleByTargetKey.get(op.sha256) ?? op.sha256.slice(0, 12)} → ${op.targetBaseUrl}`,
+        label: titleByTargetKey.get(op.sha256) ?? 'Untitled',
+        detail: `${op.sha256.slice(0, 12)} → ${hostOf(op.targetBaseUrl)}`,
         state: 'pending' as const,
       }))
     );
@@ -325,223 +336,243 @@ export function BrowseActionPlanDialog({
   const succeeded = rows.filter(row => row.state === 'done').length;
   const notFound = rows.filter(row => row.state === 'not_found').length;
   const failed = rows.filter(row => row.state === 'error').length;
+  const notStarted = rows.filter(row => row.state === 'pending').length;
   const progress = rows.length ? Math.round((done / rows.length) * 100) : 0;
+  const summary = `${cancelled ? 'Cancelled. ' : ''}${
+    action === 'delete'
+      ? `${succeeded} deleted, ${notFound} already gone, ${failed} failed`
+      : `${succeeded} copied, ${failed} failed`
+  }${notStarted > 0 ? `, ${notStarted} not started` : ''}.`;
+  const rowStateText: Record<RunRowState, string> = {
+    done: action === 'delete' ? 'Deleted' : 'Copied',
+    not_found: 'Already gone',
+    error: 'Failed',
+    running: 'In progress',
+    pending: 'Not started',
+  };
+  const fileCount = `${targetHashes.length} file${targetHashes.length === 1 ? '' : 's'}`;
+  const itemCount = `${allowedPlans.length} item${allowedPlans.length === 1 ? '' : 's'}`;
   const reviewingCopy =
     action === 'delete'
-      ? `${targetHashes.length} file${targetHashes.length === 1 ? '' : 's'} across ${allowedPlans.length} item${allowedPlans.length === 1 ? '' : 's'} will be deleted from ${deleteServerBreakdown.length} server${deleteServerBreakdown.length === 1 ? '' : 's'}. This cannot be undone.`
-      : action === 'mirror'
-        ? destination === undefined
-          ? 'Choose a destination server to see what would be copied.'
+      ? `${fileCount} from ${itemCount} will be deleted from ${deleteServerBreakdown.length} server${deleteServerBreakdown.length === 1 ? '' : 's'}. This cannot be undone.`
+      : destination === undefined
+        ? 'Choose a destination server to see what would be copied.'
+        : destination.virtual
+          ? gapCount === 0
+            ? `Every server already holds every file of the selected item${allowedPlans.length === 1 ? '' : 's'}. Nothing to copy.`
+            : `${gapCount} missing file cop${gapCount === 1 ? 'y' : 'ies'} will be filled in across your servers.`
           : gapCount === 0
             ? `${destination.name} already holds every file of the selected item${allowedPlans.length === 1 ? '' : 's'}. Nothing to copy.`
-            : `${gapCount} file${gapCount === 1 ? '' : 's'} missing on ${destination.name} will be copied there.`
-        : `${gapCount ?? 0} missing file cop${gapCount === 1 ? 'y' : 'ies'} will be filled in across your servers.`;
+            : `${gapCount} file${gapCount === 1 ? '' : 's'} missing on ${destination.name} will be copied there.`;
 
   return (
-    <DialogPrimitive.Root open={open}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80" />
-        <DialogPrimitive.Content
-          className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-6 shadow-lg"
-          onInteractOutside={event => phase === 'running' && event.preventDefault()}
-          onEscapeKeyDown={event => phase === 'running' && event.preventDefault()}
-        >
-          <DialogPrimitive.Title className="text-lg font-semibold">
+    <Dialog open={open} onOpenChange={next => !next && phase !== 'running' && closeDialog()}>
+      <DialogContent className="gap-4" hideClose={phase === 'running'}>
+        <DialogHeader>
+          <DialogTitle>
             {ACTION_LABEL[action]} {assets.length === 1 ? '1 item' : `${assets.length} items`}
-          </DialogPrimitive.Title>
-          <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">
+          </DialogTitle>
+          <DialogDescription>
             {phase === 'planning' && 'Computing what this action will affect…'}
             {phase === 'reviewing' && reviewingCopy}
             {phase === 'running' &&
-              `${action === 'delete' ? 'Deleting' : 'Transferring'} ${action === 'delete' ? `up to ${CONCURRENCY}` : `up to ${TRANSFER_CONCURRENCY}`} files concurrently…`}
-            {phase === 'complete' &&
-              (action === 'delete'
-                ? `${succeeded} deleted, ${notFound} already gone, ${failed} failed.`
-                : `${succeeded} succeeded, ${failed} failed.`)}
+              (cancelled
+                ? 'Cancelling… waiting for files already in progress to finish.'
+                : `${action === 'delete' ? `Deleting up to ${CONCURRENCY}` : `Copying up to ${TRANSFER_CONCURRENCY}`} files at a time…`)}
+            {phase === 'complete' && summary}
             {phase === 'failed' && failureMessage}
-          </DialogPrimitive.Description>
-          {phase === 'planning' && (
-            <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Planning…
-            </div>
-          )}
-          {action === 'delete' && phase === 'reviewing' && (
-            <p className="mt-3 border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              {/* Deleting blobs does not touch the events that reference them, so
-                  saying nothing here would leave the user with broken posts. */}
-              This deletes the files from your media servers. The Nostr events that reference them stay on your relays,
-              so any post using these files will show missing media.
+          </DialogDescription>
+        </DialogHeader>
+        {phase === 'planning' && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Planning…
+          </div>
+        )}
+        {action === 'delete' && phase === 'reviewing' && (
+          <div className="flex items-start gap-2 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            {/* Deleting files does not touch the posts that reference them, so
+                saying nothing here would leave the user with broken posts. */}
+            <p>
+              This deletes the files from your media servers only. Posts that use them stay on your relays and will
+              show missing media.
             </p>
-          )}
-          {phase === 'failed' && (
-            <div className="mt-6 flex items-start gap-2 rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <p className="break-words">{failureMessage}</p>
-            </div>
-          )}
-          {plan && phase === 'reviewing' && (
-            <div className="mt-4 max-h-64 space-y-2 overflow-y-auto">
-              {action === 'mirror' && (
-                <ServerSelect
-                  servers={eligibleServers}
-                  selectedServer={chosenServerName}
-                  onServerChange={setChosenServerName}
-                  placeholder="Choose a destination server"
-                />
-              )}
-              {action === 'delete' && deleteServerBreakdown.length > 0 && (
-                <div className="space-y-1">
-                  <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                    Servers affected ({deleteServerBreakdown.length})
-                  </p>
-                  {deleteServerBreakdown.map(server => (
-                    <div
-                      key={server.serverName}
-                      className="flex items-center justify-between rounded border bg-muted/10 px-2 py-1.5 text-xs"
-                    >
-                      <span className="truncate font-medium">{server.serverName}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {server.count} file{server.count === 1 ? '' : 's'} · {formatFileSize(server.size)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {action === 'delete' && hashesOnNoServer.length > 0 && (
-                <div className="flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-400">
-                  <CircleSlash className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <p>
-                    {hashesOnNoServer.length} file{hashesOnNoServer.length === 1 ? '' : 's'} not found on any known
-                    server already - nothing to delete there.
-                  </p>
-                </div>
-              )}
-              {blockedPlans.length > 0 && (
-                <div className="space-y-1">
-                  <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                    Blocked ({blockedPlans.length})
-                  </p>
-                  {blockedPlans.map(blocked => (
-                    <div
-                      key={blocked.assetId}
-                      className="flex items-start gap-2 rounded border bg-muted/30 px-2 py-1.5 text-xs"
-                    >
-                      <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{blocked.title}</p>
-                        <p className="text-muted-foreground">{blocked.reason}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {allowedPlans.length > 0 && (
-                <div className="space-y-1">
-                  <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                    Allowed ({allowedPlans.length})
-                  </p>
-                  {allowedPlans.map(allowed => (
-                    <div key={allowed.assetId} className="rounded border bg-muted/10 px-2 py-1.5 text-xs">
-                      <p className="truncate font-medium">{allowed.title}</p>
-                      <p className="text-muted-foreground">
-                        {allowed.targets.length === 1 ? '1 file' : `${allowed.targets.length} files`}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {(phase === 'running' || phase === 'complete') && (
-            <div className="mt-4 space-y-3">
-              <div className="space-y-1.5">
-                <Progress value={progress} className="h-2" />
-                <p className="text-right text-xs tabular-nums text-muted-foreground">
-                  {done} / {rows.length}
+          </div>
+        )}
+        {phase === 'failed' && (
+          <div className="flex items-start gap-2 rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <XCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <p className="break-words">{failureMessage}</p>
+          </div>
+        )}
+        {plan && phase === 'reviewing' && (
+          <div className="max-h-64 space-y-2 overflow-y-auto">
+            {action === 'mirror' && (
+              <ServerSelect
+                servers={destinationOptions}
+                selectedServer={chosenServerName}
+                onServerChange={setChosenServerName}
+                placeholder="Choose a destination server"
+              />
+            )}
+            {action === 'delete' && deleteServerBreakdown.length > 0 && (
+              <div className="space-y-1">
+                <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
+                  Servers affected ({deleteServerBreakdown.length})
+                </p>
+                {deleteServerBreakdown.map(server => (
+                  <div
+                    key={server.serverName}
+                    className="flex items-center justify-between rounded border bg-muted/10 px-2 py-1.5 text-xs"
+                  >
+                    <span className="truncate font-medium">{server.serverName}</span>
+                    <span className="shrink-0 text-muted-foreground">
+                      {server.count} file{server.count === 1 ? '' : 's'} · {formatFileSize(server.size)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {action === 'delete' && hashesOnNoServer.length > 0 && (
+              <div className="flex items-start gap-2 rounded border border-warning/40 bg-warning/10 px-2 py-1.5 text-xs text-warning">
+                <CircleSlash className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                <p>
+                  {hashesOnNoServer.length} file{hashesOnNoServer.length === 1 ? '' : 's'} not found on any known
+                  server already — nothing to delete there.
                 </p>
               </div>
-              <ul className="max-h-48 space-y-0.5 overflow-y-auto rounded-md border bg-muted/40 p-2">
-                {rows.map(row => (
-                  <li
-                    key={row.key}
-                    className={cn(
-                      'rounded px-1.5 py-1 text-xs font-mono',
-                      row.state === 'running' && 'bg-muted text-foreground',
-                      row.state === 'done' && 'text-muted-foreground',
-                      row.state === 'not_found' && 'text-amber-700 dark:text-amber-400',
-                      row.state === 'error' && 'text-destructive'
-                    )}
+            )}
+            {blockedPlans.length > 0 && (
+              <div className="space-y-1">
+                <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
+                  Blocked ({blockedPlans.length})
+                </p>
+                {blockedPlans.map(blocked => (
+                  <div
+                    key={blocked.assetId}
+                    className="flex items-start gap-2 rounded border bg-muted/30 px-2 py-1.5 text-xs"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="shrink-0">
-                        {row.state === 'done' && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
-                        {row.state === 'not_found' && <CircleSlash className="h-3.5 w-3.5" />}
-                        {row.state === 'error' && <XCircle className="h-3.5 w-3.5 text-destructive" />}
-                        {row.state === 'running' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        {row.state === 'pending' && <Trash2 className="h-3.5 w-3.5 opacity-30" />}
-                      </span>
-                      <span className="flex-1 truncate">{row.label}</span>
+                    <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{blocked.title}</p>
+                      <p className="text-muted-foreground">{blocked.reason}</p>
                     </div>
-                    {row.state === 'running' && row.total != null && (
-                      <p className="ml-5 text-muted-foreground">
-                        {row.phase} {Math.round(((row.loaded ?? 0) / row.total) * 100)}%
-                      </p>
-                    )}
-                    {row.message && (
-                      <p className={cn('ml-5 break-words', row.state === 'error' ? 'text-destructive' : 'opacity-80')}>
-                        {row.message}
-                      </p>
-                    )}
-                  </li>
+                  </div>
                 ))}
-              </ul>
-            </div>
-          )}
-          <div className="mt-6 flex justify-end gap-2">
-            {phase === 'reviewing' && (
-              <>
-                <Button variant="outline" size="sm" onClick={closeDialog}>
-                  Cancel
-                </Button>
-                <Button
-                  variant={action === 'delete' ? 'destructive' : 'default'}
-                  size="sm"
-                  onClick={action === 'delete' ? runDelete : runTransfer}
-                  disabled={
-                    targetHashes.length === 0 ||
-                    (action === 'mirror' && !destination) ||
-                    (action === 'delete' && deleteTasks.length === 0)
-                  }
-                >
-                  {ACTION_LABEL[action]} {targetHashes.length} file{targetHashes.length === 1 ? '' : 's'}
-                </Button>
-              </>
+              </div>
             )}
-            {phase === 'running' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  transferAbortRef.current?.abort();
-                  deleteAbortRef.current?.abort();
-                  if (diagnosticRunRef.current) {
-                    updateDiagnosticRun(diagnosticRunRef.current.id, { phase: 'cancelling' });
-                  }
-                  closeDialog();
-                }}
-              >
-                Cancel
-              </Button>
-            )}
-            {(phase === 'complete' || phase === 'failed') && (
-              <Button size="sm" onClick={closeDialog}>
-                Close
-              </Button>
+            {allowedPlans.length > 0 && (
+              <div className="space-y-1">
+                <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
+                  Allowed ({allowedPlans.length})
+                </p>
+                {allowedPlans.map(allowed => (
+                  <div key={allowed.assetId} className="rounded border bg-muted/10 px-2 py-1.5 text-xs">
+                    <p className="truncate font-medium">{allowed.title}</p>
+                    <p className="text-muted-foreground">
+                      {allowed.targets.length === 1 ? '1 file' : `${allowed.targets.length} files`}
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+        )}
+        {(phase === 'running' || phase === 'complete') && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Progress value={progress} className="h-2" />
+              <p className="text-right text-xs tabular-nums text-muted-foreground">
+                {done} / {rows.length}
+              </p>
+            </div>
+            <ul className="max-h-48 space-y-0.5 overflow-y-auto rounded-md border bg-muted/40 p-2">
+              {rows.map(row => (
+                <li
+                  key={row.key}
+                  className={cn(
+                    'rounded px-1.5 py-1 text-xs',
+                    row.state === 'running' && 'bg-muted text-foreground',
+                    row.state === 'done' && 'text-muted-foreground',
+                    row.state === 'not_found' && 'text-warning',
+                    row.state === 'error' && 'text-destructive'
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="shrink-0" aria-hidden>
+                      {row.state === 'done' && <CheckCircle2 className="h-3.5 w-3.5 text-success" />}
+                      {row.state === 'not_found' && <CircleSlash className="h-3.5 w-3.5" />}
+                      {row.state === 'error' && <XCircle className="h-3.5 w-3.5 text-destructive" />}
+                      {row.state === 'running' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      {row.state === 'pending' && <Circle className="h-3.5 w-3.5 opacity-30" />}
+                    </span>
+                    <span className="sr-only">{rowStateText[row.state]}:</span>
+                    <span className="min-w-0 flex-1 truncate font-medium">{row.label}</span>
+                    <span className="shrink-0 font-mono text-muted-foreground">{row.detail}</span>
+                  </div>
+                  {row.state === 'running' && row.total != null && (
+                    <p className="ml-5 text-muted-foreground">
+                      {row.phase === 'mirroring' ? 'copying' : row.phase}{' '}
+                      {Math.round(((row.loaded ?? 0) / row.total) * 100)}%
+                    </p>
+                  )}
+                  {row.message && (
+                    <p className={cn('ml-5 break-words', row.state === 'error' ? 'text-destructive' : 'opacity-80')}>
+                      {row.message}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          {phase === 'reviewing' && (
+            <>
+              <Button variant="outline" size="sm" onClick={closeDialog}>
+                Cancel
+              </Button>
+              <Button
+                variant={action === 'delete' ? 'destructive' : 'default'}
+                size="sm"
+                onClick={action === 'delete' ? runDelete : runTransfer}
+                disabled={
+                  targetHashes.length === 0 ||
+                  (action === 'mirror' && !destination) ||
+                  (action === 'delete' && deleteTasks.length === 0)
+                }
+              >
+                {ACTION_LABEL[action]} {fileCount}
+              </Button>
+            </>
+          )}
+          {phase === 'running' && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={cancelled}
+              onClick={() => {
+                // Stop starting new files; the run then settles into 'complete'
+                // with a summary, and only Close dismisses the dialog.
+                setCancelled(true);
+                transferAbortRef.current?.abort();
+                deleteAbortRef.current?.abort();
+                if (diagnosticRunRef.current) {
+                  updateDiagnosticRun(diagnosticRunRef.current.id, { phase: 'cancelling' });
+                }
+              }}
+            >
+              {cancelled ? 'Cancelling…' : 'Cancel'}
+            </Button>
+          )}
+          {(phase === 'complete' || phase === 'failed') && (
+            <Button size="sm" onClick={closeDialog}>
+              Close
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

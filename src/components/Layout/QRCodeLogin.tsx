@@ -97,7 +97,7 @@ export function QRCodeLogin({ onLogin, onError }: QRCodeLoginProps) {
         return;
       }
       console.error('QR code login failed:', error);
-      onError(error instanceof Error ? error.message : 'Connection failed');
+      onError(error instanceof Error ? error.message : 'connection failed');
     }
   }, [accountManager, onLogin, onError, setUserFromPubkey]);
 
@@ -132,8 +132,8 @@ export function QRCodeLogin({ onLogin, onError }: QRCodeLoginProps) {
   return (
     <div className="flex flex-col items-center space-y-4">
       <div className="text-center">
-        <Smartphone className="w-10 h-10 mx-auto mb-2 text-primary" />
-        <p className="text-sm text-muted-foreground">Scan with your Nostr signer app</p>
+        <Smartphone className="w-10 h-10 mx-auto mb-2 text-primary" aria-hidden="true" />
+        <p className="text-sm text-muted-foreground">Scan with your remote signer app</p>
         <p className="text-xs text-muted-foreground mt-1">Amber, Nostrudel, or other NIP-46 signers</p>
       </div>
 
@@ -155,11 +155,11 @@ export function QRCodeLogin({ onLogin, onError }: QRCodeLoginProps) {
           disabled={!nostrConnectUri}
           className="text-muted-foreground"
         >
-          {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-          {copied ? 'Copied!' : 'Copy'}
+          {copied ? <Check className="w-4 h-4 mr-2" aria-hidden="true" /> : <Copy className="w-4 h-4 mr-2" aria-hidden="true" />}
+          {copied ? 'Copied' : 'Copy link'}
         </Button>
         <Button variant="ghost" size="sm" onClick={handleRefresh} className="text-muted-foreground">
-          <RefreshCw className="w-4 h-4 mr-2" />
+          <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" />
           New code
         </Button>
       </div>

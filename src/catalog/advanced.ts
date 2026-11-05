@@ -12,7 +12,7 @@ import {
   type ReplicaState,
 } from './replica';
 export type { ReplicaState };
-export type CatalogAction = 'mirror' | 'sync' | 'delete';
+export type CatalogAction = 'mirror' | 'delete';
 
 type Membership = { pubkey: string; sha256: string; status: 'active' | 'unresolved' | 'forgotten' };
 type ProfileServer = { pubkey: string; serverId: string; enabled: boolean };
@@ -1159,22 +1159,6 @@ export async function getCatalogTimelineAsset(
   return { projection, event: catalogEvent?.event, blobs };
 }
 
-/**
- * What a browse row shows of an item's contents: the total file count, and detail for
- * only the first few. An HLS item can carry two hundred blobs, so loading them all to
- * render four would make scrolling cost grow with segment count.
- */
-export type TimelineAssetContents = { totalCount: number; blobs: TimelineAssetBlob[] };
-
-export async function getCatalogAssetContents(
-  catalog: Catalog,
-  assetId: string,
-  limit: number
-): Promise<TimelineAssetContents> {
-  const assetBlobs = await assetBlobsInOrder(catalog, assetId);
-  return { totalCount: assetBlobs.length, blobs: await loadAssetBlobs(catalog, assetBlobs.slice(0, limit)) };
-}
-
 export async function planCatalogAction(catalog: Catalog, pubkey: string, assetId: string, action: CatalogAction) {
   const [assets, assetBlobs, relationships, locations] = await Promise.all([
     Catalog.storeFor(catalog).getAll<Asset>('asset'),
@@ -1273,9 +1257,9 @@ export type ReplicaOp = {
 };
 
 /**
- * Mirror when `targetServerId` is given, sync across every enabled server when it
- * is not. A blob with no usable source, or one already present on a target, yields
- * no op - which is what makes re-running after a cancelled run cheap.
+ * Mirror to `targetServerId` when given, to every enabled server when it is not.
+ * A blob with no usable source, or one already present on a target, yields no
+ * op - which is what makes re-running after a cancelled run cheap.
  */
 export function buildReplicaOps(replicaMap: AssetReplica[], targetServerId?: string): ReplicaOp[] {
   return replicaMap.flatMap(replica => {

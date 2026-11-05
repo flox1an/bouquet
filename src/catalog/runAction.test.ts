@@ -195,7 +195,7 @@ describe('action run', () => {
     });
     const plan = await planActionRun(catalog, {
       pubkey,
-      action: 'sync',
+      action: 'mirror',
       assets: [{ assetId: item.assetId, title: 'Sunset' }],
     });
     const controller = new AbortController();

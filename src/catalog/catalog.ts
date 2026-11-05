@@ -9,7 +9,6 @@ import type { BlobLocation, BlobLocationHistory } from './replica';
 import { listingClaimMayRestore, nextCheckAtFrom } from './replica';
 import {
   getAssetReplicaMap,
-  getCatalogAssetContents,
   getCatalogTimelineAsset,
   planCatalogAction,
   projectCatalogAssets,
@@ -20,7 +19,6 @@ import {
   type CatalogAction,
   type NativeUrlProbe,
   type ReplicaProbe,
-  type TimelineAssetContents,
   type TimelineAssetDetail,
   type TimelineProjection,
   type TimelineQuery,
@@ -32,7 +30,6 @@ export type {
   NativeUrlProbe,
   ReplicaOp,
   ReplicaProbe,
-  TimelineAssetContents,
   TimelineAssetDetail,
   TimelineProjection,
   TimelineQuery,
@@ -661,10 +658,6 @@ export class Catalog {
     await this.reprojectEvents(pubkey);
     await projectCatalogAssets(this, pubkey);
     return getCatalogTimelineAsset(this, pubkey, assetId);
-  }
-
-  getCatalogAssetContents(assetId: string, limit: number): Promise<TimelineAssetContents> {
-    return getCatalogAssetContents(this, assetId, limit);
   }
 
   planCatalogAction(pubkey: string, assetId: string, action: CatalogAction) {

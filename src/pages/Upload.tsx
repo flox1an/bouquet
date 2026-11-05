@@ -3,7 +3,7 @@ import { BlobDescriptor } from 'blossom-client-sdk';
 import { useNostr } from '../utils/nostr';
 import { useServerInfo } from '../utils/useServerInfo';
 import { removeExifData } from '../utils/exif';
-import type { AxiosError } from 'axios';
+import { isCancel, type AxiosError } from 'axios';
 import FileEventEditor, { FileEventData } from '../components/FileEventEditor/FileEventEditor';
 import { Server, useUserServers } from '../utils/useUserServers';
 import { resizeImage } from '../utils/resize';
@@ -27,9 +27,17 @@ import { Info } from 'lucide-react';
 import UploadOnboarding from '../components/UploadOboarding';
 import { toast } from '@/hooks/use-toast';
 import { getCatalogClient } from '../catalog/catalogClient';
-import { mediaServer } from '../utils/server';
+import { MediaServerError, mediaServer } from '../utils/server';
 import { uploadFiles, type UploadTask } from '../utils/uploadRun';
+import { PageHeader } from '@/components/ui/page-header';
 import { retryFailedTargets } from '../utils/publish';
+
+/** Bytes sent per task and finished tasks of the current upload, kept across retries. */
+type UploadRun = { tasks: UploadTask[]; loaded: Map<UploadTask, number>; done: Set<UploadTask> };
+
+/** A file counts as uploaded once every server it was sent to has it. */
+const countDoneFiles = ({ tasks, done }: UploadRun) =>
+  new Set(tasks.map(t => t.file)).size - new Set(tasks.filter(t => !done.has(t)).map(t => t.file)).size;
 
 function Upload() {
   const { servers, serversLoading } = useUserServers();
@@ -46,6 +54,10 @@ function Upload() {
   const [uploadStep, setUploadStep] = useState(0);
   const [retryingKey, setRetryingKey] = useState<string | undefined>();
   const [failedUploadTasks, setFailedUploadTasks] = useState<UploadTask[]>([]);
+  const [cancelled, setCancelled] = useState(false);
+  const [filesProgress, setFilesProgress] = useState({ done: 0, total: 0 });
+  const runRef = useRef<UploadRun>({ tasks: [], loaded: new Map(), done: new Set() });
+  const abortRef = useRef<AbortController | undefined>(undefined);
   const dimensionsRef = useRef<{ [key: string]: FileEventData }>({});
   const { publishFileEvent, publishAudioEvent, publishVideoEvent } = usePublishing();
   const uploadedFilesRef = useRef<File[]>([]);
@@ -119,12 +131,14 @@ function Upload() {
   }
 
   const upload = async (retryTasks?: UploadTask[]) => {
+    const controller = new AbortController();
+    abortRef.current = controller;
     setUploadBusy(true);
+    setCancelled(false);
     const isRetry = Boolean(retryTasks && retryTasks.length > 0);
     if (!isRetry) {
       setPreparing(true);
     }
-    const failedServers = new Set<string>();
 
     let uploadVerdict: 'allSucceeded' | 'failed' | 'cancelled' = 'allSucceeded';
     try {
@@ -138,7 +152,6 @@ function Upload() {
         setPreparing(false);
       }
 
-      // TODO icon to cancel upload
       // TODO detect if the file already exists? if we have the hash??
 
       if (filesToUpload && filesToUpload.length) {
@@ -150,6 +163,9 @@ function Upload() {
         const uploadTasks: UploadTask[] = isRetry
           ? (retryTasks as UploadTask[])
           : orderedServers.flatMap(server => filesToUpload.map(file => ({ server, file })));
+        if (!isRetry) runRef.current = { tasks: uploadTasks, loaded: new Map(), done: new Set() };
+        const run = runRef.current;
+        setFilesProgress({ done: countDoneFiles(run), total: filesToUpload.length });
 
         setTransfers(ut => {
           const newTransfers = { ...ut };
@@ -171,33 +187,61 @@ function Upload() {
           return newTransfers;
         });
 
-        const transferred: Record<string, number> = {};
+        const serverLoaded = (name: string) => {
+          let sum = 0;
+          for (const [task, bytes] of run.loaded) if (task.server.name === name) sum += bytes;
+          return sum;
+        };
         const result = await uploadFiles({
           tasks: uploadTasks,
           files: filesToUpload,
           servers: orderedServers,
           sign: signEventTemplate,
           resolveServer: mediaServer,
-          onProgress: ({ server }, progress) => {
+          signal: controller.signal,
+          onProgress: (task, progress) => {
+            run.loaded.set(task, progress.loaded);
             setTransfers(current => ({
               ...current,
-              [server.name]: {
-                ...current[server.name],
-                transferred: (transferred[server.name] ?? 0) + progress.loaded,
+              [task.server.name]: {
+                ...current[task.server.name],
+                transferred: serverLoaded(task.server.name),
                 rate: progress.rate || 0,
               },
             }));
           },
+          onTaskDone: task => {
+            run.loaded.set(task, task.file.size);
+            run.done.add(task);
+            setTransfers(current => ({
+              ...current,
+              [task.server.name]: { ...current[task.server.name], transferred: serverLoaded(task.server.name) },
+            }));
+            setFilesProgress({ done: countDoneFiles(run), total: filesToUpload.length });
+          },
         });
         uploadVerdict = result.verdict;
-        for (const outcome of result.outcomes) {
-          if (outcome.state === 'error') continue;
-          if (outcome.state === 'cancelled') {
-            failedServers.add('cancelled');
-            continue;
+        const remainingFailedTasks: UploadTask[] = [];
+        result.outcomes.forEach((outcome, index) => {
+          if (outcome.state !== 'done') {
+            const task = uploadTasks[index];
+            remainingFailedTasks.push(task);
+            const wasCancelled =
+              outcome.state === 'cancelled' ||
+              isCancel(outcome.error instanceof MediaServerError ? outcome.error.cause : outcome.error);
+            const message =
+              outcome.state === 'error' && !wasCancelled ? formatUploadError(outcome.error as AxiosError) : undefined;
+            setTransfers(current => ({
+              ...current,
+              // A real failure on this server outranks "Cancelled" from its other tasks.
+              [task.server.name]: {
+                ...current[task.server.name],
+                error: message ?? current[task.server.name]?.error ?? 'Cancelled',
+              },
+            }));
+            return;
           }
           const { task, descriptor } = outcome.value;
-          transferred[task.server.name] = (transferred[task.server.name] ?? 0) + task.file.size;
           const existingUrls = fileDimensions[task.file.name]?.url ?? [];
           fileDimensions[task.file.name] = {
             ...fileDimensions[task.file.name],
@@ -214,20 +258,9 @@ function Upload() {
             void getCatalogClient()
               .ingestUpload(user.pubkey, { url: task.server.url, type: task.server.type }, descriptor)
               .catch(() => undefined);
-        }
-        const remainingFailedTasks: UploadTask[] = [];
-        for (const index of result.failed) {
-          const task = uploadTasks[index];
-          const outcome = result.outcomes[index];
-          if (outcome.state !== 'error') continue;
-          remainingFailedTasks.push(task);
-          failedServers.add(task.server.name);
-          setTransfers(current => ({
-            ...current,
-            [task.server.name]: { ...current[task.server.name], error: formatUploadError(outcome.error as AxiosError) },
-          }));
-        }
+        });
         setFailedUploadTasks(remainingFailedTasks);
+        setCancelled(result.verdict === 'cancelled');
         if (result.verdict === 'allSucceeded' && !isRetry) setFiles([]);
       }
       if (uploadVerdict === 'allSucceeded') {
@@ -238,12 +271,6 @@ function Upload() {
           .filter((fe): fe is FileEventData => Boolean(fe && fe.x && fe.url.length > 0));
         setFileEventsToPublish(drafts);
         setUploadStep(2);
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Upload completed with errors',
-          description: `Some uploads failed on ${failedServers.size} server(s). Your files are still selected, so you can upload again to retry.`,
-        });
       }
     } catch (error) {
       console.error(error);
@@ -416,6 +443,7 @@ function Upload() {
 
   return (
     <div className="mx-auto flex w-full max-w-[80em] flex-col gap-4 py-1">
+      <PageHeader title="Upload" description="Store files on your servers, then optionally publish them as posts." />
       {!serversLoading && (!servers || servers.length == 0) ? (
         <UploadOnboarding />
       ) : (
@@ -425,7 +453,7 @@ function Upload() {
               { label: 'Choose files' },
               { label: 'Upload files' },
               { label: 'Describe media' },
-              { label: 'Publish Nostr events' },
+              { label: 'Publish posts' },
             ]}
             currentStep={uploadStep}
             className="-mt-0.5"
@@ -455,18 +483,22 @@ function Upload() {
                   transfers={transfers}
                   preparing={preparing}
                   uploadBusy={uploadBusy}
+                  filesDone={filesProgress.done}
+                  filesTotal={filesProgress.total}
+                  cancelled={cancelled}
                   failedCount={failedUploadTasks.length}
                   onRetry={() => void upload(failedUploadTasks)}
+                  onCancel={() => abortRef.current?.abort()}
+                  onBack={clearTransfers}
                 />
               )}
             </div>
           )}
           {uploadStep == 2 && fileEventsToPublish.length > 0 && (
             <div className="gap-4 flex flex-col">
-              <h2 className="">Publish Nostr events</h2>
+              <h2 className="text-lg font-semibold">Publish posts</h2>
               <p className="text-sm text-muted-foreground">
-                Your files are already on the servers; publishing creates the Nostr events that make them visible to
-                other people.
+                Your files are already on the servers; publishing creates posts that make them visible to other people.
               </p>
               <div className="flex flex-col gap-4">
                 {fileEventsToPublish.map(fe => (
@@ -481,10 +513,10 @@ function Upload() {
               </div>
               {audioCount > 0 && (
                 <div className="text-sm text-muted-foreground flex flex-row gap-2 items-center pl-4">
-                  <Info className="h-5 w-5 text-blue-500" />
-                  Audio events are not widely supported yet. Currently they are only used by{' '}
-                  <a className="link link-primary" href="https://stemstr.app/" target="_blank" rel="noreferrer">
-                    stemstr.app
+                  <Info className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  Audio posts are not widely supported yet. Currently they are only used by{' '}
+                  <a className="text-primary hover:underline" href="https://stemstr.app/" target="_blank" rel="noreferrer">
+                    stemstr.app<span className="sr-only"> (opens in a new tab)</span>
                   </a>
                 </div>
               )}
@@ -500,7 +532,7 @@ function Upload() {
                 </Button>
                 {publishCount > 0 && (
                   <Button className="w-full max-w-40 sm:w-40" disabled={uploadBusy} onClick={() => publishAll()}>
-                    {uploadBusy ? 'Publishing…' : `Publish (${publishCount} event${publishCount > 1 ? 's' : ''})`}
+                    {uploadBusy ? 'Publishing…' : `Publish ${publishCount} ${publishCount === 1 ? 'post' : 'posts'}`}
                   </Button>
                 )}
               </div>

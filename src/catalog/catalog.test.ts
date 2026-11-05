@@ -1200,7 +1200,7 @@ describe('user blob catalog', () => {
     ]);
   });
 
-  it('builds sync operations for every absent blob and server pair', () => {
+  it('builds all-servers mirror operations for every absent blob and server pair', () => {
     const replicaMap = [
       {
         sha256: hashA,
@@ -1265,7 +1265,7 @@ describe('user blob catalog', () => {
     ).toEqual([]);
   });
 
-  it('builds no operations for a blob without a usable source in mirror or sync mode', () => {
+  it('builds no operations for a blob without a usable source, for one target or all', () => {
     const replicaMap = [
       {
         sha256: hashA,

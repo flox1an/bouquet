@@ -121,26 +121,6 @@ describe('catalog scale', () => {
     expect((await catalog.queryCatalogTimeline(pubkey)).map(item => item.assetId)).not.toContain(stale.assetId);
   });
 
-  // Browse renders one of these per visible row, so any full-table scan here turns
-  it("reads one item's contents without scanning any table, at any catalog size", async () => {
-    const readsFor = async (count: number) => {
-      const counting = new CountingStore(new MemoryCatalogStore());
-      const catalog = await catalogOf(count, counting);
-      await catalog.queryCatalogTimeline(pubkey);
-      const [first] = await catalog.queryCatalogTimeline(pubkey);
-      counting.scans.length = 0;
-      counting.reads.length = 0;
-      const contents = await catalog.getCatalogAssetContents(first.assetId, 4);
-      expect(contents.totalCount).toBeGreaterThan(0);
-      return counting;
-    };
-
-    const small = await readsFor(100);
-    const large = await readsFor(5000);
-    expect(small.scans).toEqual([]);
-    expect(large.scans).toEqual([]);
-    expect(large.reads).toEqual(small.reads);
-  });
   it('loads a whole asset detail without scanning any table', async () => {
     const counting = new CountingStore(new MemoryCatalogStore());
     const catalog = await catalogOf(500, counting);

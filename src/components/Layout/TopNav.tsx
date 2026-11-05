@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { FolderOpen, Menu, RefreshCw, Settings as SettingsIcon, Upload, User } from 'lucide-react';
+import { ArrowLeftRight, FolderOpen, Menu, Settings as SettingsIcon, Upload, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
@@ -15,7 +15,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 const navItems = [
   { to: '/upload', label: 'Upload', icon: Upload },
   { to: '/browse', label: 'Browse', icon: FolderOpen },
-  { to: '/sync', label: 'Sync', icon: RefreshCw },
+  { to: '/sync', label: 'Copy', icon: ArrowLeftRight },
 ];
 
 function isNavItemActive(pathname: string, to: string): boolean {
@@ -31,24 +31,30 @@ export function TopNav() {
       <div className="container flex h-14 items-center">
         {/* Logo */}
         <Link to="/" className="mr-6 flex items-center space-x-2">
-          <span className="text-xl">🌸</span>
+          <span className="text-xl" aria-hidden="true">
+            🌸
+          </span>
           <span className="font-bold">Bouquet</span>
         </Link>
 
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
-          {navItems.map(item => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={cn(
-                'transition-colors hover:text-foreground/80',
-                isNavItemActive(location.pathname, item.to) ? 'text-foreground' : 'text-foreground/60'
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map(item => {
+            const active = isNavItemActive(location.pathname, item.to);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'transition-colors hover:text-foreground/80',
+                  active ? 'text-foreground underline decoration-2 underline-offset-8' : 'text-foreground/60'
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Right Side */}
@@ -58,17 +64,17 @@ export function TopNav() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Account menu">
-                  <User className="h-5 w-5" />
+                  <User className="h-5 w-5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
                   <Link to="/settings" className="flex items-center gap-2">
-                    <SettingsIcon className="h-4 w-4" />
+                    <SettingsIcon className="h-4 w-4" aria-hidden="true" />
                     Settings
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
+                <DropdownMenuItem onClick={logout}>Sign out</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -77,7 +83,7 @@ export function TopNav() {
           <Sheet>
             <SheetTrigger asChild className="md:hidden">
               <Button variant="ghost" size="icon" aria-label="Open navigation menu">
-                <Menu className="h-5 w-5" />
+                <Menu className="h-5 w-5" aria-hidden="true" />
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[300px]">
@@ -96,19 +102,23 @@ function MobileNav({ onLogout }: { onLogout: () => void }) {
   return (
     <div className="flex flex-col space-y-4 mt-4">
       <nav className="flex flex-col space-y-2">
-        {navItems.map(item => (
-          <Link
-            key={item.to}
-            to={item.to}
-            className={cn(
-              'flex items-center space-x-2 px-2 py-2 rounded-md transition-colors',
-              isNavItemActive(location.pathname, item.to) ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-            )}
-          >
-            <item.icon className="h-5 w-5" />
-            <span>{item.label}</span>
-          </Link>
-        ))}
+        {navItems.map(item => {
+          const active = isNavItemActive(location.pathname, item.to);
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              aria-current={active ? 'page' : undefined}
+              className={cn(
+                'flex items-center space-x-2 px-2 py-2 rounded-md border-l-2 transition-colors',
+                active ? 'border-primary bg-accent font-semibold text-accent-foreground' : 'border-transparent hover:bg-accent/50'
+              )}
+            >
+              <item.icon className="h-5 w-5" aria-hidden="true" />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
       </nav>
       <div className="border-t pt-4 flex items-center justify-between">
         <span className="text-sm">Theme</span>
@@ -118,12 +128,12 @@ function MobileNav({ onLogout }: { onLogout: () => void }) {
         <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Account</p>
         <Button variant="ghost" className="mb-2 w-full justify-start" asChild>
           <Link to="/settings">
-            <SettingsIcon className="mr-2 h-4 w-4" />
+            <SettingsIcon className="mr-2 h-4 w-4" aria-hidden="true" />
             Settings
           </Link>
         </Button>
         <Button variant="outline" className="w-full" onClick={onLogout}>
-          Logout
+          Sign out
         </Button>
       </div>
     </div>

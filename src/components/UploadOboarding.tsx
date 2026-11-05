@@ -22,7 +22,7 @@ const defaultServers: (Server & { description: string; buyUrl?: string })[] = [
   {
     name: 'satellite.earth',
     url: 'https://cdn.satellite.earth',
-    description: 'A payed blossom server with cheap prices 0.05 USD per GB/month.',
+    description: 'A paid Blossom server with cheap prices: 0.05 USD per GB/month.',
     buyUrl: 'https://cdn.satellite.earth/',
     type: 'blossom',
   },
@@ -52,8 +52,8 @@ export default function UploadOnboarding() {
 
   return (
     <div>
-      <h2 className="text-2xl py-4">You don't have any servers yet</h2>
-      <p className="py-4">Please choose some of the following options...</p>
+      <h2 className="text-lg font-semibold">You don't have any servers yet</h2>
+      <p className="py-4">Choose one or more servers to start with.</p>
 
       <div>
         {defaultServers.map((server, index) => (
@@ -74,7 +74,7 @@ export default function UploadOnboarding() {
             <div className="flex flex-col gap-1">
               <span className="flex items-center gap-2">
                 <span className="flex items-center gap-2 text-primary">
-                  <ServerIcon className="w-4 h-4" /> {server.name}
+                  <ServerIcon className="w-4 h-4" aria-hidden="true" /> {server.name}
                 </span>
                 <Badge>{server.type}</Badge>
               </span>
@@ -88,7 +88,7 @@ export default function UploadOnboarding() {
                       rel="noopener noreferrer"
                       onClick={e => e.stopPropagation()}
                     >
-                      Buy Storage
+                      Buy storage<span className="sr-only"> (opens in a new tab)</span>
                     </a>
                   </Button>
                 )}

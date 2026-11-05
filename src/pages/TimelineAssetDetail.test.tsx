@@ -157,17 +157,15 @@ const renderDetail = () =>
   );
 
 describe('TimelineAssetDetail storage actions', () => {
-  it('offers mirror/sync/delete for an unlinked item and opens the shared action plan dialog', async () => {
+  it('offers copy/delete for an unlinked item and opens the shared action plan dialog', async () => {
     const user = userEvent.setup();
     mockGetCatalogTimelineAsset.mockResolvedValue(detailFixture);
 
     renderDetail();
 
-    const menuButton = await screen.findByRole('button', { name: /open (item )?actions/i });
-    await user.click(menuButton);
-    await user.click(screen.getByRole('menuitem', { name: /mirror/i }));
+    await user.click(await screen.findByRole('button', { name: 'Copy' }));
 
-    expect(await screen.findByRole('dialog', { name: /mirror plan/i })).toBeTruthy();
+    expect(await screen.findByRole('dialog', { name: /plan/i })).toBeTruthy();
     expect(lastDialogProps?.action).toBe('mirror');
     expect(lastDialogProps?.assets).toEqual([projection]);
   });
@@ -178,7 +176,7 @@ describe('TimelineAssetDetail storage actions', () => {
 
     renderDetail();
 
-    const menuButton = await screen.findByRole('button', { name: /open (item )?actions/i });
+    const menuButton = await screen.findByRole('button', { name: /more actions/i });
     await user.click(menuButton);
     await user.click(screen.getByRole('menuitem', { name: /delete/i }));
 
@@ -244,8 +242,8 @@ describe('TimelineAssetDetail server copies', () => {
     expect(screen.getByText('missing-it.example')).toBeTruthy();
     expect(screen.getByText('loading.example')).toBeTruthy();
     expect(screen.getByText('down.example')).toBeTruthy();
-    expect(screen.getByText(/confirmed missing/i)).toBeTruthy();
-    expect(screen.getByText(/not checked/i)).toBeTruthy();
+    expect(screen.getByText('Missing')).toBeTruthy();
+    expect(screen.getByText('Unknown')).toBeTruthy();
     expect(screen.getByText(/unreachable/i)).toBeTruthy();
     // The confirmed server's real listed URL is shown as a working link, not an invented one.
     const link = screen.getByRole('link', { name: /has-it\.example/i });
@@ -280,7 +278,7 @@ describe('TimelineAssetDetail server copies', () => {
     renderDetail();
 
     expect(await screen.findByText('has-it.example')).toBeTruthy();
-    const eventUrlsHeading = screen.getByText(/from event metadata/i);
+    const eventUrlsHeading = screen.getByText(/from post metadata/i);
     expect(eventUrlsHeading).toBeTruthy();
     expect(screen.getByRole('link', { name: /relay-host\.example/i })).toBeTruthy();
     expect(screen.getByRole('link', { name: /another-relay\.example/i })).toBeTruthy();

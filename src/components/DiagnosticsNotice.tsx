@@ -17,7 +17,7 @@ export function DiagnosticsNotice() {
 
   return (
     <div
-      className="container mt-4 flex flex-wrap items-center justify-between gap-3 border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm"
+      className="container mt-4 flex flex-wrap items-center justify-between gap-3 border border-warning/40 bg-warning/10 px-3 py-2 text-sm"
       role="alert"
     >
       <span>{detail} A diagnostic report is available.</span>

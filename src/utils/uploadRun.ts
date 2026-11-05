@@ -25,6 +25,7 @@ export async function uploadFiles(input: {
   sign: (template: EventTemplate) => Promise<SignedEvent>;
   resolveServer(server: Server): UploadServer;
   onProgress?(task: UploadTask, progress: AxiosProgressEvent): void;
+  onTaskDone?(task: UploadTask): void;
   signal?: AbortSignal;
   concurrency?: number;
 }): Promise<RunResult<UploadResult> & { verdict: 'allSucceeded' | 'failed' | 'cancelled' }> {
@@ -46,6 +47,7 @@ export async function uploadFiles(input: {
           progress => input.onProgress?.(task, progress),
           input.signal
         ));
+      input.onTaskDone?.(task);
       return { task, descriptor, skipped: !!existing };
     },
     { concurrency: input.concurrency ?? 3, signal: input.signal }

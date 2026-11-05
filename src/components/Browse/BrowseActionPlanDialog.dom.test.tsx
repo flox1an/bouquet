@@ -106,7 +106,11 @@ const server = (name: string, url: string): ServerInfo =>
 
 const renderDialog = (
   assets: TimelineItem[],
-  overrides: { action?: 'mirror' | 'sync' | 'delete'; serverInfo?: Record<string, ServerInfo> } = {}
+  overrides: {
+    action?: 'mirror' | 'delete';
+    serverInfo?: Record<string, ServerInfo>;
+    onClose?: () => void;
+  } = {}
 ) => {
   const queryClient = new QueryClient();
   return render(
@@ -120,7 +124,7 @@ const renderDialog = (
         pubkey: 'pk',
         serverInfo: overrides.serverInfo ?? {},
         signEventTemplate: vi.fn(),
-        onClose: vi.fn(),
+        onClose: overrides.onClose ?? vi.fn(),
         onDeleted: vi.fn(),
       })
     )
@@ -162,7 +166,7 @@ describe('BrowseActionPlanDialog', () => {
     expect(planCatalogAction).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the chosen mirror destination while replanning', async () => {
+  it('keeps the chosen copy destination while replanning', async () => {
     planCatalogAction.mockResolvedValue({ allowed: true, targets: ['a'.repeat(64)] });
     getAssetReplicaMap.mockResolvedValue([]);
 
@@ -176,13 +180,13 @@ describe('BrowseActionPlanDialog', () => {
     await userEvent.click(screen.getByRole('menuitemradio', { name: /destination/i }));
 
     await vi.waitFor(() => {
-      const mirror = screen.getByRole('button', { name: 'Mirror 1 file' });
+      const mirror = screen.getByRole('button', { name: 'Copy 1 file' });
       expect(mirror.hasAttribute('disabled')).toBe(false);
       expect(screen.getByRole('button', { name: /destination/i })).toBeTruthy();
     });
   });
 
-  it('transfers to a mirror destination when the virtual all-servers entry is present', async () => {
+  it('defaults to "All servers" and still lets a single destination be chosen', async () => {
     const hash = 'a'.repeat(64);
     const destination = server('destination', 'https://destination.example');
     planCatalogAction.mockResolvedValue({ allowed: true, targets: [hash] });
@@ -214,13 +218,13 @@ describe('BrowseActionPlanDialog', () => {
       },
     });
 
-    await vi.waitFor(() => expect(screen.getByRole('button', { name: /Choose a destination server/i })).toBeTruthy());
-    await userEvent.click(screen.getByRole('button', { name: /Choose a destination server/i }));
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /All servers/i })).toBeTruthy());
+    await userEvent.click(screen.getByRole('button', { name: /All servers/i }));
     await userEvent.click(screen.getByRole('menuitemradio', { name: /destination/i }));
     await vi.waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Mirror 1 file' }).hasAttribute('disabled')).toBe(false)
+      expect(screen.getByRole('button', { name: 'Copy 1 file' }).hasAttribute('disabled')).toBe(false)
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Mirror 1 file' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Copy 1 file' }));
 
     await vi.waitFor(() =>
       expect(transferBlob).toHaveBeenCalledWith(
@@ -230,6 +234,49 @@ describe('BrowseActionPlanDialog', () => {
         expect.any(Object)
       )
     );
+  });
+
+  it('fills the gaps on every server with the default "All servers" destination', async () => {
+    const hash = 'a'.repeat(64);
+    const one = server('one', 'https://one.example');
+    const two = server('two', 'https://two.example');
+    planCatalogAction.mockResolvedValue({ allowed: true, targets: [hash] });
+    getAssetReplicaMap.mockResolvedValue([
+      {
+        sha256: hash,
+        assetId: 'asset-1',
+        role: 'main',
+        sources: [{ serverId: 'https://source.example', baseUrl: 'https://source.example', serverType: 'blossom' }],
+        presentOn: ['https://source.example'],
+        absentFrom: [
+          { serverId: one.url, baseUrl: one.url },
+          { serverId: two.url, baseUrl: two.url },
+        ],
+      },
+    ]);
+    transferBlob.mockImplementation(async (_source: string, target: ServerInfo) => ({
+      sha256: hash,
+      url: `${target.url}/${hash}`,
+      type: 'image/jpeg',
+      size: 1,
+      uploaded: 1,
+    }));
+    ingestUpload.mockResolvedValue(undefined);
+    refreshReplicaAvailability.mockResolvedValue(undefined);
+
+    renderDialog([item('asset-1')], {
+      action: 'mirror',
+      // One failing server must not make the all-servers target unselectable.
+      serverInfo: { all: { ...server('All servers', 'all'), virtual: true, isError: true }, one, two },
+    });
+
+    // No choice needed: "All servers" is preselected.
+    await vi.waitFor(() => expect(screen.getByText(/2 missing file copies will be filled in/i)).toBeTruthy());
+    expect(screen.getByRole('button', { name: /All servers/i })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Copy 1 file' }));
+
+    await vi.waitFor(() => expect(transferBlob).toHaveBeenCalledTimes(2));
+    expect(transferBlob.mock.calls.map(call => (call[1] as ServerInfo).url).sort()).toEqual([one.url, two.url]);
   });
 
   it('shows a per-server breakdown, tells "already gone" apart from failure, and updates the catalog on success', async () => {
@@ -327,6 +374,54 @@ describe('BrowseActionPlanDialog', () => {
     );
     await vi.waitFor(() => expect(screen.getByText(/1 deleted, 0 already gone, 0 failed/i)).toBeTruthy());
     expect(recordBlobsRemoved).toHaveBeenCalledWith('pk', [{ sha256: hashA, serverUrl: 'https://almond.slidetr.net' }]);
+  });
+
+  it('cancelling a running delete shows a summary and keeps the dialog open until Close', async () => {
+    const hashFor = (assetId: string) => Number(assetId.slice(6)).toString(16).padStart(64, '0');
+    planCatalogAction.mockImplementation(async (_pubkey: string, assetId: string) => ({
+      allowed: true,
+      targets: [hashFor(assetId)],
+    }));
+    getAssetReplicaMap.mockImplementation(async (_pubkey: string, assetId: string) => [
+      {
+        sha256: hashFor(assetId),
+        assetId,
+        role: 'main',
+        size: 10,
+        sources: [{ serverId: 'https://media.example', baseUrl: 'https://media.example', serverType: 'blossom' }],
+        presentOn: ['https://media.example'],
+        absentFrom: [],
+      },
+    ]);
+    recordBlobsRemoved.mockResolvedValue(undefined);
+    // Hold every delete open so the run is still in flight when Cancel is pressed.
+    const gate = Promise.withResolvers<boolean>();
+    deleteBlob.mockImplementation(() => gate.promise);
+    const onClose = vi.fn();
+
+    renderDialog(
+      Array.from({ length: 6 }, (_, index) => item(`asset-${index}`)),
+      { onClose }
+    );
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Delete 6 files' })).toBeTruthy());
+    await userEvent.click(screen.getByRole('button', { name: 'Delete 6 files' }));
+    // Concurrency is 5, so one file is still waiting to start.
+    await vi.waitFor(() => expect(deleteBlob).toHaveBeenCalledTimes(5));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: 'Cancelling…' }).hasAttribute('disabled')).toBe(true);
+    gate.resolve(true);
+
+    await vi.waitFor(() =>
+      expect(screen.getByText('Cancelled. 5 deleted, 0 already gone, 0 failed, 1 not started.')).toBeTruthy()
+    );
+    expect(deleteBlob).toHaveBeenCalledTimes(5);
+    expect(onClose).not.toHaveBeenCalled();
+
+    // The footer Close is the last one; the dialog's X shares the accessible name.
+    const closeButtons = screen.getAllByRole('button', { name: 'Close' });
+    await userEvent.click(closeButtons[closeButtons.length - 1]);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('completes a 700-file delete run', async () => {

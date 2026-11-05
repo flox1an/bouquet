@@ -136,8 +136,13 @@ const BlobList = ({ blobs, title, className = '' }: BlobListProps) => {
                     <div className="flex items-center gap-1">
                       <Badges blob={blob} fileMetaEventsByHash={fileMetaEventsByHash} />
                       {distribution[blob.sha256]?.servers.length === 1 && (
-                        <span className="text-yellow-500" title="Not distributed to any other server">
-                          <AlertTriangle className="h-4 w-4" />
+                        <span
+                          className="text-warning"
+                          title="Not copied to any other server"
+                          role="img"
+                          aria-label="Not copied to any other server"
+                        >
+                          <AlertTriangle className="h-4 w-4" aria-hidden />
                         </span>
                       )}
                     </div>

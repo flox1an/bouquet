@@ -15,7 +15,6 @@ import type {
   NativeUrlProbe,
   ReplicaProbe,
   ReplicaState,
-  TimelineAssetContents,
   TimelineAssetDetail,
   TimelineProjection,
   TimelineQuery,
@@ -68,7 +67,6 @@ export const catalogMethodNames = [
   'queryCatalogTimeline',
   'queryCatalogAssetIds',
   'getCatalogTimelineAsset',
-  'getCatalogAssetContents',
   'planCatalogAction',
   'getAssetReplicaMap',
   'refreshReplicaAvailability',
@@ -259,9 +257,6 @@ export class CatalogClient {
   }
   getCatalogTimelineAsset(pubkey: string, assetId: string): Promise<TimelineAssetDetail | undefined> {
     return this.call('getCatalogTimelineAsset', pubkey, assetId) as Promise<TimelineAssetDetail | undefined>;
-  }
-  getCatalogAssetContents(assetId: string, limit: number): Promise<TimelineAssetContents> {
-    return this.call('getCatalogAssetContents', assetId, limit) as Promise<TimelineAssetContents>;
   }
   planCatalogAction(
     pubkey: string,

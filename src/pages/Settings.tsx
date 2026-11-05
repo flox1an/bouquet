@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PageHeader } from '@/components/ui/page-header';
+import { ToastAction } from '@/components/ui/toast';
+import { useToast } from '@/hooks/use-toast';
 import { getCatalogClient } from '../catalog/catalogClient';
 import type { AdditionalPubkey } from '../catalog/catalog';
 import ServerListPopup from '../components/ServerListPopup';
@@ -25,6 +28,7 @@ export default function Settings() {
   const [serversOpen, setServersOpen] = useState(false);
   const [error, setError] = useState<string>();
   const { servers, serversLoading, storeUserServers } = useUserServers();
+  const { toast } = useToast();
 
   const load = useCallback(async () => {
     if (!user?.pubkey) return;
@@ -46,7 +50,7 @@ export default function Settings() {
     setError(undefined);
     try {
       const source = parseAdditionalPubkey(input);
-      if (source.pubkey === user.pubkey) throw new Error('Your signed-in pubkey is already scanned');
+      if (source.pubkey === user.pubkey) throw new Error("That's your own profile - it's already included.");
       await getCatalogClient().addAdditionalPubkey(user.pubkey, source);
       await load();
       setInput('');
@@ -67,12 +71,29 @@ export default function Settings() {
     }
   };
 
-  const remove = async (pubkey: string) => {
+  const remove = async (source: AdditionalPubkey) => {
     if (!user?.pubkey) return;
+    const owner = user.pubkey;
     setError(undefined);
     try {
-      await getCatalogClient().removeAdditionalPubkey(user.pubkey, pubkey);
-      setSources(current => current.filter(source => source.pubkey !== pubkey));
+      await getCatalogClient().removeAdditionalPubkey(owner, source.pubkey);
+      setSources(current => current.filter(item => item.pubkey !== source.pubkey));
+      toast({
+        description: 'Profile removed.',
+        action: (
+          <ToastAction
+            altText="Undo removing profile"
+            onClick={() =>
+              void getCatalogClient()
+                .addAdditionalPubkey(owner, { pubkey: source.pubkey, relayHints: source.relayHints })
+                .then(load)
+                .catch((error: unknown) => setError(error instanceof Error ? error.message : String(error)))
+            }
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
     }
@@ -80,23 +101,20 @@ export default function Settings() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col px-4 py-8">
-      <header className="mb-8 border-b-2 border-primary pb-5">
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">Account settings</p>
-        <h1 className="mt-2 text-4xl font-black tracking-tight">Settings</h1>
-      </header>
+      <PageHeader title="Settings" />
 
       <Card>
         <CardHeader>
           <CardTitle>Media servers</CardTitle>
           <CardDescription>
-            The blossom and NIP-96 servers your media lives on. Rescanning reads these listings to build your catalog,
-            so configure them before you scan.
+            The Blossom and NIP-96 servers your media lives on. Bouquet looks at the files on these servers to build your
+            library, so add them before you scan.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {serversLoading ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading servers…
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading servers…
             </p>
           ) : (
             <>
@@ -104,7 +122,7 @@ export default function Settings() {
                 {servers.length === 0 ? 'No servers configured yet.' : servers.map(server => server.name).join(' · ')}
               </p>
               <Button variant="outline" className="mt-3" onClick={() => setServersOpen(true)}>
-                <ServerIcon className="h-4 w-4" />
+                <ServerIcon className="h-4 w-4" aria-hidden />
                 Manage servers
               </Button>
             </>
@@ -121,29 +139,29 @@ export default function Settings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Additional content</CardTitle>
+          <CardTitle>Other profiles' media</CardTitle>
           <CardDescription>
-            Scan supported media and websites published by other Nostr identities. These sources are read-only; Bouquet
-            never publishes as them or deletes their blobs.
+            Include media and websites published by other Nostr profiles. They're read-only: Bouquet never posts as them
+            or deletes their files.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={add}>
             <div className="min-w-0 flex-1 space-y-2">
-              <Label htmlFor="additional-pubkey">Pubkey</Label>
+              <Label htmlFor="additional-pubkey">Nostr profile (npub)</Label>
               <Input
                 id="additional-pubkey"
                 value={input}
                 onChange={event => setInput(event.target.value)}
-                placeholder="npub, nprofile, or hex pubkey"
+                placeholder="npub1…"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
               />
             </div>
             <Button type="submit" disabled={!input.trim() || adding}>
-              {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Add pubkey
+              {adding ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
+              Add profile
             </Button>
           </form>
 
@@ -156,18 +174,18 @@ export default function Settings() {
           <div className="mt-6 border-t pt-4">
             {loading ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading additional pubkeys…
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading profiles…
               </p>
             ) : sources.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No additional pubkeys configured.</p>
+              <p className="text-sm text-muted-foreground">No other profiles added yet.</p>
             ) : (
-              <ul className="space-y-2" aria-label="Additional pubkeys">
+              <ul className="space-y-2" aria-label="Other profiles">
                 {sources.map(source => (
                   <AdditionalPubkeyRow
                     key={source.pubkey}
                     source={source}
                     syncing={syncing.has(source.pubkey)}
-                    onRemove={() => void remove(source.pubkey)}
+                    onRemove={() => void remove(source)}
                   />
                 ))}
               </ul>
@@ -201,12 +219,12 @@ function AdditionalPubkeyRow({
         </p>
         {syncing && (
           <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground" role="status">
-            <Loader2 className="h-3 w-3 animate-spin" /> Scanning relays…
+            <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Scanning relays…
           </p>
         )}
       </div>
       <Button type="button" variant="ghost" size="icon" onClick={onRemove} aria-label={`Remove ${name ?? npub}`}>
-        <Trash2 className="h-4 w-4" />
+        <Trash2 className="h-4 w-4" aria-hidden />
       </Button>
     </li>
   );

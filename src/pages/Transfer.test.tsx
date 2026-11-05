@@ -92,8 +92,8 @@ describe('Transfer inventory status', () => {
     await user.click(screen.getByRole('button', { name: /select target server/i }));
     await user.click(screen.getByRole('menuitemradio', { name: /beta/i }));
 
-    expect(screen.queryByText(/no missing files to transfer/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: /start sync/i })).toBeNull();
+    expect(screen.queryByText(/no missing files to copy/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /start copying/i })).toBeNull();
     expect(screen.getByText(/checking file inventory/i)).toBeTruthy();
   });
 
@@ -127,8 +127,8 @@ describe('Transfer inventory status', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByText(/no missing files to transfer/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: /start sync/i })).toBeNull();
+    expect(screen.queryByText(/no missing files to copy/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /start copying/i })).toBeNull();
     expect(screen.getByText(/could not read this server's file list/i)).toBeTruthy();
   });
 });
@@ -170,7 +170,7 @@ describe('Transfer cancellation recovery', () => {
     await user.click(screen.getByRole('button', { name: /select target server/i }));
     await user.click(screen.getByRole('menuitemradio', { name: /^target/i }));
 
-    await user.click(screen.getByRole('button', { name: /start sync/i }));
+    await user.click(screen.getByRole('button', { name: /start copying/i }));
 
     const cancelButton = await screen.findByRole('button', { name: /^cancel$/i });
     await user.click(cancelButton);

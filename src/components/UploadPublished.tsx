@@ -40,7 +40,7 @@ const getEventDataByKind = (event: NostrEvent): EventVisModel | undefined => {
     return {
       id: event.id,
       nevent,
-      type: 'filemeta',
+      type: 'file',
       thumbnail: getValueByTag(event.tags, 'thumb') || getValueByTag(event.tags, 'image'),
       title: getValueByTag(event.tags, 'title'),
       content: getValueByTag(event.tags, 'summary'),
@@ -80,19 +80,23 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
             height={128}
             src={getProxyUrl(data.thumbnail, 600)}
             className="w-full"
+            alt=""
           />
         </div>
         <div className="flex flex-col gap-2 flex-grow">
-          {data.title && <div className="text-accemt">{data.title}</div>}
+          {data.title && <div className="font-medium">{data.title}</div>}
           {data.content && <div>{data.content}</div>}
           {data.artist && (
             <div>
               {data.artist} {data.album ? `(${data.album})` : ''}
             </div>
           )}
-          <div className="text-xs bg-muted p-4 rounded-xl text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
-            {JSON.stringify(event, null, 2)}
-          </div>
+          <details className="text-xs text-muted-foreground">
+            <summary className="cursor-pointer">Raw event (JSON)</summary>
+            <div className="mt-2 bg-muted p-4 rounded-xl overflow-x-auto whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
+              {JSON.stringify(event, null, 2)}
+            </div>
+          </details>
         </div>
         <div className="w-24">
           <a
@@ -101,8 +105,9 @@ const FileEvent = ({ event }: { event: NostrEvent }) => {
             rel="noreferrer"
             href={`https://nostr.at/${data.nevent}`}
           >
-            <Link className="w-5 h-5" />
+            <Link className="w-5 h-5" aria-hidden="true" />
             <Badge>{data.type}</Badge>
+            <span className="sr-only">(opens in a new tab)</span>
           </a>
         </div>
       </div>
@@ -118,7 +123,7 @@ export type PublishJobKind = 'file' | 'audio' | 'video';
 export type PublishOutcome = { kind: PublishJobKind; result: PublishResult } | { kind: PublishJobKind; error: string };
 export type FileEventPublishState = FileEventData & { publishOutcomes?: PublishOutcome[] };
 
-const KIND_LABEL: Record<PublishJobKind, string> = { file: 'File event', audio: 'Audio event', video: 'Video event' };
+const KIND_LABEL: Record<PublishJobKind, string> = { file: 'File post', audio: 'Audio post', video: 'Video post' };
 
 function isRetryable(outcome: PublishOutcome): boolean {
   return 'error' in outcome || outcome.result.verdict === 'failed' || outcome.result.verdict === 'partial';
@@ -142,7 +147,7 @@ function statusClassName(outcome: PublishOutcome): string {
   if ('error' in outcome) return 'text-destructive';
   switch (outcome.result.verdict) {
     case 'delivered':
-      return 'text-green-600';
+      return 'text-success';
     case 'disabled':
       return 'text-muted-foreground';
     default:
@@ -182,10 +187,10 @@ const UploadPublished: React.FC<{
 
   return (
     <div className="flex flex-col gap-4 ">
-      <h2 className="text-2xl font-bold">{everyPublishFailed ? 'Publishing failed' : 'Publishing results'}</h2>
+      <h2 className="text-lg font-semibold">{everyPublishFailed ? 'Publishing failed' : 'Publishing results'}</h2>
       {allEvents.length > 0 && (
         <div className="flex flex-col gap-4 w-full bg-muted rounded-xl p-4">
-          <div className="font-mono text-xs uppercase text-muted-foreground">Published events</div>
+          <div className="font-mono text-xs uppercase text-muted-foreground">Published posts</div>
           {allEvents.map(event => (
             <FileEvent key={event.id} event={event} />
           ))}
@@ -214,9 +219,9 @@ const UploadPublished: React.FC<{
                         onClick={() => onRetry(fe.x, outcome.kind)}
                       >
                         {retryingKey === retryKey ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
                         ) : (
-                          <RotateCw className="h-3 w-3" />
+                          <RotateCw className="h-3 w-3" aria-hidden="true" />
                         )}
                         Retry
                       </Button>

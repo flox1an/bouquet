@@ -1,6 +1,7 @@
-import { ArrowDownSquare, ArrowUpSquare, CheckCircle2, FileText, AlertTriangle, X, Loader2 } from 'lucide-react';
+import { ArrowDownSquare, ArrowUpSquare, CheckCircle2, FileText, AlertTriangle, X, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Steps } from '@/components/ui/steps';
+import { PageHeader } from '@/components/ui/page-header';
 import { ServerSelect } from '../components/ServerList/ServerSelect';
 import { ServerInfo, useServerInfo } from '../utils/useServerInfo';
 import { useMemo, useState } from 'react';
@@ -29,12 +30,36 @@ type TransferStatus = {
     phase?: TransferPhase;
     message?: string;
     size: number;
+    type?: string;
     uploaded?: number;
     rate?: number;
     downloaded?: number;
     retries?: number;
   };
 };
+
+const phaseLabels: Record<TransferPhase, string> = {
+  validating: 'Checking source…',
+  mirroring: 'Copying on server…',
+  downloading: 'Downloading…',
+  uploading: 'Uploading…',
+  completed: 'Done',
+  error: 'Failed',
+};
+
+const FileSummary = ({ sha256, type, size }: { sha256: string; type?: string; size: number }) => (
+  <span className="flex min-w-0 items-center gap-2">
+    <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+    <span className="min-w-0">
+      <span className="block truncate">
+        {type || 'Unknown type'} · {formatFileSize(size)}
+      </span>
+      <span className="block truncate font-mono text-muted-foreground" title={sha256}>
+        {sha256.slice(0, 12)}…
+      </span>
+    </span>
+  </span>
+);
 
 const getPercent = (value: number, max: number) => (max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0);
 
@@ -70,7 +95,8 @@ export const Transfer = () => {
   const { source } = useParams();
   const [transferSource, setTransferSource] = useState(source);
   const navigate = useNavigate();
-  const { serverInfo } = useServerInfo();
+  const { serverInfo, rescan } = useServerInfo();
+  const [refreshing, setRefreshing] = useState(false);
   const { storeUserServers } = useUserServers();
   const [isServerListDialogOpen, setIsServerListDialogOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState<string | undefined>();
@@ -90,6 +116,15 @@ export const Transfer = () => {
     navigate('/browse');
   };
 
+  const refreshFromServers = async () => {
+    setRefreshing(true);
+    try {
+      await rescan();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const transferJobs = useMemo(() => {
     if (transferSource && transferTarget) {
       const sourceServer = serverInfo[transferSource];
@@ -103,7 +138,7 @@ export const Transfer = () => {
   }, [serverInfo, transferSource, transferTarget]);
 
   // Loading/unreachable listings must never be presented as a confirmed
-  // zero-difference "nothing to sync" - that hides real inventory the app
+  // zero-difference "nothing to copy" - that hides real inventory the app
   // simply hasn't read yet.
   const inventoryStatus = useMemo((): 'loading' | 'error' | 'ready' => {
     if (!transferSource || !transferTarget) return 'ready';
@@ -123,9 +158,9 @@ export const Transfer = () => {
     const missingCount = sourceBlobs.filter(src => !targetBlobs?.find(tgt => tgt.sha256 === src.sha256)).length;
 
     if (missingCount === 0) {
-      return 'No files to transfer';
+      return 'No files to copy';
     }
-    return `${missingCount} file${missingCount > 1 ? 's' : ''} to transfer`;
+    return `${missingCount} file${missingCount > 1 ? 's' : ''} to copy`;
   };
 
   const performTransfer = async (
@@ -148,8 +183,8 @@ export const Transfer = () => {
           [b.sha256]: {
             sha256: b.sha256,
             status: 'pending',
-            phase: 'mirroring',
             size: b.size,
+            type: b.type,
             uploaded: 0,
             rate: 0,
             downloaded: 0,
@@ -238,7 +273,10 @@ export const Transfer = () => {
       setTransferLog(ts =>
         ts[blob.sha256]
           ? ts
-          : { ...ts, [blob.sha256]: { sha256: blob.sha256, status: 'cancelled', size: blob.size, retries: 0 } }
+          : {
+              ...ts,
+              [blob.sha256]: { sha256: blob.sha256, status: 'cancelled', size: blob.size, type: blob.type, retries: 0 },
+            }
       );
     }
     setAbortController(null);
@@ -286,7 +324,7 @@ export const Transfer = () => {
   const currentTransferStep = transferSource ? (transferTarget ? 2 : 1) : 0;
   const transferSteps = (
     <Steps
-      steps={[{ label: 'Choose source' }, { label: 'Choose target' }, { label: 'Sync files' }]}
+      steps={[{ label: 'Choose source' }, { label: 'Choose target' }, { label: 'Copy files' }]}
       currentStep={currentTransferStep}
     />
   );
@@ -309,16 +347,20 @@ export const Transfer = () => {
 
   return (
     <div className="mx-auto flex w-full max-w-[80em] flex-col gap-4 py-1">
+      <PageHeader
+        title="Copy between servers"
+        description="Copy every file that is missing on one server from another. To copy only selected items, use Copy in Browse."
+      />
       <div className="-mt-0.5">{transferSteps}</div>
 
       {!hasConfiguredServers ? (
         <Card className="shadow-sm">
           <CardContent className="flex min-h-40 flex-col items-center justify-center gap-3 p-8 text-center">
-            <AlertTriangle className="h-7 w-7" />
+            <AlertTriangle className="h-7 w-7" aria-hidden="true" />
             <div>
               <p className="font-semibold">No media servers configured yet</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Add a Blossom server to choose a source and sync your media files.
+                Copying needs at least two Blossom servers: one to copy from and one to copy to.
               </p>
             </div>
             <Button onClick={() => setIsServerListDialogOpen(true)}>Manage servers</Button>
@@ -328,7 +370,7 @@ export const Transfer = () => {
         <>
           {hasStaleSource && (
             <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
               <AlertTitle>This source server is no longer configured</AlertTitle>
               <AlertDescription>
                 Choose a currently configured source server below, or manage your servers.
@@ -339,8 +381,8 @@ export const Transfer = () => {
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <ArrowUpSquare className="h-4 w-4" />
-                  Source Server
+                  <ArrowUpSquare className="h-4 w-4" aria-hidden="true" />
+                  Source server
                 </CardTitle>
                 <CardDescription className="truncate">
                   {transferSource ? serverInfo[transferSource]?.url : 'Choose a source server'}
@@ -360,8 +402,8 @@ export const Transfer = () => {
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <ArrowDownSquare className="h-4 w-4" />
-                  Target Server
+                  <ArrowDownSquare className="h-4 w-4" aria-hidden="true" />
+                  Target server
                 </CardTitle>
                 <CardDescription className="truncate">
                   {transferTarget ? serverInfo[transferTarget]?.url : 'Choose a target server'}
@@ -378,7 +420,7 @@ export const Transfer = () => {
                 />
                 {!hasValidTarget && (
                   <div className="mt-3 border-t pt-3 text-sm text-muted-foreground">
-                    Sync needs a second Blossom server as its target.{' '}
+                    Copying needs a second Blossom server to copy to.{' '}
                     <Button variant="link" className="h-auto p-0" onClick={() => setIsServerListDialogOpen(true)}>
                       Manage servers
                     </Button>
@@ -388,9 +430,9 @@ export const Transfer = () => {
             </Card>
 
             <div className="flex items-start justify-end">
-              {transferSource && (
-                <Button variant="ghost" size="sm" onClick={() => closeTransferMode()}>
-                  <X className="h-4 w-4" />
+              {transferSource && !abortController && (
+                <Button variant="ghost" size="sm" aria-label="Close" onClick={() => closeTransferMode()}>
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </Button>
               )}
             </div>
@@ -405,24 +447,24 @@ export const Transfer = () => {
               <div>
                 <CardTitle className="flex items-center gap-2 text-base">
                   {started && !isTransferComplete ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <ArrowUpSquare className="h-4 w-4" />
+                    <ArrowUpSquare className="h-4 w-4" aria-hidden="true" />
                   )}
-                  Sync Summary
+                  Summary
                 </CardTitle>
                 <CardDescription>
-                  {transferJobs.length} media file{transferJobs.length > 1 ? 's' : ''} missing on{' '}
+                  {transferJobs.length} file{transferJobs.length > 1 ? 's' : ''} missing on{' '}
                   {serverInfo[transferTarget]?.name}
                 </CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {mirrorSupport[transferTarget] === false && (
-                  <Badge variant="outline">Mirror unavailable on target</Badge>
+                  <Badge variant="outline">Server can&apos;t copy directly; uploading instead</Badge>
                 )}
                 {isTransferComplete && transferStatus.error === 0 && (
                   <Badge variant="secondary" className="gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                     Complete
                   </Badge>
                 )}
@@ -430,8 +472,8 @@ export const Transfer = () => {
                   <Button
                     onClick={() => transferSource && performTransfer(transferSource, transferTarget, transferJobs)}
                   >
-                    <ArrowUpSquare className="mr-1 h-4 w-4" />
-                    Start sync
+                    <ArrowUpSquare className="mr-1 h-4 w-4" aria-hidden="true" />
+                    Start copying
                   </Button>
                 ) : (
                   <Button variant="outline" onClick={cancelTransfer} disabled={!abortController}>
@@ -456,31 +498,30 @@ export const Transfer = () => {
 
               {started && currentTransfer && (
                 <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                  <Badge variant="outline">{currentTransfer.phase || 'starting'}</Badge>
-                  <span className="text-xs text-muted-foreground">
-                    Transferring media file <span className="font-mono">{currentTransfer.sha256.slice(0, 24)}</span>
+                  <Badge variant="outline">
+                    {currentTransfer.phase ? phaseLabels[currentTransfer.phase] : 'Starting…'}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">Copying file</span>
+                  <span className="text-xs">
+                    <FileSummary {...currentTransfer} />
                   </span>
                 </div>
               )}
 
               {transferResumable.length > 0 && (
                 <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTriangle className="h-4 w-4" aria-hidden="true" />
                   <AlertTitle>
-                    {transferResumable.length} transfer{transferResumable.length > 1 ? 's' : ''} need attention
+                    {transferResumable.length} cop{transferResumable.length > 1 ? 'ies need' : 'y needs'} attention
                   </AlertTitle>
                   <AlertDescription>
                     <div className="mt-2 grid w-full gap-2">
                       {transferResumable.map(t => (
                         <div
                           key={t.sha256}
-                          className="grid gap-2 rounded-md border border-destructive/20 bg-background/60 p-2 text-xs md:grid-cols-[1fr_auto_auto]"
+                          className="grid gap-2 rounded-md border border-destructive/20 bg-background/60 p-2 text-xs md:grid-cols-[1fr_auto]"
                         >
-                          <span className="flex min-w-0 items-center gap-2 font-mono">
-                            <FileText className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">{t.sha256}</span>
-                          </span>
-                          <span className="whitespace-nowrap text-muted-foreground">{formatFileSize(t.size)}</span>
+                          <FileSummary {...t} />
                           <span className="text-destructive">
                             {t.status === 'cancelled' ? 'Cancelled before it started' : t.message}
                           </span>
@@ -488,7 +529,7 @@ export const Transfer = () => {
                       ))}
                     </div>
                     {/* Without this the only way past a partial failure or cancellation is to
-                        run the whole transfer again, including everything that already worked. */}
+                        copy everything again, including everything that already worked. */}
                     <Button
                       className="mt-3"
                       size="sm"
@@ -503,7 +544,7 @@ export const Transfer = () => {
                         }
                       }}
                     >
-                      Resume {transferResumable.length} remaining transfer{transferResumable.length > 1 ? 's' : ''}
+                      Resume {transferResumable.length} remaining cop{transferResumable.length > 1 ? 'ies' : 'y'}
                     </Button>
                   </AlertDescription>
                 </Alert>
@@ -518,18 +559,24 @@ export const Transfer = () => {
           <CardContent className="flex min-h-40 items-center justify-center p-8 text-center text-sm text-muted-foreground">
             {transferTarget && inventoryStatus === 'loading' ? (
               <div className="flex items-center gap-2">
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
                 Checking file inventory…
               </div>
             ) : transferTarget && inventoryStatus === 'error' ? (
-              <div className="flex items-center gap-2 text-destructive">
-                <AlertTriangle className="h-5 w-5" />
-                Could not read this server&apos;s file list. Try rescanning your servers.
+              <div className="flex flex-col items-center gap-3">
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+                  Could not read this server&apos;s file list.
+                </div>
+                <Button variant="outline" size="sm" onClick={refreshFromServers} disabled={refreshing}>
+                  <RefreshCw className={`h-4 w-4${refreshing ? ' animate-spin' : ''}`} aria-hidden="true" />
+                  Refresh from servers
+                </Button>
               </div>
             ) : transferTarget ? (
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                No missing files to transfer.
+                <CheckCircle2 className="h-5 w-5 text-success" aria-hidden="true" />
+                No missing files to copy.
               </div>
             ) : transferSource ? (
               <>Select a target server above.</>

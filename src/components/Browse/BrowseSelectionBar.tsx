@@ -30,21 +30,18 @@ export function BrowseSelectionBar({ selectedItems, onSelectAllVisible, onClear,
       </span>
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
         <Button size="sm" variant="ghost" onClick={onSelectAllVisible}>
-          <CheckSquare className="h-4 w-4" />
+          <CheckSquare className="h-4 w-4" aria-hidden />
           Select all visible
         </Button>
         <Button size="sm" variant="outline" onClick={() => onAction('mirror')}>
-          Mirror
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => onAction('sync')}>
-          Sync
+          Copy
         </Button>
         <Button size="sm" variant="destructive" onClick={() => onAction('delete')}>
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-4 w-4" aria-hidden />
           Delete
         </Button>
         <Button size="sm" variant="ghost" onClick={onClear} aria-label="Clear selection">
-          <X className="h-4 w-4" />
+          <X className="h-4 w-4" aria-hidden />
         </Button>
       </div>
     </div>

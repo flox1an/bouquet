@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ServerInfo } from '../../utils/useServerInfo';
 import type { TimelineSort, TimelineSortField } from '../../catalog/catalog';
-import { formatFileSize } from '../../utils/utils';
 import { SORT_FIELD_OPTIONS, TYPE_FILTERS, type TypeFilter } from './browseConstants';
 import { BrowseFilterMenu, type AvailabilityFilter } from './BrowseFilterMenu';
 
@@ -81,20 +80,24 @@ export function BrowseToolbar({
           <Input
             value={search}
             onChange={event => onSearchChange(event.target.value)}
-            placeholder="Search titles, descriptions, event metadata, or a file hash"
+            placeholder="Search titles, descriptions, posts, or a file hash"
             className="pl-9"
             aria-label="Search your media"
           />
         </label>
 
-        <div className="inline-flex shrink-0 rounded-md border bg-background p-0.5" aria-label="Browse display mode">
+        <div
+          role="group"
+          aria-label="Display mode"
+          className="inline-flex shrink-0 rounded-md border bg-background p-0.5"
+        >
           <Button
             size="sm"
             variant={displayMode === 'media' ? 'default' : 'ghost'}
             onClick={() => onDisplayModeChange('media')}
             aria-pressed={displayMode === 'media'}
           >
-            <LayoutGrid className="h-4 w-4" />
+            <LayoutGrid className="h-4 w-4" aria-hidden="true" />
             Media
           </Button>
           <Button
@@ -103,7 +106,7 @@ export function BrowseToolbar({
             onClick={() => onDisplayModeChange('list')}
             aria-pressed={displayMode === 'list'}
           >
-            <List className="h-4 w-4" />
+            <List className="h-4 w-4" aria-hidden="true" />
             List
           </Button>
         </div>
@@ -144,27 +147,14 @@ export function BrowseToolbar({
               aria-label={sort.direction === 'asc' ? 'Sort ascending' : 'Sort descending'}
               onClick={() => onSortChange({ ...sort, direction: sort.direction === 'asc' ? 'desc' : 'asc' })}
             >
-              {sort.direction === 'asc' ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
+              {sort.direction === 'asc' ? (
+                <ArrowUpAZ className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <ArrowDownAZ className="h-4 w-4" aria-hidden="true" />
+              )}
             </Button>
           </div>
         )}
-
-        <Select
-          value={selectedServerName ?? '__all__'}
-          onValueChange={value => onServerChange(value === '__all__' ? undefined : value)}
-        >
-          <SelectTrigger className="w-48 shrink-0" aria-label="Filter by server">
-            <SelectValue placeholder="Any server" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Any server</SelectItem>
-            {realServers.map(server => (
-              <SelectItem key={server.name} value={server.name}>
-                {server.name} · {formatFileSize(server.size)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
 
         <Button
           variant="outline"
@@ -176,12 +166,19 @@ export function BrowseToolbar({
             void onRescan().finally(() => setIsRescanning(false));
           }}
         >
-          {isRescanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Rescan
+          {isRescanning ? (
+            <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          ) : (
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          )}
+          Refresh from servers
         </Button>
 
         <div className="shrink-0">
           <BrowseFilterMenu
+            servers={realServers}
+            selectedServerName={selectedServerName}
+            onServerChange={onServerChange}
             eventOnly={eventOnly}
             onEventOnlyChange={onEventOnlyChange}
             unlinkedOnly={unlinkedOnly}
@@ -195,9 +192,9 @@ export function BrowseToolbar({
           />
         </div>
       </div>
-      <p className="mt-2 font-mono text-xs text-muted-foreground">
+      <p className="mt-2 text-xs text-muted-foreground">
         {matchingCount === 1 ? '1 matching item' : `${matchingCount.toLocaleString()} matching items`} ·{' '}
-        {knownCount.toLocaleString()} known blobs · offline index
+        {knownCount === 1 ? '1 file indexed' : `${knownCount.toLocaleString()} files indexed`}
       </p>
     </section>
   );

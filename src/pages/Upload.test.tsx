@@ -140,7 +140,7 @@ describe('Upload workflow', () => {
 
     // Step 2 should be active and describe media drafts should render
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /publish nostr events/i })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /publish posts/i })).toBeTruthy();
     });
     const skipButton = await screen.findByRole('button', { name: /skip publishing/i });
     const publishButton = await screen.findByRole('button', { name: /^publish/i });
@@ -319,7 +319,7 @@ describe('Upload workflow', () => {
 
     // After retry succeeds, advances to step 2 with drafts containing both URLs
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /publish nostr events/i })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /publish posts/i })).toBeTruthy();
     });
 
     const publishButton = await screen.findByRole('button', { name: /^publish/i });
@@ -442,7 +442,7 @@ describe('Upload workflow', () => {
       ['wss://bad.example'],
       expect.objectContaining({ id: signedEvent.id })
     );
-    expect(await screen.findByText(/^file event: delivered$/i)).toBeTruthy();
+    expect(await screen.findByText(/^file post: delivered$/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /retry/i })).toBeFalsy();
   });
 
@@ -505,8 +505,8 @@ describe('Upload workflow', () => {
     await user.click(await screen.findByRole('button', { name: /upload 1 file/i }));
     await user.click(await screen.findByRole('button', { name: /^publish/i }));
 
-    expect(await screen.findByText(/^file event: delivered$/i)).toBeTruthy();
-    expect(screen.getByText(/^video event: failed$/i)).toBeTruthy();
+    expect(await screen.findByText(/^file post: delivered$/i)).toBeTruthy();
+    expect(screen.getByText(/^video post: failed$/i)).toBeTruthy();
     // One succeeded, so this is not a total loss - the heading must not say every publish failed.
     expect(screen.getByText('Publishing results')).toBeTruthy();
   });

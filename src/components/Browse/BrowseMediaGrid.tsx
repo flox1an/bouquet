@@ -14,7 +14,13 @@ import type { MonthGroup } from '../TimelineNavigation';
 import { TimelineThumbnail, type KnownServersFor } from '../TimelineThumbnail';
 import { useNativeUrlAvailabilityCheck } from './useNativeUrlAvailability';
 import { formatDate, formatFileSize } from '../../utils/utils';
-import { AVAILABILITY_LABEL, TYPE_ICON, type TimelineItem } from './browseConstants';
+import {
+  AVAILABILITY_CLASS,
+  AVAILABILITY_ICON,
+  AVAILABILITY_LABEL,
+  TYPE_ICON,
+  type TimelineItem,
+} from './browseConstants';
 import { eventKindLabel } from '../../catalog/eventKinds';
 import type { CatalogAction } from '../../catalog/catalog';
 
@@ -262,7 +268,7 @@ function fileSummary(item: TimelineItem): string {
 }
 
 const OVERLAY_BADGE =
-  'pointer-events-none border border-border bg-background/85 px-1 py-px font-mono text-[10px] leading-4 tracking-wide';
+  'pointer-events-none border border-border bg-background/85 px-1 py-px font-mono text-xs leading-4 tracking-wide';
 
 function MediaCard({
   item,
@@ -303,14 +309,8 @@ function MediaCard({
       : item.displayDateSource === 'blob-uploaded'
         ? 'Uploaded'
         : 'Discovered';
-  const availabilityClass =
-    item.availabilityState === 'complete'
-      ? 'bg-primary'
-      : item.availabilityState === 'partial'
-        ? 'bg-yellow-500'
-        : item.availabilityState === 'unavailable'
-          ? 'bg-destructive'
-          : 'bg-muted-foreground';
+  const AvailabilityIcon = AVAILABILITY_ICON[item.availabilityState];
+  const availabilityLabel = AVAILABILITY_LABEL[item.availabilityState];
   // When the title is only the kind label, the meta line would repeat it.
   const meta = [
     item.displayTitleIsFallback ? undefined : item.displayKindLabel,
@@ -320,7 +320,6 @@ function MediaCard({
   ]
     .filter(Boolean)
     .join(' · ');
-  const shortHash = item.displayTitleIsFallback ? item.primaryBlobSha256?.slice(0, 8) : undefined;
   const segments = item.segmentCount ?? 0;
   return (
     <article
@@ -339,23 +338,25 @@ function MediaCard({
         }}
         className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         aria-label={`Open details for ${item.displayTitle}`}
+        // A fallback title is only the kind; the hash stays reachable as a
+        // tooltip without becoming the label.
+        title={item.displayTitleIsFallback ? item.primaryBlobSha256 : undefined}
       >
         <TimelineThumbnail item={item} knownServersFor={knownServersFor} fill />
         {/* Kind first: at column width the line truncates, and losing the clock
             time costs less than losing "Unlinked file". */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2 pb-1.5 pt-10">
           <div className="flex items-baseline gap-1.5">
-            <Icon className="h-3.5 w-3.5 shrink-0 translate-y-0.5 text-white/70" aria-hidden="true" />
+            <Icon className="h-3.5 w-3.5 shrink-0 translate-y-0.5 text-white/80" aria-hidden="true" />
             <h2
               className={`truncate text-sm text-white ${item.displayTitleIsFallback ? 'font-medium' : 'font-semibold'}`}
             >
               {item.displayTitle}
             </h2>
-            {shortHash && <span className="shrink-0 font-mono text-[10px] text-white/60">{shortHash}</span>}
           </div>
           {item.displaySubtitle && <p className="truncate text-xs text-white/80">{item.displaySubtitle}</p>}
           <p
-            className="truncate font-mono text-[10px] leading-4 text-white/60"
+            className="truncate font-mono text-xs leading-4 text-white/80"
             title={
               item.unknownBlobSizeCount > 0 ? `${plural(item.unknownBlobSizeCount, 'file')} of unknown size` : undefined
             }
@@ -383,12 +384,15 @@ function MediaCard({
           {item.displayDurationSeconds !== undefined && (
             <span className={OVERLAY_BADGE}>{formatDuration(item.displayDurationSeconds)}</span>
           )}
-          <span className="flex h-4 w-4 items-center justify-center border border-border bg-background/85">
-            <span
-              role="img"
-              className={`h-2 w-2 shrink-0 border border-foreground/30 ${availabilityClass}`}
-              title={AVAILABILITY_LABEL[item.availabilityState]}
-              aria-label={AVAILABILITY_LABEL[item.availabilityState]}
+          <span
+            role="img"
+            aria-label={availabilityLabel}
+            title={availabilityLabel}
+            className="flex h-5 w-5 items-center justify-center border border-border bg-background/85"
+          >
+            <AvailabilityIcon
+              className={`h-3.5 w-3.5 ${AVAILABILITY_CLASS[item.availabilityState]}`}
+              aria-hidden="true"
             />
           </span>
           <DropdownMenu>
@@ -396,15 +400,14 @@ function MediaCard({
               <Button
                 size="icon"
                 variant="secondary"
-                className="pointer-events-auto h-6 w-6 border border-border opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                className="pointer-events-auto h-6 w-6 border border-border opacity-100 transition-opacity focus-visible:opacity-100 data-[state=open]:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100"
               >
                 <MoreVertical className="h-4 w-4" aria-hidden="true" />
                 <span className="sr-only">Actions for {item.displayTitle}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => onAction(item, 'mirror')}>Mirror</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onAction(item, 'sync')}>Sync</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onAction(item, 'mirror')}>Copy</DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 onSelect={() => onAction(item, 'delete')}

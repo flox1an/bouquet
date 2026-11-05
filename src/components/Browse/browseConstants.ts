@@ -1,4 +1,4 @@
-import { FileText, Image, Music2, Video } from 'lucide-react';
+import { CircleCheck, CircleDashed, CircleQuestionMark, CircleX, FileText, Image, Music2, Video } from 'lucide-react';
 import type { TimelineProjection, TimelineSortField } from '../../catalog/catalog';
 
 export type TimelineItem = TimelineProjection;
@@ -32,11 +32,27 @@ export function matchesTypeFilter(item: TimelineItem, filter: TypeFilter): boole
   return item.displayType === filter;
 }
 
+// One label set for cards, rows, the detail page and the filter menu. Each
+// state also gets its own icon shape so it never relies on colour alone.
 export const AVAILABILITY_LABEL = {
-  complete: '✅ Available',
-  partial: 'Partially available',
-  unavailable: 'Unavailable',
-  unknown: 'Not checked',
+  complete: 'Available',
+  partial: 'Partly available',
+  unavailable: 'Missing',
+  unknown: 'Unknown',
+};
+
+export const AVAILABILITY_ICON = {
+  complete: CircleCheck,
+  partial: CircleDashed,
+  unavailable: CircleX,
+  unknown: CircleQuestionMark,
+};
+
+export const AVAILABILITY_CLASS = {
+  complete: 'text-success',
+  partial: 'text-warning',
+  unavailable: 'text-destructive',
+  unknown: 'text-muted-foreground',
 };
 
 export const SORT_FIELD_OPTIONS: Array<{ id: TimelineSortField; label: string }> = [

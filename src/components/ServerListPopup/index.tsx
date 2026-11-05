@@ -201,8 +201,8 @@ const ServerListPopup: React.FC<ServerListPopupProps> = ({ isOpen, onClose, onSa
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {index === 0 && (
-                          <span title="Primary server">
-                            <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                          <span title="Primary server" role="img" aria-label="Primary server">
+                            <Star className="h-4 w-4 text-warning fill-warning" aria-hidden />
                           </span>
                         )}
                         <span className="truncate font-medium">{server.name}</span>

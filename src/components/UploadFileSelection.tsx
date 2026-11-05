@@ -18,7 +18,7 @@ type ResizeOptionType = {
 
 export const ResizeOptions: ResizeOptionType[] = [
   {
-    name: 'Orignal Image',
+    name: 'Original image',
     width: undefined,
     height: undefined,
   },
@@ -133,7 +133,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
         onDragEnter={() => setIsDragging(true)}
         onDragLeave={() => setIsDragging(false)}
       >
-        <Upload className="w-8 h-8 inline" /> Browse or drag & drop
+        <Upload className="w-8 h-8 inline" aria-hidden="true" /> Browse or drag & drop
       </label>
 
       <div className="cursor-pointer gap-4 flex flex-col md:flex-row">
@@ -150,7 +150,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
                   setTransfers(ut => ({ ...ut, [s.name]: { enabled: c, transferred: 0, size: 0, rate: 0 } }))
                 }
               >
-                <ServerIcon className="w-6" />
+                <ServerIcon className="w-6" aria-hidden="true" />
                 {s.name} <Badge variant="secondary">{serverInfo[s.name].type}</Badge>
               </CheckBox>
             ))}
@@ -158,7 +158,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
         </div>
         {imagesAreUploaded && (
           <div className="flex flex-col gap-4 w-full md:w-1/2">
-            <h3 className="text-lg text-muted-foreground">Image Options</h3>
+            <h3 className="text-lg text-muted-foreground">Image options</h3>
             <div className="cursor-pointer grid gap-2 items-center" style={{ gridTemplateColumns: '1.5em auto' }}>
               <CheckBox
                 name="cleanData"
@@ -176,7 +176,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
               />
               <div className="flex flex-wrap items-center gap-2">
                 <label htmlFor="resizeOption" className="cursor-pointer select-none">
-                  Resize Image
+                  Resize image
                 </label>
                 <Select
                   disabled={uploadBusy || imageResize == 0}
@@ -200,14 +200,14 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
         )}
       </div>
       {serversEnabledCount == 1 && (
-        <div className="text-sm flex flex-row gap-2 items-center text-yellow-600 dark:text-yellow-500">
-          <AlertTriangle className="w-5 h-5 shrink-0" />
+        <div className="text-sm flex flex-row gap-2 items-center text-warning">
+          <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
           <span>It's recommended to upload to multiple servers to ensure availability and censorship resistance.</span>
         </div>
       )}
       <div className="flex flex-row gap-2 justify-center md:justify-start">
         <Button onClick={() => upload()} disabled={serversEnabledCount < 1 || uploadBusy || files.length == 0}>
-          <Upload className="w-4 h-4 mr-1" />
+          <Upload className="w-4 h-4 mr-1" aria-hidden="true" />
           Upload{files.length > 0 ? (files.length == 1 ? ` 1 file` : ` ${files.length} files`) : ''} /{' '}
           {formatFileSize(sizeOfFilesToUpload)}
         </Button>
@@ -224,7 +224,7 @@ const UploadFileSelection: React.FC<UploadFileSelectionProps> = ({
             }
           }}
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="w-4 h-4" aria-hidden="true" />
         </Button>
       </div>
     </>

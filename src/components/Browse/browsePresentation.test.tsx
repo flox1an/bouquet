@@ -90,8 +90,8 @@ describe('browse presentation smoke', () => {
         onAction: () => {},
       })
     );
-    expect(html).toContain('Mirror');
-    expect(html).toContain('Sync');
+    expect(html).toContain('Copy');
+    expect(html).not.toContain('Mirror');
     expect(html).toContain('Delete');
     // must not advertise actions as mere previews any more
     expect(html).not.toContain('Plan mirror');
@@ -134,7 +134,7 @@ describe('browse presentation smoke', () => {
     expect(html.indexOf('January picture')).toBeGreaterThan(janHeading);
   });
 
-  it('identifies a hash-named file by kind and short hash, and counts segments as segments', () => {
+  it('identifies a hash-named file by kind, keeps the hash out of the label, and counts segments as segments', () => {
     const hash = '4edb1e6b8529'.padEnd(64, 'f');
     const items = [
       item({
@@ -177,11 +177,10 @@ describe('browse presentation smoke', () => {
       })
     );
     const text = html.replace(/<!--.*?-->/g, '').replace(/<[^>]+>/g, ' ');
-    // The kind carries the identity, a short hash keeps the file findable, and
-    // the full 64-character hash never reaches the card.
+    // The kind carries the identity; the hash stays a tooltip, never visible text.
     expect(text).toContain('MP4 video');
-    expect(text).toContain('4edb1e6b');
-    expect(text).not.toContain(hash);
+    expect(text).not.toContain('4edb1e6b');
+    expect(html).toContain(`title="${hash}"`);
     expect(text).toContain('1 file');
     // 43 stored files are one playlist the user chose plus 42 segments.
     expect(text).toContain('1 playlist + 42 segments');
@@ -190,6 +189,6 @@ describe('browse presentation smoke', () => {
     expect(text).toContain('1920×1080');
     // Actions stay reachable without a visible button row on every card.
     expect(text).toContain('Actions for MP4 video');
-    expect(html).not.toContain('>Mirror<');
+    expect(html).not.toContain('>Copy<');
   });
 });

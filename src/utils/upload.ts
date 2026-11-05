@@ -28,7 +28,7 @@ export function formatTransferError(error: unknown, sourceServer: string): strin
     response?: { status?: number };
   };
   const status = value.response?.status;
-  if (value.message?.includes('cancelled')) return 'Transfer cancelled';
+  if (value.message?.includes('cancelled')) return 'Copy cancelled';
   if (value.message?.includes('timeout')) return 'Operation timed out';
   if (value.name === 'SourceBlobNotFoundError') return `Missing on source server (${sourceServer})`;
   if (status === 404) return 'File not found (404)';

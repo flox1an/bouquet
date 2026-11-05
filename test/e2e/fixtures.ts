@@ -115,9 +115,9 @@ export function uniqueUpload(label: string, sizeBytes?: number): UploadFixture {
 /** Logs in via nsec and waits until the seeded server list has rendered. An nsec
     login is never persisted, so every test has to do this itself. */
 export async function login(page: Page) {
-  await page.getByRole('button', { name: 'Nsec' }).click();
+  await page.getByRole('tab', { name: 'Key' }).click();
   await page.getByPlaceholder('nsec1').fill(NSEC);
-  await page.getByRole('button', { name: 'Login with Nsec' }).click();
+  await page.getByRole('button', { name: 'Log in with private key' }).click();
 }
 
 /** BUD-02 listing straight off a server - the only proof the bytes really landed. */
