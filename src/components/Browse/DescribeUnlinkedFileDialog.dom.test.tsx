@@ -13,7 +13,7 @@ vi.mock('../../utils/publish', () => ({ signAndPublish, retryFailedTargets }));
 vi.mock('../../utils/nostr', () => ({
   useNostr: () => ({ user: { pubkey: 'p'.repeat(64), relayUrls: ['wss://relay.example'] } }),
 }));
-vi.mock('../../nostr/core', () => ({ mergeRelays: (relays: string[]) => relays }));
+vi.mock('../../nostr/core', () => ({ writeRelays: (relays: string[]) => relays }));
 vi.mock('../FileEventEditor/FileEventEditor', () => ({
   default: ({ fileEventData }: { fileEventData: { x: string } }) => <p>Editing {fileEventData.x}</p>,
 }));

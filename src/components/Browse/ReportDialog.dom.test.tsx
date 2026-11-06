@@ -23,7 +23,7 @@ vi.mock('../../utils/useUserServers', () => ({
 }));
 vi.mock('@/nostr/core', () => ({
   relayPool: { publish },
-  mergeRelays: (userRelays: string[]) => userRelays,
+  writeRelays: (userRelays: string[]) => userRelays,
 }));
 vi.mock('../../utils/server', () => ({
   mediaServer: (server: { url: string }) => ({ report: (event: unknown) => report(server.url, event) }),

@@ -6,7 +6,8 @@ import { openDB, getEventsForFilters, addEvents, type NostrIDBDatabase } from 'n
 import { persistEventsToCache } from 'applesauce-core/helpers';
 import { NostrConnectSigner } from 'applesauce-signers';
 import type { NostrSubscriptionMethod, NostrPublishMethod } from 'applesauce-signers';
-import { filter, mergeMap, race, throwError, timer } from 'rxjs';
+import { filter, takeUntil, timeout, timer } from 'rxjs';
+import { normalizeURL } from 'applesauce-core/helpers/url';
 
 // Default relays. VITE_RELAYS points the whole app at a local relay instead,
 // which is what the integration stack in test/e2e relies on.
@@ -26,29 +27,30 @@ export const DEFAULT_RELAYS = configuredRelays?.length
       'wss://relay.nostu.be',
     ];
 
-/**
- * Merges default relays with user relays, removing duplicates
- * @param userRelays - Array of user-specific relay URLs
- * @returns Combined array of unique relay URLs with user relays prioritized
- */
+/** Canonical relay URL (same rules the pool uses), or undefined for garbage input. */
+export function normalizeRelay(url: string): string | undefined {
+  try {
+    const parsed = new URL(url.trim());
+    if (!['ws:', 'wss:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash) return undefined;
+    return normalizeURL(parsed.toString());
+  } catch {
+    return undefined;
+  }
+}
+
+const uniqueRelays = (urls: string[]) => [
+  ...new Set(urls.map(normalizeRelay).filter((url): url is string => !!url)),
+];
+
+/** Where to look for events: the user's relays first, then the defaults. */
 export function mergeRelays(userRelays: string[] = []): string[] {
-  const relaySet = new Set<string>();
+  return uniqueRelays([...userRelays, ...DEFAULT_RELAYS]);
+}
 
-  // Add user relays first (higher priority)
-  for (const relay of userRelays) {
-    if (relay && relay.trim()) {
-      relaySet.add(relay.trim());
-    }
-  }
-
-  // Add default relays
-  for (const relay of DEFAULT_RELAYS) {
-    relaySet.add(relay);
-  }
-
-  const merged = Array.from(relaySet);
-
-  return merged;
+/** Where to publish the user's own events: only their NIP-65 write relays.
+    Defaults are a fallback for users without a relay list, never an addition. */
+export function writeRelays(userRelays?: string[]): string[] {
+  return uniqueRelays(userRelays ?? DEFAULT_RELAYS);
 }
 
 // IndexedDB cache for local event storage
@@ -71,16 +73,20 @@ export async function cacheRequest(filters: Filter[]): Promise<NostrEvent[]> {
 export const eventStore = new EventStore();
 export const relayPool = new RelayPool();
 
-// Request timeout to prevent hanging relay requests (5 seconds)
+// Reads across several relays end at the deadline with whatever already arrived:
+// one slow relay must not discard the answers of the fast ones.
 const REQUEST_TIMEOUT_MS = 5000;
 const originalRequest = relayPool.request.bind(relayPool);
 
-relayPool.request = ((relays, filters, opts) => {
-  const timeout$ = timer(REQUEST_TIMEOUT_MS).pipe(
-    mergeMap(() => throwError(() => new Error(`Relay request timed out after ${REQUEST_TIMEOUT_MS}ms`)))
-  );
-  return race(originalRequest(relays, filters, opts), timeout$);
-}) as typeof relayPool.request;
+relayPool.request = ((relays, filters, opts) =>
+  originalRequest(relays, filters, opts).pipe(takeUntil(timer(REQUEST_TIMEOUT_MS)))) as typeof relayPool.request;
+
+/** All-or-error read for paginated catalog sync: a page cut off by a deadline must
+    fail (the catalog keeps its cursor and resumes) instead of looking like the last page.
+    Errors only when the relay goes silent, so long pages still stream through. */
+export function requestComplete(relayUrl: string, filters: Filter[]) {
+  return relayPool.relay(relayUrl).request(filters).pipe(timeout({ first: REQUEST_TIMEOUT_MS, each: REQUEST_TIMEOUT_MS }));
+}
 
 // Configure unified loader for all event types
 createEventLoaderForStore(eventStore, relayPool, {

@@ -11,7 +11,7 @@ import { useNostr } from '../../utils/nostr';
 import { useUserServers } from '../../utils/useUserServers';
 import { mediaServer } from '../../utils/server';
 import { REPORT_TYPES, buildReportTemplate, type ReportType } from '../../utils/report';
-import { mergeRelays } from '@/nostr/core';
+import { writeRelays } from '@/nostr/core';
 import { publishToRelays, retryFailedTargets, type PublishResult } from '../../utils/publish';
 
 type ReportDialogProps = {
@@ -77,7 +77,7 @@ export function ReportDialog({ open, onOpenChange, hashes, event, signEventTempl
       if (target.relays) {
         nextRelayResult = relayResult
           ? await retryFailedTargets(relayResult)
-          : await publishToRelays(mergeRelays(user?.relayUrls), signed);
+          : await publishToRelays(writeRelays(user?.writeRelayUrls), signed);
         setRelayResult(nextRelayResult);
       }
 

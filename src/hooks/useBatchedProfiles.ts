@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useEventStore } from 'applesauce-react/hooks';
 import { createTimelineLoader } from 'applesauce-loaders/loaders';
 import { kinds } from 'nostr-tools';
-import { relayPool, DEFAULT_RELAYS } from '../nostr/core';
+import { relayPool, mergeRelays } from '../nostr/core';
 
 /**
  * Batched profile loader
@@ -36,7 +36,7 @@ export function useBatchedProfileLoader() {
       // Load all profiles in a single request
       const loader = createTimelineLoader(
         relayPool,
-        [...DEFAULT_RELAYS, 'wss://purplepag.es'],
+        mergeRelays(['wss://purplepag.es']),
         {
           kinds: [kinds.Metadata],
           authors: pubkeysToLoad,

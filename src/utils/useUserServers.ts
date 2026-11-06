@@ -7,7 +7,7 @@ import useEvent from './useEvent';
 import { useQueries } from '@tanstack/react-query';
 import { Nip96ServerConfig, fetchNip96ServerConfig } from './nip96';
 import dayjs from 'dayjs';
-import { mergeRelays } from '../nostr/core';
+import { writeRelays } from '../nostr/core';
 import { signAndPublish, type PublishResult } from './publish';
 
 type ServerType = 'blossom' | 'nip96';
@@ -41,7 +41,7 @@ export const useUserServers = (): {
   const storeUserServers = async (newServers: Server[]): Promise<StoreServersResult> => {
     if (!pubkey) throw new Error('No active user');
 
-    const relays = mergeRelays(user?.relayUrls);
+    const relays = writeRelays(user?.writeRelayUrls);
 
     const blossomTemplate: Omit<NostrEvent, 'id' | 'sig'> = {
       kind: USER_BLOSSOM_SERVER_LIST_KIND,

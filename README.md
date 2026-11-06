@@ -10,6 +10,8 @@ It supports upload, browsing, deletion, and server-to-server sync workflows.
 - Delete blobs from selected servers (including multi-server delete from `All servers`)
 - Sync missing blobs from one server to another
 - Manage Blossom and NIP-96 servers in-app
+- Manage a public NIP-65 relay list in Settings; choose read and write roles independently
+- Publish personal events to the list's write relays, or to default relays when no list exists
 
 ## Tech Stack
 

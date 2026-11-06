@@ -11,6 +11,7 @@ import { useActiveAccount } from 'applesauce-react/hooks';
 
 // Local imports
 import { eventStore, connectToRelays, mergeRelays } from '../nostr/core';
+import { getOutboxes } from 'applesauce-core/helpers/mailboxes';
 import { restoreAccountsToManager } from '../nostr/accountPersistence';
 import { useBatchedProfileLoader } from '../hooks/useBatchedProfiles';
 import useEvent from './useEvent';
@@ -20,6 +21,7 @@ export type ApplesauceUser = {
   pubkey: string;
   npub: string;
   relayUrls: string[];
+  writeRelayUrls?: string[];
   profile?: {
     image?: string;
     name?: string;
@@ -82,6 +84,12 @@ function BatchedProfileLoaderInit() {
 // NIP-65 Relay List Metadata kind
 const RELAY_LIST_METADATA_KIND = 10002;
 
+/**
+ * Follows the user's newest NIP-65 relay list for the whole session: a list that
+ * arrives after the startup timeout, or a newer one replacing the cached copy, still
+ * applies. Only the user's outboxes (write relays) matter here - that is where their
+ * own events live and where they publish.
+ */
 function UserRelayLoader({
   user,
   onRelaysLoaded,
@@ -91,50 +99,21 @@ function UserRelayLoader({
   onRelaysLoaded: (relays: string[]) => void;
   onRelaysReady: () => void;
 }) {
-  const hasLoadedRef = React.useRef(false);
-  const currentPubkeyRef = React.useRef<string | undefined>(undefined);
-
-  // Fetch user's relay list (NIP-65)
-  // Important: Set waitForRelays: false to avoid circular dependency
   const relayListEvent = useEvent({ kinds: [RELAY_LIST_METADATA_KIND], authors: [user?.pubkey || ''] } as Filter, {
     disable: !user?.pubkey,
-    waitForRelays: false, // Don't wait for relays when fetching the relay list itself
+    waitForRelays: false, // the relay list itself cannot wait for the relay list
   });
 
-  // Reset loaded flag when user changes
-  if (currentPubkeyRef.current !== user?.pubkey) {
-    hasLoadedRef.current = false;
-    currentPubkeyRef.current = user?.pubkey;
-  }
-
   useEffect(() => {
-    if (relayListEvent.isSuccess && relayListEvent.data && !hasLoadedRef.current) {
-      // Extract relay URLs from 'r' tags
-      const relayUrls = relayListEvent.data.tags.filter(tag => tag[0] === 'r' && tag[1]).map(tag => tag[1]);
+    if (relayListEvent.data && relayListEvent.data.pubkey === user?.pubkey) onRelaysLoaded(getOutboxes(relayListEvent.data));
+  }, [relayListEvent.data, user?.pubkey, onRelaysLoaded]);
 
-      hasLoadedRef.current = true;
-
-      if (relayUrls.length > 0) {
-        onRelaysLoaded(relayUrls);
-      } else {
-        onRelaysReady();
-      }
-    }
-  }, [relayListEvent.isSuccess, relayListEvent.data, onRelaysLoaded, onRelaysReady]);
-
-  // Timeout: If 10002 event is not received within 3 seconds, proceed with default relays
+  // No list within 3 s: start with the defaults; a late list still applies above.
   useEffect(() => {
-    if (!user?.pubkey || hasLoadedRef.current) return;
-
-    const timeout = setTimeout(() => {
-      if (!relayListEvent.isSuccess && !hasLoadedRef.current) {
-        hasLoadedRef.current = true;
-        onRelaysReady();
-      }
-    }, 3000);
-
+    if (!user?.pubkey) return;
+    const timeout = setTimeout(onRelaysReady, 3000);
     return () => clearTimeout(timeout);
-  }, [user?.pubkey, relayListEvent.isSuccess, onRelaysReady]);
+  }, [user?.pubkey, onRelaysReady]);
 
   return null;
 }
@@ -171,16 +150,18 @@ export const NostrProvider = ({ children }: { children: React.ReactElement }) =>
     [createUserFromPubkey]
   );
 
+  const handleRelaysReady = useCallback(() => setRelaysReady(true), []);
+
   const handleRelaysLoaded = useCallback((relays: string[]) => {
     setUser(prev => {
       if (!prev) return prev;
       // Only update if relays have actually changed
       const currentRelays = prev.relayUrls.join(',');
       const newRelays = relays.join(',');
-      if (currentRelays === newRelays) {
+      if (currentRelays === newRelays && prev.writeRelayUrls !== undefined) {
         return prev; // No change, return same object to prevent re-render
       }
-      return { ...prev, relayUrls: relays };
+      return { ...prev, relayUrls: relays, writeRelayUrls: relays };
     });
     setRelaysReady(true);
   }, []);
@@ -226,7 +207,7 @@ export const NostrProvider = ({ children }: { children: React.ReactElement }) =>
         <NostrContext.Provider value={value}>
           <AccountRestoreInit onRestore={handleAccountRestore} />
           <BatchedProfileLoaderInit />
-          <UserRelayLoader user={user} onRelaysLoaded={handleRelaysLoaded} onRelaysReady={() => setRelaysReady(true)} />
+          <UserRelayLoader user={user} onRelaysLoaded={handleRelaysLoaded} onRelaysReady={handleRelaysReady} />
           {children}
         </NostrContext.Provider>
       </EventStoreProvider>

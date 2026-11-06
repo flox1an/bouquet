@@ -12,7 +12,7 @@ const { mockRelayPoolPublish, mockAccountManager } = vi.hoisted(() => ({
 }));
 vi.mock('../nostr/core', () => ({
   relayPool: { publish: (...args: unknown[]) => mockRelayPoolPublish(...args) },
-  mergeRelays: (userRelays: string[] = []) => userRelays,
+  writeRelays: (userRelays: string[] = []) => userRelays,
 }));
 vi.mock('./nostr', () => ({
   accountManager: mockAccountManager,

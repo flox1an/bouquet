@@ -17,6 +17,7 @@ import { syncAdditionalPubkeyFromRelays } from '../catalog/catalogNostr';
 import { useProfile } from '../hooks/useProfile';
 import { parseAdditionalPubkey } from '../utils/additionalPubkeys';
 import { useNostr } from '../utils/nostr';
+import RelaySettings from '../components/RelaySettings';
 
 export default function Settings() {
   const { user } = useNostr();
@@ -102,6 +103,8 @@ export default function Settings() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col px-4 py-8">
       <PageHeader title="Settings" />
+
+      <RelaySettings />
 
       <Card>
         <CardHeader>

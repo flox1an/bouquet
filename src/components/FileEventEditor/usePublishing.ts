@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import { FileEventData } from './FileEventEditor';
 const uniq = <T>(values: T[]): T[] => [...new Set(values)];
 import { useNostr } from '../../utils/nostr';
-import { mergeRelays } from '../../nostr/core';
+import { writeRelays } from '../../nostr/core';
 import { signAndPublish, type PublishResult } from '../../utils/publish';
 import { KIND_AUDIO, KIND_FILE_META, KIND_VIDEO_HORIZONTAL, KIND_VIDEO_VERTICAL } from '../../utils/useFileMetaEvents';
 
@@ -11,7 +11,7 @@ export const usePublishing = () => {
   const { user } = useNostr();
 
   const publish = (event: Omit<NostrEvent, 'id' | 'sig'>): Promise<PublishResult> =>
-    signAndPublish(event, mergeRelays(user?.relayUrls));
+    signAndPublish(event, writeRelays(user?.writeRelayUrls));
 
   const publishFileEvent = async (data: FileEventData): Promise<PublishResult> => {
     const e: Omit<NostrEvent, 'id' | 'sig'> = {

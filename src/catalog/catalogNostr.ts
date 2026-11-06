@@ -1,6 +1,7 @@
 import { firstValueFrom, toArray } from 'rxjs';
 import type { Filter, NostrEvent } from 'nostr-tools';
-import { mergeRelays, relayPool } from '../nostr/core';
+import { getOutboxes } from 'applesauce-core/helpers/mailboxes';
+import { mergeRelays, relayPool, requestComplete } from '../nostr/core';
 import type { AdditionalPubkey, Catalog } from './catalog';
 
 export const CATALOG_EVENT_KINDS = [
@@ -19,7 +20,7 @@ export async function syncAuthoredEventsFromRelays(catalog: EventSyncTarget, pub
     try {
       await catalog.syncAuthoredEvents(pubkey, relayUrl, async ({ until, limit }) => {
         const filter: Filter = { authors: [pubkey], kinds: [...CATALOG_EVENT_KINDS], limit, until };
-        return firstValueFrom(relayPool.request([relayUrl], [filter]).pipe(toArray()));
+        return firstValueFrom(requestComplete(relayUrl, [filter]).pipe(toArray()));
       });
     } catch {
       // The catalog records the per-relay error and continues with the remaining relays.
@@ -36,12 +37,10 @@ export async function syncAdditionalPubkeyFromRelays(
   const seedRelays = mergeRelays([...source.relayHints, ...ownerRelayUrls]);
   const seedMetadata = await loadSourceMetadata(source.pubkey, seedRelays);
   const relayList = newestOfKind(seedMetadata, 10002);
+  // A profile's own events live on its outboxes (NIP-65 write relays), not its inboxes.
   const sourceRelays = mergeRelays([
     ...source.relayHints,
-    ...(relayList?.tags
-      .filter(tag => tag[0] === 'r')
-      .map(tag => tag[1])
-      .filter(Boolean) ?? []),
+    ...(relayList ? getOutboxes(relayList) : []),
     ...ownerRelayUrls,
   ]);
   const metadata = [...seedMetadata, ...(await loadSourceMetadata(source.pubkey, sourceRelays))];
@@ -64,7 +63,7 @@ export async function syncAdditionalPubkeyFromRelays(
             limit,
             until,
           };
-          return firstValueFrom(relayPool.request([relayUrl], [filter]).pipe(toArray()));
+          return firstValueFrom(requestComplete(relayUrl, [filter]).pipe(toArray()));
         },
         serverUrls
       );
@@ -93,7 +92,7 @@ export async function syncReverseLookupsFromRelays(catalog: EventSyncTarget, pub
     try {
       await catalog.syncReverseLookups(pubkey, relayUrl, async hashes => {
         const filter: Filter = { '#x': hashes, kinds: [...CATALOG_EVENT_KINDS], limit: 500 };
-        return firstValueFrom(relayPool.request([relayUrl], [filter]).pipe(toArray()));
+        return firstValueFrom(requestComplete(relayUrl, [filter]).pipe(toArray()));
       });
     } catch {
       // The catalog records the per-relay error and continues with the remaining relays.
