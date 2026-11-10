@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.1.11 — Dependency updates
+
+- Updated dependencies within their existing version ranges.
+
 ## 0.1.0 — Nostr-event-centric browse
 
 This release replaces the blob-centric browse model with a catalog of Nostr
