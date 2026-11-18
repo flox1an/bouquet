@@ -5,10 +5,15 @@ When you're ready, start your application by running:
 
 Your application will be available at http://localhost:3000.
 
-The image uses Node 22 and `npm ci`. After changing dependencies, commit the
-updated `package-lock.json`, including transitive peer dependencies. To refresh
-it with the same runtime as the image build, run:
-`docker run --rm -v "$PWD:/app" -w /app node:22-alpine npm install --package-lock-only --ignore-scripts`.
+The image uses Node 24 and `npm ci`. The lockfile metadata for optional and peer
+dependencies depends on the npm version and platform that wrote it — a local
+`npm install` on macOS drops the optional peer `@capacitor/core` (via
+`nostr-signer-capacitor-plugin`) and bundled `@emnapi/*` entries, which makes
+`npm ci` fail on Linux. The build therefore re-derives that metadata with
+`npm install --package-lock-only` before `npm ci`, so any lockfile your local
+npm produced builds; resolved versions still come from the lockfile.
+To refresh it on the build platform yourself:
+`docker run --rm -v "$PWD:/app" -w /app node:24-alpine npm install --package-lock-only --ignore-scripts`.
 
 ### Deploying your application to the cloud
 

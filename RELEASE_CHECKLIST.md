@@ -38,6 +38,8 @@
 ## 6. Deployment
 
 - [ ] Deployment method confirmed (no `nsite-cli` workflow in this repo)
+- [ ] `docker build -t bouquet .` succeeds — the deploy image's `npm ci` is the
+      only check that catches lockfile/npm drift before Coolify does
 - [ ] Production environment variables/config validated
 - [ ] Post-deploy smoke test completed
 

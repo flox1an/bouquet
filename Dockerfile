@@ -1,8 +1,15 @@
 # syntax=docker/dockerfile:1
 # Build im Node-Container, Auslieferung als nginx:alpine.
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
+# Lockfile metadata for optional/peer deps depends on the npm version and platform
+# that wrote it: an `npm install` on macOS drops the optional peer @capacitor/core
+# (via nostr-signer-capacitor-plugin) and bundled @emnapi/* entries, and `npm ci`
+# then aborts with "Missing: ... from lock file". Re-derive that metadata here, on
+# the build platform, so a stale committed lockfile can't break the deploy. Resolved
+# versions come from the lockfile and stay unchanged.
+RUN npm install --package-lock-only --ignore-scripts
 RUN npm ci
 COPY . .
 RUN npm run build
